@@ -13,17 +13,18 @@ func GetUpdates() (updates []TUpdate, e error) {
 	       "offset=" + strconv.Itoa(mostRecentlyReceived) +
 	       "&timeout=3600"
 	r, e := http.Get(url)
-	log.Printf("[telegram] API call: %s (%s)\n", url, r.Status)
 
 	if r != nil {
 		defer r.Body.Close()
 	}
 	if e != nil {
+		log.Printf("[telegram] API error (http): %s (%s)\n", url, r.Status)
 		return
 	}
 
 	b, e := ioutil.ReadAll(r.Body)
 	if e != nil {
+		log.Printf("[telegram] API error (read): %s (%s)\n", url, r.Status)
 		return
 	}
 
@@ -31,6 +32,7 @@ func GetUpdates() (updates []TUpdate, e error) {
 	e = json.Unmarshal(b, &out)
 
 	if e != nil {
+		log.Printf("[telegram] API error (unmarshal): %s (%s)\n", url, r.Status)
 		return
 	}
 
@@ -42,6 +44,7 @@ func GetUpdates() (updates []TUpdate, e error) {
 	e = json.Unmarshal(*out.Result, &updates)
 
 	if e != nil {
+		log.Printf("[telegram] API error (unmarshal): %s (%s)\n", url, r.Status)
 		return
 	}
 
