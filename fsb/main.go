@@ -44,9 +44,15 @@ func main() {
 	settingsFile := "~/.fsb.json"
 	if len(os.Args) > 1 && os.Args[1] != "" {
 		if os.Args[1] == "--help" || os.Args[1] == "-h" {
-			fmt.Printf("Usage: %s [LOGFILE] [APIKEY]\n", os.Args[0])
-			fmt.Println("  LOGFILE - Name of a file to write logs to. If it already exists, it will be appended to.")
-			fmt.Println("  APIKEY  - Telegram api key for this bot.  This determines which user the bot will act as (default is @WugTestBot)")
+			fmt.Printf("Usage: %s [CONFIGFILE]\n", os.Args[0])
+			fmt.Println("  CONFIGFILE  - Read this file for settings. (if omitted, use ~/.fsb.json)")
+			fmt.Println("CONFIGFILE options available:.")
+			fmt.Println("  logfile     - controls the file to log to.")
+			fmt.Println("  apikey      - sets the bot's telegram api token.")
+			fmt.Println("  api_name              - the common, colloquial name of the api service.")
+			fmt.Println("  api_endpoint          - the api endpoint hostname.")
+			fmt.Println("  api_filtered_endpoint - the api SSF endpoint hostname.")
+			fmt.Println("  api_static_endpoint   - the api endpoint static resource hostname.")
 			os.Exit(0)
 		} else {
 			settingsFile = os.Args[1]
