@@ -35,13 +35,16 @@ func ContainsSafeRatingTag(tags string) (bool) {
 	return false
 }
 
-func ConvertApiResultToTelegramInline(result api.TSearchResult, force_safe bool) (interface{}) {
+func ConvertApiResultToTelegramInline(result api.TSearchResult, force_safe bool, query string) (interface{}) {
 	postURL := ""
 	if force_safe {
 		postURL = fmt.Sprintf("https://%s/post/show/%d", api.FilteredEndpoint, result.Id)
 	} else {
 		postURL = fmt.Sprintf("https://%s/post/show/%d", api.Endpoint, result.Id)
 	}
+
+	postURL += "\n(search: " + query + ")"
+
 	if result.File_ext == "gif" {
 		return telegram.TInlineQueryResultGif{
 			Type:         "gif",

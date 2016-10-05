@@ -30,10 +30,10 @@ func AnswerInlineQuery(q TInlineQuery, out []interface{}, last_offset int) (e er
 	                 "&results="
 
 	r, e := http.Get(surl + url.QueryEscape(string(b)))
-	log.Printf("[telegram] API call: %s (%s)\n", surl + "[snip]", r.Status)
 
 	if r != nil {
 		defer r.Body.Close()
+		log.Printf("[telegram] API call: %s (%s)\n", surl + "[snip]", r.Status)
 	}
 	if e != nil {
 		return

@@ -16,9 +16,11 @@ func GetUpdates() (updates []TUpdate, e error) {
 
 	if r != nil {
 		defer r.Body.Close()
+		if r.Status != "200" {
+			log.Printf("[telegram] API error (http): %s (%s)\n", url, r.Status)
+		}
 	}
 	if e != nil {
-		log.Printf("[telegram] API error (http): %s (%s)\n", url, r.Status)
 		return
 	}
 

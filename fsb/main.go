@@ -90,13 +90,14 @@ func main() {
 				// if we got an inline query, do an api tag search.
 				log.Printf("[main    ] Received inline query (from %s): %s", q.From.Username, q.Query)
 				offset := proxify.Offset(q.Offset)
-				search_results, e := api.TagSearch(q.Query, offset, 10)
+
+				search_results, e := api.TagSearch(q.Query, offset, 50)
 				errorlog.ErrorLog("api", "api.TagSearch", e)
 
 				// take the suggestions we got from api and marshal them into inline query replies for telegram
 				inline_suggestions := []interface{}{}
 				for _, r := range search_results {
-					new_result := proxify.ConvertApiResultToTelegramInline(r, proxify.ContainsSafeRatingTag(q.Query))
+					new_result := proxify.ConvertApiResultToTelegramInline(r, proxify.ContainsSafeRatingTag(q.Query), q.Query)
 
 					if (new_result != nil) {
 						inline_suggestions = append(inline_suggestions, new_result)

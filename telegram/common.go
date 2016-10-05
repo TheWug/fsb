@@ -22,10 +22,10 @@ func SetAPIKey(newKey string) () {
 func Test() (error) {
 	url := apiEndpoint + apiKey + "/getMe"
 	r, e := http.Get(url)
-	log.Printf("[telegram] API call: %s (%s)\n", url, r.Status)
 
 	if r != nil {
 		defer r.Body.Close()
+		log.Printf("[telegram] API call: %s (%s)\n", url, r.Status)
 	}
 	if e != nil {
 		return e
