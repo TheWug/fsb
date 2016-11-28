@@ -88,7 +88,7 @@ func main() {
 			r := u.Chosen_inline_result
 			if q != nil {
 				// if we got an inline query, do an api tag search.
-				log.Printf("[main    ] Received inline query (from %s): %s", q.From.Username, q.Query)
+				log.Printf("[main    ] Received inline query (from %d %s): %s", q.From.Id, q.From.UsernameString(), q.Query)
 				offset := proxify.Offset(q.Offset)
 
 				search_results, e := api.TagSearch(q.Query, offset, 50)
@@ -110,7 +110,7 @@ func main() {
 			}
 			if r != nil {
 				// snoop on users who actually pick results
-				log.Printf("[main    ] Inline selection: %s (by %s)\n", r.Result_id, r.From.Username)
+				log.Printf("[main    ] Inline selection: %s (by %d %s)\n", r.Result_id, r.From.Id, r.From.UsernameString())
 			}
 		}
 	}
