@@ -16,4 +16,4 @@ killall fsb
 
 ./bin/fsb "$(echo ~/.fsb.json)" 2> ./err.log &
 disown
-tail -f knottybot.log
+tail -f knottybot.log err.log
