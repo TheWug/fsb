@@ -759,7 +759,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 			include = append(include, token)
 		} else if mode == MODE_THRESHHOLD {
 			t, err := strconv.Atoi(token)
-			if err != nil { threshhold = t }
+			if err == nil { threshhold = t }
 		} 
 
 		if mode != MODE_READY {
