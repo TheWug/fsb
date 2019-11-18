@@ -314,7 +314,7 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 	// we don't need to do a full sync if one wasn't requested, or if we have a saved checkpoint.
 	if !settings.Full && checkpoint != 0 {
 		// attempt to resume a sync in progress
-		state, substate, settings.Full = storage.GetMigrationState()
+		state, substate, settings.Full = storage.GetMigrationState(settings)
 
 		// if we're resuming a full sync, bodge in the correct staging suffix.
 		if settings.Full {
@@ -332,21 +332,21 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 			} else {
 				state = SYNC_BEGIN_INCREMENTAL
 			}
-			storage.SetMigrationState(state, 0, settings.Full)
+			storage.SetMigrationState(settings, state, 0, settings.Full)
 		case SYNC_BEGIN_FULL:
 			settings.TableSuffix = "staging"
 			state = SYNC_RESETSTAGING
-			storage.SetMigrationState(state, 0, settings.Full)
+			storage.SetMigrationState(settings, state, 0, settings.Full)
 		case SYNC_BEGIN_INCREMENTAL:
 			state = SYNC_INCREMENTAL_HISTORY
-			storage.SetMigrationState(state, 0, settings.Full)
+			storage.SetMigrationState(settings, state, 0, settings.Full)
 
 		// full sync states
 		case SYNC_RESETSTAGING:
 			msg <- "Preparing sync environment..."
 			storage.SetupSyncStagingEnvironment(settings)
 			state = SYNC_TAGCHECKPOINT
-			storage.SetMigrationState(state, 0, settings.Full)
+			storage.SetMigrationState(settings, state, 0, settings.Full)
 		case SYNC_TAGCHECKPOINT:
 			msg <- "Updating tag history checkpoint..."
 			hist, err := api.ListTagHistory(user, api_key, 1, nil, nil)
@@ -360,7 +360,7 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 			checkpoint = hist[0].Id
 
 			state = SYNC_VISIBLE
-			storage.SetMigrationState(state, 0, settings.Full)
+			storage.SetMigrationState(settings, state, 0, settings.Full)
 		case SYNC_VISIBLE:
 			success := func() bool {
 			msg <- "Downloading visible posts..."
@@ -389,7 +389,7 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 				go func(_state, _substate int) {
 					storage.PostUpdater(posts, settings)
 					wg.Done()
-					storage.SetMigrationState(_state, _substate, settings.Full)
+					storage.SetMigrationState(settings, _state, _substate, settings.Full)
 				}(state, before)
 
 				for i, p := range list {
@@ -410,7 +410,7 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 			wg.Wait()
 			state = SYNC_DELETED
 			substate = 0
-			storage.SetMigrationState(state, 0, settings.Full)
+			storage.SetMigrationState(settings, state, 0, settings.Full)
 			return true
 			}()
 			if !success { state = SYNC_ERROR }
@@ -443,7 +443,7 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 				go func(_state, _substate int) {
 					storage.PostUpdater(posts, settings)
 					wg.Done()
-					storage.SetMigrationState(_state, _substate, settings.Full)
+					storage.SetMigrationState(settings, _state, _substate, settings.Full)
 				}(state, page)
 
 				for i, p := range list {
@@ -464,7 +464,7 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 			wg.Wait()
 			state = SYNC_GHOSTED
 			substate = 0
-			storage.SetMigrationState(state, 0, settings.Full)
+			storage.SetMigrationState(settings, state, 0, settings.Full)
 			return true
 			}()
 			if !success { state = SYNC_ERROR }
@@ -492,7 +492,7 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 				go func(_state, _substate int) {
 					storage.PostUpdater(posts, settings)
 					wg.Done()
-					storage.SetMigrationState(_state, _substate, settings.Full)
+					storage.SetMigrationState(settings, _state, _substate, settings.Full)
 				}(state, gap_ids[partition.High - 1])
 
 				for i, id := range gap_ids[partition.Low: partition.High] {
@@ -521,7 +521,7 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 			wg.Wait()
 			state = SYNC_INCREMENTAL_HISTORY
 			substate = 0
-			storage.SetMigrationState(state, 0, settings.Full)
+			storage.SetMigrationState(settings, state, 0, settings.Full)
 			return true
 			}()
 			if !success { state = SYNC_ERROR }
@@ -557,7 +557,7 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 				go func(_state, _substate int) {
 					storage.PostUpdater(posts, settings)
 					wg.Done()
-					storage.SetMigrationState(_state, _substate, settings.Full)
+					storage.SetMigrationState(settings, _state, _substate, settings.Full)
 				}(state, *last)
 
 				if new_checkpoint == 0 { new_checkpoint = history[0].Id }
@@ -591,7 +591,7 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 		case SYNC_TAGS:
 			SyncTags(ctx, settings, msg, sfx)
 			state = SYNC_TAGNORMALIZE
-			storage.SetMigrationState(state, 0, settings.Full)
+			storage.SetMigrationState(settings, state, 0, settings.Full)
 		case SYNC_TAGNORMALIZE:
 			msg <- "Resolving post tags..."
 			err := storage.ImportPostTagsFromNameToID(settings, sfx)
@@ -603,7 +603,7 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 				break
 			}
 			state = SYNC_STAGEPROMOTE
-			storage.SetMigrationState(state, 0, settings.Full)
+			storage.SetMigrationState(settings, state, 0, settings.Full)
 
 		// promotion stages
 		case SYNC_STAGEPROMOTE:
@@ -622,14 +622,14 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 				break
 			}
 			state = SYNC_DONE
-			storage.SetMigrationState(state, 0, settings.Full)
+			storage.SetMigrationState(settings, state, 0, settings.Full)
 
 		// finish-success stage
 		case SYNC_DONE:
 			RecountTags(ctx, msg, sfx)
 			CalculateAliasedCounts(ctx, msg, sfx)
 			sfx <- " done."
-			storage.SetMigrationState(SYNC_BEGIN, 0, false)
+			storage.SetMigrationState(settings, SYNC_BEGIN, 0, false)
 			state = SYNC_BREAK
 			break
 

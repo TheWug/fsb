@@ -161,13 +161,13 @@ func GetUserTagRules(id int, name string) (string, error) {
 	return rules, err
 }
 
-func SetMigrationState(state, progress int, is_full bool) (error) {
+func SetMigrationState(settings UpdaterSettings, state, progress int, is_full bool) (error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }
 
 	sq := "DELETE FROM import_progress"
-	_, err = tx.Exec(sq)
+	_, err := tx.Exec(sq)
 	if err != nil { return err }
 
 	sq = "INSERT INTO import_progress VALUES ($1, $2, $3)"
@@ -178,9 +178,13 @@ func SetMigrationState(state, progress int, is_full bool) (error) {
 	return nil
 }
 
-func GetMigrationState() (int, int, bool) {
+func GetMigrationState(settings UpdaterSettings) (int, int, bool) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return 0, 0, false }
+
 	sq := "SELECT state, progress, is_full FROM import_progress LIMIT 1"
-	row := Db_pool.QueryRow(sq)
+	row := tx.QueryRow(sq)
 
 	var state, progress int
 	var is_full bool
@@ -188,6 +192,7 @@ func GetMigrationState() (int, int, bool) {
 
 	if err != nil { log.Println(err.Error()) }
 
+	settings.Transaction.commit = mine
 	return state, progress, is_full
 }
 
