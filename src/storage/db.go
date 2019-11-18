@@ -267,9 +267,15 @@ func ClearTagIndex(settings UpdaterSettings) (error) {
 	// instead, keep them. they may conflict later with real tags, in which case they will be de-phantomified.
 	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
 
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
+
 	table := "tag_index"
 
-	_, err := Db_pool.Exec("DELETE FROM " + suf(table) + " WHERE tag_id > 0")
+	_, err := tx.Exec("DELETE FROM " + suf(table) + " WHERE tag_id > 0")
+
+	settings.Transaction.commit = mine
 	return err
 }
 
