@@ -45,7 +45,8 @@ func (this *TransactionBox) Rollback() error {
 // ones are no-ops.
 
 // use it like this:
-// defer box.Finalize(box.PopulateIfEmpty(db))
+// mine, tx := box.PopulateIfEmpty(db)
+// defer box.Finalize(mine)
 func (this *TransactionBox) Finalize(is_transaction_mine bool) {
 	if is_transaction_mine && this.tx != nil {
 		if this.commit {
