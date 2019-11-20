@@ -983,7 +983,12 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		}
 	}
 
-	t1, err := storage.GetTag(ctx.Cmd.Args[0], storage.EnumerateControl{CreatePhantom: true})
+	ctrl := storage.EnumerateControl{
+		CreatePhantom: true,
+		OrderByCount: true,
+	}
+
+	t1, err := storage.GetTag(ctx.Cmd.Args[0], ctrl)
 	if err != nil { log.Printf("Error occurred when looking up tag: %s", err.Error()) }
 	if t1 == nil {
 		ctx.ReplyAsync(data.OMessage{Text: fmt.Sprintf("Tag doesn't exist: %s.", start_tag)}, nil)
@@ -992,7 +997,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 
 	msg, sfx := ProgressMessage(ctx, "Checking for duplicates...", "(enumerate tags)")
 
-	tags, _ := storage.EnumerateAllTags(storage.EnumerateControl{OrderByCount: true})
+	tags, _ := storage.EnumerateAllTags(ctrl)
 
 	for _, t2 := range tags {
 		if t1.Name == t2.Name { continue } // skip tag = tag
@@ -1046,8 +1051,9 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 
 	// aaaaaand finally add any matches manually included.
 	sfx <- "(merge included)"
+	ctrl.CreatePhantom = false
 	for _, item := range include {
-		t, _ := storage.GetTag(item, storage.EnumerateControl{})
+		t, _ := storage.GetTag(item, ctrl)
 		if t != nil { results[item] = TagEditBox{Tag: *t, EditDistance: wordset.Levenshtein(t1.Name, t.Name)} }
 	}
 
