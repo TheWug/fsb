@@ -216,6 +216,7 @@ func PrefixedTagToTypedTag(name string) (string, int) {
 type EnumerateControl struct {
 	OrderByCount bool
 	CreatePhantom bool
+	Transaction TransactionBox
 }
 
 func GetTag(name string, ctrl EnumerateControl) (*apitypes.TTagData, error) {
