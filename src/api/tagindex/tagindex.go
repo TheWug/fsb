@@ -983,10 +983,19 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		}
 	}
 
+	txbox, err := storage.NewTxBox()
+	if err != nil {
+		ctx.ReplyAsync(data.OMessage{Text: fmt.Sprintf("Error opening DB transaction: %s.", err.Error())}, nil)
+		return
+	}
+
 	ctrl := storage.EnumerateControl{
+		Transaction: txbox,
 		CreatePhantom: true,
 		OrderByCount: true,
 	}
+
+	defer ctrl.Finalize(true)
 
 	t1, err := storage.GetTag(ctx.Cmd.Args[0], ctrl)
 	if err != nil { log.Printf("Error occurred when looking up tag: %s", err.Error()) }
@@ -1115,6 +1124,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		api_timeout.Stop()
 	}
 
+	ctrl.Transaction.MarkForCommit()
 	_ = save
 }
 
