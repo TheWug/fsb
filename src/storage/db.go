@@ -50,14 +50,18 @@ func (this *TransactionBox) Rollback() error {
 func (this *TransactionBox) Finalize(is_transaction_mine bool) {
 	if is_transaction_mine && this.tx != nil {
 		if this.commit {
-			this.tx.Commit()
+			this.Commit()
 		} else {
-			this.tx.Rollback()
+			this.Rollback()
 		}
 		*this = TransactionBox{}
 	}
 	// if the transaction isn't ours, or there is no transaction (maybe because
 	// this isn't the first call), do nothing.
+}
+
+func (this *TransactionBox) MarkForCommit() {
+	this.commit = true
 }
 
 // populates the transaction box with a new transaction. If it succeeds, it returns
