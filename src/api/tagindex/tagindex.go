@@ -1203,7 +1203,21 @@ type Triplet struct {
 }
 
 func Concatenations(ctx *gogram.MessageCtx) {
-	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+	txbox, err := storage.NewTxBox()
+	if err != nil {
+		ctx.ReplyAsync(data.OMessage{Text: fmt.Sprintf("Error opening DB transaction: %s.", err.Error())}, nil)
+		return
+	}
+
+	ctrl := storage.EnumerateControl{
+		Transaction: txbox,
+		CreatePhantom: true,
+		OrderByCount: true,
+	}
+
+	defer ctrl.Transaction.Finalize(true)
+
+	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{Transaction: txbox}, ctx.Msg.From.Id)
 	if err != nil || !janitor { return }
 
 	var cats []Triplet
@@ -1272,7 +1286,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 			return
 		}
 
-		tags, _ := storage.EnumerateAllTags(storage.EnumerateControl{})
+		tags, _ := storage.EnumerateAllTags(storage.EnumerateControl{Transaction: txbox})
 		exceptions, _ := storage.EnumerateCatsExceptions()
 
 		tagmap := make(map[string]types.TTagData, len(tags))
@@ -1328,9 +1342,9 @@ func Concatenations(ctx *gogram.MessageCtx) {
 	api_timeout := time.NewTicker(750 * time.Millisecond)
 	updated := 1
 	for _, i := range fix_list {
-		t, err := storage.GetTag(cats[i].tag.Name, storage.EnumerateControl{})
+		t, err := storage.GetTag(cats[i].tag.Name, storage.EnumerateControl{Transaction: txbox})
 		cats[i].tag = *t
-		posts, err := storage.LocalTagSearch(cats[i].tag, storage.EnumerateControl{})
+		posts, err := storage.LocalTagSearch(cats[i].tag, storage.EnumerateControl{Transaction: txbox})
 		if err != nil {
 			sfx <- fmt.Sprintf(" (error: %s)", err.Error())
 			return
@@ -1347,7 +1361,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 			}
 
 			if newp != nil {
-				err = storage.UpdatePost(p, *newp, storage.UpdaterSettings{})
+				err = storage.UpdatePost(p, *newp, storage.UpdaterSettings{Transaction: txbox})
 				if err != nil {
 					sfx <- fmt.Sprintf(" (error: %s)", err.Error())
 					return
@@ -1363,7 +1377,9 @@ func Concatenations(ctx *gogram.MessageCtx) {
 		api_timeout.Stop()
 		message.WriteString(fmt.Sprintf("Fixing %d: <code>%s</code> -> <code>%s, %s</code>\n", i, cats[i].tag.Name, cats[i].subtag1.Name, cats[i].subtag2.Name))
 	}
+
 	ctx.ReplyAsync(data.OMessage{Text: message.String(), ParseMode: data.HTML}, nil)
+	ctrl.Transaction.MarkForCommit()
 }
 
 // func BulkSearch(searchtags string)
