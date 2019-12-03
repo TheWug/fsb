@@ -887,6 +887,7 @@ const (
 	MODE_DISTINCT = iota
 	MODE_EXCLUDE = iota
 	MODE_INCLUDE = iota
+	MODE_LIST = iota
 	MODE_THRESHHOLD = iota
 	MODE_FREQ_RATIO = iota
 	MODE_IGNORE = iota
@@ -1141,11 +1142,17 @@ func Blits(ctx *gogram.MessageCtx) {
 			mode = MODE_EXCLUDE
 		} else if token == "--mark" {
 			mode = MODE_INCLUDE
+		} else if token == "--list" {
+			mode = MODE_LIST
 		} else if mode == MODE_EXCLUDE {
 			exclude[token] = true
 		} else if mode == MODE_INCLUDE {
 			include[token] = true
 		}
+	}
+
+	if mode == MODE_LIST {
+
 	}
 
 	tags, _ := storage.EnumerateAllTags(storage.EnumerateControl{})
@@ -1154,15 +1161,14 @@ func Blits(ctx *gogram.MessageCtx) {
 		if utf8.RuneCountInString(t.Name) <= 2 {
 			intermediate = append(intermediate, t)
 		}
-	}
 
-	for _, t := range intermediate {
 		if include[t.Name] {
 			storage.MarkBlit(t.Id, true)
 		} else if exclude[t.Name] {
 			storage.MarkBlit(t.Id, false)
 		}
 	}
+
 	allknownblits := make(map[int]bool)
 	for _, b := range storage.GetMarkedAndUnmarkedBlits() {
 		allknownblits[b] = true
