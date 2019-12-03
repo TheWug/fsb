@@ -1330,7 +1330,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 	for _, i := range fix_list {
 		t, err := storage.GetTag(cats[i].tag.Name, storage.EnumerateControl{})
 		cats[i].tag = *t
-		posts, err := storage.LocalTagSearch(cats[i].tag)
+		posts, err := storage.LocalTagSearch(cats[i].tag, storage.EnumerateControl{})
 		if err != nil {
 			sfx <- fmt.Sprintf(" (error: %s)", err.Error())
 			return
