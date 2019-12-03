@@ -959,7 +959,22 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		}
 	}
 
-	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+
+	txbox, err := storage.NewTxBox()
+	if err != nil {
+		ctx.ReplyAsync(data.OMessage{Text: fmt.Sprintf("Error opening DB transaction: %s.", err.Error())}, nil)
+		return
+	}
+
+	ctrl := storage.EnumerateControl{
+		Transaction: txbox,
+		CreatePhantom: true,
+		OrderByCount: true,
+	}
+
+	defer ctrl.Transaction.Finalize(true)
+
+	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{Transaction: ctrl.Transaction}, ctx.Msg.From.Id)
 	if (err != nil || !janitor) && fix {
 		ctx.ReplyAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
 		return
@@ -982,20 +997,6 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 			threshhold = 4
 		}
 	}
-
-	txbox, err := storage.NewTxBox()
-	if err != nil {
-		ctx.ReplyAsync(data.OMessage{Text: fmt.Sprintf("Error opening DB transaction: %s.", err.Error())}, nil)
-		return
-	}
-
-	ctrl := storage.EnumerateControl{
-		Transaction: txbox,
-		CreatePhantom: true,
-		OrderByCount: true,
-	}
-
-	defer ctrl.Finalize(true)
 
 	t1, err := storage.GetTag(ctx.Cmd.Args[0], ctrl)
 	if err != nil { log.Printf("Error occurred when looking up tag: %s", err.Error()) }
