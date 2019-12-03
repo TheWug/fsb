@@ -1273,11 +1273,11 @@ func Concatenations(ctx *gogram.MessageCtx) {
 	if cats == nil {
 		var message bytes.Buffer
 		for _, tag := range manual_ignore {
-			storage.SetCatsException(tag)
+			storage.SetCatsException(tag, ctrl)
 			message.WriteString(fmt.Sprintf("Adding to ignore list: <code>%s</code>\n", tag))
 		}
 		for _, tag := range manual_unignore {
-			storage.ClearCatsException(tag)
+			storage.ClearCatsException(tag, ctrl)
 			message.WriteString(fmt.Sprintf("Removing from ignore list: <code>%s</code>\n", tag))
 		}
 
@@ -1287,7 +1287,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 		}
 
 		tags, _ := storage.EnumerateAllTags(storage.EnumerateControl{Transaction: txbox})
-		exceptions, _ := storage.EnumerateCatsExceptions()
+		exceptions, _ := storage.EnumerateCatsExceptions(ctrl)
 
 		tagmap := make(map[string]types.TTagData, len(tags))
 		exceptionmap := make(map[string]bool, len(exceptions))
@@ -1334,7 +1334,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 	msg, sfx := ProgressMessage(ctx, "", "")
 	var message bytes.Buffer
 	for _, i := range ignore_list {
-		storage.SetCatsException(cats[i].tag.Name)
+		storage.SetCatsException(cats[i].tag.Name, ctrl)
 		msg <- fmt.Sprintf("Adding %d to ignore list: <code>%s</code>\n", i, cats[i].tag.Name)
 	}
 	msg <- "\nUpdating posts which need fixing... "

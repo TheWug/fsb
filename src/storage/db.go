@@ -603,9 +603,13 @@ func EnumerateAllTags(ctrl EnumerateControl) (apitypes.TTagInfoArray, error) {
 	return output, nil
 }
 
-func EnumerateCatsExceptions() ([]string, error) {
+func EnumerateCatsExceptions(ctrl EnumerateControl) ([]string, error) {
+	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
+	defer ctrl.Transaction.Finalize(mine)
+	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
+
 	sql := "SELECT tag FROM cats_ignored"
-	rows, err := Db_pool.Query(sql)
+	rows, err := tx.Query(sql)
 
 	var output []string
 
@@ -616,18 +620,32 @@ func EnumerateCatsExceptions() ([]string, error) {
 
 		output = append(output, tag)
 	}
+
+	ctrl.Transaction.commit = mine
 	return output, nil
 }
 
-func SetCatsException(tag string) (error) {
+func SetCatsException(tag string, ctrl EnumerateControl) (error) {
+	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
+	defer ctrl.Transaction.Finalize(mine)
+	if ctrl.Transaction.err != nil { return ctrl.Transaction.err }
+
 	sql := "INSERT INTO cats_ignored (tag) VALUES ($1)"
-	_, err := Db_pool.Exec(sql, tag)
+	_, err := tx.Exec(sql, tag)
+
+	ctrl.Transaction.commit = mine
 	return err
 }
 
-func ClearCatsException(tag string) (error) {
+func ClearCatsException(tag string, ctrl EnumerateControl) (error) {
+	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
+	defer ctrl.Transaction.Finalize(mine)
+	if ctrl.Transaction.err != nil { return ctrl.Transaction.err }
+
 	sql := "DELETE FROM cats_ignored WHERE tag = $1"
-	_, err := Db_pool.Exec(sql, tag)
+	_, err := tx.Exec(sql, tag)
+
+	ctrl.Transaction.commit = mine
 	return err
 }
 
