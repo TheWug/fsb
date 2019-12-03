@@ -1006,6 +1006,8 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 	}
 
 	msg, sfx := ProgressMessage(ctx, "Checking for duplicates...", "(enumerate tags)")
+	defer close(sfx)
+	defer close(msg)
 
 	tags, _ := storage.EnumerateAllTags(ctrl)
 
