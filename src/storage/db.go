@@ -999,15 +999,22 @@ type BlitData struct {
 	Valid bool
 }
 
-func GetMarkedAndUnmarkedBlits() ([]BlitData) {
+func GetMarkedAndUnmarkedBlits(ctrl EnumerateControl) ([]BlitData, error) {
+	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
+	defer ctrl.Transaction.Finalize(mine)
+	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
+
 	var blit BlitData
 	var out []BlitData
-	rows, _ := Db_pool.Query("SELECT is_blit, tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM blit_tag_registry INNER JOIN tag_index USING (tag_id) ORDER BY NOT is_blit")
+	rows, _ := tx.Query("SELECT is_blit, tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM blit_tag_registry INNER JOIN tag_index USING (tag_id) ORDER BY NOT is_blit")
 	for rows.Next() {
-		rows.Scan(&blit.Valid, &blit.Id, &blit.Name, &blit.Count, &blit.Type, &blit.Locked)
+		err := rows.Scan(&blit.Valid, &blit.Id, &blit.Name, &blit.Count, &blit.Type, &blit.Locked)
+		if err != nil { return nil, err }
 		out = append(out, blit)
 	}
-	return out
+
+	ctrl.Transaction.commit = mine
+	return out, nil
 }
 
 func MarkBlit(id int, mark bool) {

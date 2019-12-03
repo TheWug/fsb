@@ -1170,7 +1170,13 @@ func Blits(ctx *gogram.MessageCtx) {
 	}
 
 	allknownblits := make(map[int]bool)
-	for _, b := range storage.GetMarkedAndUnmarkedBlits() {
+	allblits, err := storage.GetMarkedAndUnmarkedBlits(storage.EnumerateControl{})
+	if err != nil {
+		ctx.ReplyAsync(data.OMessage{Text: "Whoops! " + err.Error(), ParseMode: data.HTML}, nil)
+		return
+	}
+
+	for _, b := range allblits {
 		allknownblits[b.Id] = true
 	}
 
