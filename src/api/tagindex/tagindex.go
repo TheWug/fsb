@@ -1171,7 +1171,7 @@ func Blits(ctx *gogram.MessageCtx) {
 
 	allknownblits := make(map[int]bool)
 	for _, b := range storage.GetMarkedAndUnmarkedBlits() {
-		allknownblits[b] = true
+		allknownblits[b.Id] = true
 	}
 
 	for _, b := range intermediate {

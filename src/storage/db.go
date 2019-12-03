@@ -993,13 +993,19 @@ func UpdatePost(oldpost, newpost apitypes.TSearchResult, settings UpdaterSetting
 	return nil
 }
 
-func GetMarkedAndUnmarkedBlits() ([]int) {
-	var id int
-	var out []int
-	rows, _ := Db_pool.Query("SELECT tag_id FROM blit_tag_registry")
+type BlitData struct {
+	apitypes.TTagData
+
+	Valid bool
+}
+
+func GetMarkedAndUnmarkedBlits() ([]BlitData) {
+	var blit BlitData
+	var out []BlitData
+	rows, _ := Db_pool.Query("SELECT is_blit, tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM blit_tag_registry INNER JOIN tag_index USING (tag_id) ORDER BY NOT is_blit")
 	for rows.Next() {
-		rows.Scan(&id)
-		out = append(out, id)
+		rows.Scan(&blit.Valid, &blit.Id, &blit.Name, &blit.Count, &blit.Type, &blit.Locked)
+		out = append(out, blit)
 	}
 	return out
 }
