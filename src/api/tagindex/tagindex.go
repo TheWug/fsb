@@ -1163,9 +1163,9 @@ func Blits(ctx *gogram.MessageCtx) {
 		}
 
 		if include[t.Name] {
-			storage.MarkBlit(t.Id, true)
+			storage.MarkBlit(t.Id, true, storage.EnumerateControl{})
 		} else if exclude[t.Name] {
-			storage.MarkBlit(t.Id, false)
+			storage.MarkBlit(t.Id, false, storage.EnumerateControl{})
 		}
 	}
 

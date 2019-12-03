@@ -1017,8 +1017,15 @@ func GetMarkedAndUnmarkedBlits(ctrl EnumerateControl) ([]BlitData, error) {
 	return out, nil
 }
 
-func MarkBlit(id int, mark bool) {
-	Db_pool.Exec("INSERT INTO blit_tag_registry (tag_id, is_blit) VALUES ($1, $2) ON CONFLICT (tag_id) DO UPDATE SET is_blit = EXCLUDED.is_blit", id, mark)
+func MarkBlit(id int, mark bool, ctrl EnumerateControl) (error) {
+	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
+	defer ctrl.Transaction.Finalize(mine)
+	if ctrl.Transaction.err != nil { return ctrl.Transaction.err }
+
+	_, err := tx.Exec("INSERT INTO blit_tag_registry (tag_id, is_blit) VALUES ($1, $2) ON CONFLICT (tag_id) DO UPDATE SET is_blit = EXCLUDED.is_blit", id, mark)
+
+	ctrl.Transaction.commit = mine
+	return err
 }
 
 /*
