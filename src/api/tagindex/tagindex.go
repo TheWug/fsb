@@ -1133,6 +1133,23 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 }
 
 func Blits(ctx *gogram.MessageCtx) {
+	txbox, err := storage.NewTxBox()
+	if err != nil {
+		ctx.ReplyAsync(data.OMessage{Text: fmt.Sprintf("Error opening DB transaction: %s.", err.Error())}, nil)
+		return
+	}
+
+	ctrl := storage.EnumerateControl{
+		Transaction: txbox,
+		CreatePhantom: true,
+		OrderByCount: true,
+	}
+
+	defer ctrl.Transaction.Finalize(true)
+
+	_, _, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{Transaction: txbox}, ctx.Msg.From.Id)
+	if err != nil || !janitor { return }
+
 	mode := MODE_READY
 	include, exclude := make(map[string]bool), make(map[string]bool)
 
@@ -1155,7 +1172,7 @@ func Blits(ctx *gogram.MessageCtx) {
 
 	}
 
-	tags, _ := storage.EnumerateAllTags(storage.EnumerateControl{})
+	tags, _ := storage.EnumerateAllTags(ctrl)
 	var intermediate, blits types.TTagInfoArray
 	for _, t := range tags {
 		if utf8.RuneCountInString(t.Name) <= 2 {
@@ -1163,14 +1180,14 @@ func Blits(ctx *gogram.MessageCtx) {
 		}
 
 		if include[t.Name] {
-			storage.MarkBlit(t.Id, true, storage.EnumerateControl{})
+			storage.MarkBlit(t.Id, true, ctrl)
 		} else if exclude[t.Name] {
-			storage.MarkBlit(t.Id, false, storage.EnumerateControl{})
+			storage.MarkBlit(t.Id, false, ctrl)
 		}
 	}
 
 	allknownblits := make(map[int]bool)
-	allblits, err := storage.GetMarkedAndUnmarkedBlits(storage.EnumerateControl{})
+	allblits, err := storage.GetMarkedAndUnmarkedBlits(ctrl)
 	if err != nil {
 		ctx.ReplyAsync(data.OMessage{Text: "Whoops! " + err.Error(), ParseMode: data.HTML}, nil)
 		return
@@ -1208,6 +1225,7 @@ func Blits(ctx *gogram.MessageCtx) {
 		buf.WriteString(html.EscapeString(newstr))
 	}
 	ctx.ReplyAsync(data.OMessage{Text: "<pre>" + buf.String() + "</pre>", ParseMode: data.HTML}, nil)
+	ctrl.Transaction.MarkForCommit()
 }
 
 type Triplet struct {
