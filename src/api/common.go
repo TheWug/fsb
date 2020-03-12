@@ -43,8 +43,8 @@ func Init(s settings) error {
 
 func SanitizeRating(input string) (string) {
 	input = strings.Replace(strings.ToLower(input), "rating:", "", -1)
-	if input == "explicit" || input == "e" { return "explicit" }
-	if input == "questionable" || input == "q" { return "questionable" }
-	if input == "safe" || input == "s" { return "safe" }
+	if input == "explicit" || input == "e" { return "e" }
+	if input == "questionable" || input == "q" { return "q" }
+	if input == "safe" || input == "s" { return "s" }
 	return ""
 }
