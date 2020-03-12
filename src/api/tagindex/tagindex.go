@@ -3,7 +3,6 @@ package tagindex
 import (
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"
-	"github.com/meirf/gopart"
 
 	"api"
 	"api/types"
@@ -17,10 +16,8 @@ import (
 	"unicode/utf8"
 	"bytes"
 	"html"
-	"errors"
 	"sort"
 	"strings"
-	"math/rand"
 	"sync"
 )
 
@@ -283,6 +280,7 @@ func (this *SearchChanBox) Close() {
 	close(this.Channel)
 }
 
+/*
 func SyncPosts(ctx *gogram.MessageCtx) {
 	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
 	if err != nil || !janitor {
@@ -646,6 +644,7 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 		}
 	}
 }
+*/
 
 func UpdateAliases(ctx *gogram.MessageCtx) {
 	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
@@ -914,6 +913,7 @@ func NewTagsFromOldTags(oldtags string, deltags, addtags map[string]bool) (strin
 	return strings.Join(tags, " ")
 }
 
+/*
 func FindTagTypos(ctx *gogram.MessageCtx) {
 	mode := MODE_READY
 	var distinct, include, exclude []string
@@ -1131,6 +1131,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 	ctrl.Transaction.MarkForCommit()
 	_ = save
 }
+*/
 
 func Blits(ctx *gogram.MessageCtx) {
 	txbox, err := storage.NewTxBox()
@@ -1258,6 +1259,7 @@ type Triplet struct {
 	tag, subtag1, subtag2 types.TTagData
 }
 
+/*
 func Concatenations(ctx *gogram.MessageCtx) {
 	txbox, err := storage.NewTxBox()
 	if err != nil {
@@ -1437,6 +1439,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 	ctx.ReplyAsync(data.OMessage{Text: message.String(), ParseMode: data.HTML}, nil)
 	ctrl.Transaction.MarkForCommit()
 }
+*/
 
 // func BulkSearch(searchtags string)
 
