@@ -30,8 +30,15 @@ type TTagInfoArray []TTagData
 
 type TAliasData struct {
 	Id int `json:"id"`
-	Name string `json:"name"`
-	Alias int `json:"alias_id"`
+	Name string `json:"consequent_name"`
+	Alias int `json:"antecedent_name"`
+
+	// reason
+	// creator_id
+	// created_at
+	// updated_at
+	// forum_post_id
+	// forum_topic_id
 }
 
 type TAliasInfoArray []TAliasData
