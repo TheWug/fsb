@@ -181,22 +181,10 @@ func FetchOnePost(user, apitoken string, id int) (*types.TSearchResult, error) {
 }
 
 func ListOnePageOfDeletedPosts(user, apitoken string, page int) (types.TResultArray, bool, int, error) {
-	url := "/posts.json"
+	posts, err := TagSearch(user, apitoken, "status:deleted", page, 10000)
 
-	var posts types.TResultArray
-
-	r, e := api.New(url).
-			BasicAuthentication(user, apitoken).
-			URLArg("limit", "10000").
-			URLArg("page", strconv.Itoa(page)).
-			URLArg("tags", "status:deleted").
-			Into(&posts).
-			Do()
-
-	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
-
-	if e != nil {
-		return posts, true, page, e
+	if err != nil {
+		return posts, true, page, err
 	}
 
 	return posts, len(posts) != 0, page + 1, nil
