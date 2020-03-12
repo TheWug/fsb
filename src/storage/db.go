@@ -1006,7 +1006,7 @@ func GetMarkedAndUnmarkedBlits(ctrl EnumerateControl) ([]BlitData, error) {
 
 	var blit BlitData
 	var out []BlitData
-	rows, _ := tx.Query("SELECT is_blit, tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM blit_tag_registry INNER JOIN tag_index USING (tag_id) ORDER BY NOT is_blit")
+	rows, _ := tx.Query("SELECT is_blit, tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM blit_tag_registry INNER JOIN tag_index USING (tag_id) ORDER BY NOT is_blit, tag_name")
 	for rows.Next() {
 		err := rows.Scan(&blit.Valid, &blit.Id, &blit.Name, &blit.Count, &blit.Type, &blit.Locked)
 		if err != nil { return nil, err }

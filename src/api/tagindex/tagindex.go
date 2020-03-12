@@ -1169,7 +1169,33 @@ func Blits(ctx *gogram.MessageCtx) {
 	}
 
 	if mode == MODE_LIST {
+		allblits, err := storage.GetMarkedAndUnmarkedBlits(ctrl)
+		if err != nil {
+			ctx.ReplyAsync(data.OMessage{Text: "Whoops! " + err.Error(), ParseMode: data.HTML}, nil)
+			return
+		}
 
+		var buf bytes.Buffer
+		last_valid := true
+
+		buf.WriteString("<b>Blit List</b>\n<pre>")
+		for _, b := range allblits {
+			if last_valid != b.Valid {
+				buf.WriteString("</pre>\n\n<b>Ignore List</b>\n<pre>")
+			}
+			last_valid = b.Valid
+			if len(b.Name) + 1 + buf.Len() > 4095 + 36 - 24 { break } // 4095 max, 36 chars of HTML tag, 24 characters of string literal
+			buf.WriteString(html.EscapeString(b.Name))
+			buf.WriteRune(' ')
+		}
+		if last_valid != false {
+			buf.WriteString("</pre>\n\n<b>Ignore List</b>\n")
+		} else {
+			buf.WriteString("</pre>")
+		}
+
+		ctx.ReplyAsync(data.OMessage{Text: buf.String(), ParseMode: data.HTML}, nil)
+		return
 	}
 
 	tags, _ := storage.EnumerateAllTags(ctrl)
