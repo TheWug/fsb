@@ -52,38 +52,98 @@ type TTagHistory struct {
 
 type THistoryArray []TTagHistory
 
+type TPostScore struct {
+	Upvotes   int `json:"up"`
+	Downvotes int `json:"down"`
+	Score     int `json:"total"`
+}
+
+type TPostFile struct {
+	Width     int    `json:"width"`
+	Height    int    `json:"height"`
+	File_ext  string `json:"ext"`
+	File_size int    `json:"size"`
+	File_url  string `json:"url"`
+	Md5       string `json:"md5"`
+}
+
+type TPostPreview struct {
+	Preview_width  int    `json:"width"`
+	Preview_height int    `json:"height"`
+	Preview_url    string `json:"url"`
+}
+
+type TPostSample struct {
+	Sample_width  int    `json:"width"`
+	Sample_height int    `json:"height"`
+	Sample_url    string `json:"url"`
+	Has_sample    bool   `json:"has"`
+}
+
+type TPostFlags struct {
+	Pending       bool `json:"pending"`
+	Flagged       bool `json:"flagged"`
+	Locked_notes  bool `json:"note_locked"`
+	Locked_status bool `json:"status_locked"`
+	Locked_rating bool `json:"rating_locked"`
+	Deleted       bool `json:"deleted"`
+}
+
+type TPostRelationships struct {
+	Parent_id           int  `json:"parent_id,omitempty"`
+	Has_children        bool `json:"has_children"`
+	Has_active_children bool `json:"has_active_children"`
+	Children          []int  `json:"children,omitempty"`
+}
+
+type TPostTags struct {
+	General   []string `json:"general"`
+	Species   []string `json:"species"`
+	Character []string `json:"character"`
+	Copyright []string `json:"copyright"`
+	Artist    []string `json:"artist"`
+	Invalid   []string `json:"invalid"`
+	Lore      []string `json:"lore"`
+	Meta      []string `json:"meta"`
+}
+
 type TSearchResult struct {
-	Id int `json:"id"`
-	Tags string `json:"tags"`
-	Description string `json:"description"`
-//	Created_at JSONTime `json:"created_at"`
-	Creator_id int `json:"creator_id"`
-	Author string `json:"author"`
-	Change int `json:"change"`
-	Source string `json:"source"`
-	Score int `json:"score"`
-	Fav_count int `json:"fav_count"`
-	Md5 string `json:"md5"`
-	File_size int `json:"file_size"`
-	File_url string `json:"file_url"`
-	File_ext string `json:"file_ext"`
-	Preview_url string `json:"preview_url"`
-	Preview_width int `json:"preview_width"`
-	Preview_height int `json:"preview_height"`
-	Sample_url string `json:"sample_url"`
-	Sample_width int `json:"sample_width"`
-	Sample_height int `json:"sample_height"`
-	Rating string `json:"rating"`
-	Status string `json:"status"`
-	Width int `json:"width"`
-	Height int `json:"height"`
-	Has_comments bool `json:"has_comments"`
-	Has_notes bool `json:"has_notes"`
-	Has_children bool `json:"has_children"`
-//	Children string `json:"children,omitempty"`
-	Parent_id int `json:"parent_id,omitempty"`
-	Artist []string `json:"artist,omitempty"`
-	Sources []string `json:"sources,omitempty"`
+	// anonymous nested subcomponents
+	TPostScore         `json:"score"`
+	TPostFile          `json:"file"`
+	TPostPreview       `json:"preview"`
+	TPostSample        `json:"sample"`
+	TPostFlags         `json:"flags"`
+	TPostRelationships `json:"relationships"`
+	TPostTags          `json:"tags"`
+
+	Id            int `json:"id"`
+	Description   string `json:"description"`
+	Creator_id    int `json:"uploader_id"`
+	Change        int `json:"change_seq"`
+	Fav_count     int `json:"fav_count"`
+	Rating        string `json:"rating"`
+	Comment_count int `json:"comment_count"`
+	Sources     []string `json:"sources,omitempty"`
+
+//	Created_at    JSONTime `json:"created_at"`
+//	Updated_at    JSONTime `json:"updated_at"`
+//	Author        string `json:"author"`
+//	Has_notes     bool `json:"has_notes"`
+//	Artist      []string `json:"artist,omitempty"`
+}
+
+func (this *TSearchResult) Tags() ([]string) {
+	var tags []string
+	tags = append(tags, this.General...)
+	tags = append(tags, this.Species...)
+	tags = append(tags, this.Character...)
+	tags = append(tags, this.Copyright...)
+	tags = append(tags, this.Artist...)
+	tags = append(tags, this.Invalid...)
+	tags = append(tags, this.Lore...)
+	tags = append(tags, this.Meta...)
+	return tags
 }
 
 type TResultArray []TSearchResult
