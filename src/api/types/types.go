@@ -16,9 +16,14 @@ const (
 type TTagData struct {
 	Id int `json:"id"`
 	Name string `json:"name"`
-	Count int `json:"count"`
-	Type int `json:"type"`
-	Locked *bool `json:"type_locked"`
+	Count int `json:"post_count"`
+	Type int `json:"category"`
+	Locked *bool `json:"is_locked"`
+
+	// created_at
+	// updated_at
+	// related_tags
+	// related_tags_updated_at
 }
 
 type TTagInfoArray []TTagData
