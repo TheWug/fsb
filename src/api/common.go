@@ -16,7 +16,7 @@ var Endpoint         string
 var FilteredEndpoint string
 var StaticPrefix     string
 
-var userAgent string = "KnottyBot (telegram, v1.0, operator: snergal)"
+var userAgent string = "KnottyBot (telegram, v1.1, operator: snergal)"
 var api reqtify.Reqtifier
 
 type settings interface {
