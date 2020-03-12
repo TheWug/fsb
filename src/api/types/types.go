@@ -8,6 +8,9 @@ const (
 	Copyright = 3
 	Character = 4
 	Species = 5
+	Invalid = 6
+	Meta = 7
+	Lore = 8
 )
 
 type TTagData struct {
