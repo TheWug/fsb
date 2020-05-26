@@ -826,32 +826,6 @@ func ImportPostTagsFromNameToID(settings UpdaterSettings, status chan string) (e
 	return nil
 }
 
-func FindPostGaps(minimum int, settings UpdaterSettings) ([]int, error) {
-	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
-
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
-
-	table := "post_tags_by_name"
-
-	query := "SELECT * from GENERATE_SERIES($1, (SELECT MAX(post_id) FROM " + suf(table) + ")) AS post_id EXCEPT SELECT DISTINCT post_id FROM " + suf(table) + " ORDER BY post_id"
-	rows, err := tx.Query(query, minimum)
-
-	if err != nil { return nil, err }
-
-	var i int
-	var out []int
-	for rows.Next() {
-		err = rows.Scan(&i)
-		if err != nil { return nil, err }
-		out = append(out, i)
-	}
-
-	settings.Transaction.commit = mine
-	return out, nil
-}
-
 func ResetPostTags() (error) {
 	tx, err := Db_pool.Begin()
 	if err != nil { return err }
