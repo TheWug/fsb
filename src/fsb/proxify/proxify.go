@@ -77,17 +77,14 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 		if debugmode { GenerateDebugText(&foo, result) }
 
 		s2p := func(s string) *string { return &s }
-
-		if debugmode {
-			foo.ReplyMarkup = &data.TInlineKeyboard{
-				Buttons: [][]data.TInlineKeyboardButton{
-					[]data.TInlineKeyboardButton{
-						data.TInlineKeyboardButton{Text: "Upvote \U0001F44D", Data: s2p(fmt.Sprintf("/upvote %d", result.Id))},
-						data.TInlineKeyboardButton{Text: "Downvote \U0001F44E", Data: s2p(fmt.Sprintf("/downvote %d", result.Id))},
-						data.TInlineKeyboardButton{Text: "Favorite \u2764\uFE0F", Data: s2p(fmt.Sprintf("/favorite %d", result.Id))},
-					},
+		foo.ReplyMarkup = &data.TInlineKeyboard{
+			Buttons: [][]data.TInlineKeyboardButton{
+				[]data.TInlineKeyboardButton{
+					data.TInlineKeyboardButton{Text: "\U0001F44D Up", Data: s2p(fmt.Sprintf("/upvote %d", result.Id))},
+					data.TInlineKeyboardButton{Text: "\U0001F44E Down", Data: s2p(fmt.Sprintf("/downvote %d", result.Id))},
+					data.TInlineKeyboardButton{Text: "\u2764\uFE0F Fav", Data: s2p(fmt.Sprintf("/favorite %d", result.Id))},
 				},
-			}
+			},
 		}
 		return foo
 	}
