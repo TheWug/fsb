@@ -19,7 +19,6 @@ import (
 	"sort"
 	"html"
 	"io/ioutil"
-	"log"
 	"io"
 	"sync"
 
@@ -1279,9 +1278,7 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	log.Printf("first:\n")
 	user, apikey, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
-	log.Printf("over.\n")
 	if !janitor {
 		// commands from non-authorized users are silently ignored
 		return
