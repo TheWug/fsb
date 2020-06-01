@@ -570,6 +570,7 @@ func EnumerateCatsExceptions(ctrl EnumerateControl) ([]string, error) {
 
 	sql := "SELECT tag FROM cats_ignored"
 	rows, err := tx.Query(sql)
+	if err != nil { return nil, err }
 
 	var output []string
 
