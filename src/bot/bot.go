@@ -499,40 +499,76 @@ login.advanced.janitor. <code>/logout                -</code> disconnect your ac
 .advanced. <code>/post        ... -</code> posts a new file.
 .advanced. <code>/settagrules ... -</code> updates your tag rules.
 janitor. 
-janitor. <b>Janitor features</b>
-janitor. I have some powerful features for manipulating posts. Use of these features is limited, contact the operator to apply for access. Remember that with great power comes great responsibility: these features can perform automated bulk edits and should be used with great carefulness. [X] indicates a deprecated (likely to be removed) command, and [D] or [U] indicates a development feature which may/may not be finished. Ask before using them.
-janitor. <code>/indextags        -</code> Syncs tag database.
-janitor. <code>      --full      -</code> Discard local database first.
-janitor. <code>/indextagaliases  -</code> Syncs alias database.
-janitor. <code>      --full      -</code> [U] Discard local database first.
-janitor. <code>/sync             -</code> [D] Fetches new data from the site.
-janitor. <code>      --all       -</code> [D] Fetch everything. (Default behavior)
-janitor. <code>      --posts     -</code> [D] Fetch posts and tags.
-janitor. <code>      --tags      -</code> [D] Fetch aliases and tags.
-janitor. <code>      --aliases   -</code> [D] Fetch tags only.
-janitor. <code>      --refetch   -</code> [D] Refetch everything, discard local copy.
-janitor. <code>/cats             -</code> [D] Deal with concatenated tags.
-janitor. <code>    --exclude T   -</code> [D] Flag T as not-a-cat.
-janitor. <code>    --mark C X Y  -</code> [D] Flag C as a cat of X and Y.
-janitor. <code>    --list        -</code> [D] List known cats.
-janitor. <code>    --fix C       -</code> [D] Fix all posts with known cat C.
-janitor. <code>    --search N    -</code> [D] Find possible cats with count >= N.
-janitor. <code>/findtagtypos TAG -</code> Find typos of TAG.
-janitor. <code>   --fix          -</code> fix typo for all non-excluded posts. (!!!)
-janitor. <code>   --mark         -</code> [U] saves listed typos for auto-flagging later.
-janitor. <code>   --include TAG  -</code> force inclusion of known unlisted typo.
-janitor. <code>   --exclude TAG  -</code> exclude minor false positive.
-janitor. <code>   --distinct TAG -</code> exclude major false positive and similar tags.
-janitor. <code>   --allow-short  -</code> don't refuse to run for very short tags.
-janitor. <code>   --threshhold N -</code> use N instead of auto-chosen edit distance.
-janitor. <code>   --show-zero    -</code> don't hide tags with no posts.
-janitor. <code>/recounttags      -</code> Update saved postcounts for tags.
-janitor. <code>   --real         -</code> Count actual posts by tag.
-janitor. <code>   --alias        -</code> Set alias count to that of their counterparts.
-janitor. <code>/syncposts        -</code> Update saved postcounts for tags.
-janitor. <code>   --full         -</code> Do full refetch instead of incremental.
-janitor. <code>   --restart      -</code> Abandon progress of full sync and start over.
-janitor. What do I do with these? Ask the operator. Don't guess.
+janitor. <b>Janitor Commands</b>
+janitor. For a full description of any command, use <code>/help [command]</code>.
+janitor.cats. <code>/cats</code>
+cats. A <i>CAT</i> is a tag which is two other tags concatenated together. These tags are typos, and are added to posts by accident (if it isn't an accident, it's not a <i>CAT</i>). This command helps search for <i>CAT</i>s, resolve them to their correct tags, and automatically apply them to posts.
+cats. <i>Listing</i> options:
+cats. <i>CAT</i>s are not shown if they are already listed in the database. <i>BLIT</i>s are also not elligible to be part of <i>CAT</i>s.
+cats. <code> (no arguments)    -</code> list a few random possible <i>CAT</i>s
+cats. <code> --all,     -a     -</code> include known and <i>BLIT CAT</i>s
+cats. <code> --inspect, -i TAG -</code> List all possible <i>CAT</i>s including <code>TAG</code>
+cats. <code> --ratio,   -r N   -</code> <i>CAT</i>s must be <code>N</code> times rarer than base tags
+cats. <i>Selection</i> options:
+cats. <code> --entry,  -e N     -</code> reply to listing to select <i>CAT</i> N
+cats. <code> --select, -s T1 T2 -</code> manually specify <i>CAT</i> formed by <code>T1</code> + <code>T2</code>
+cats. <i>Editing</i> options:
+cats. These options all apply to any previous selection options, since the last edit option was specified. They "forget" the list of specified cats when they are used. <code>--fix</code> can be paired with any of the other options, otherwise they are all mutually exclusive.
+cats. <code> --ignore,  -I -</code> not a cat, no corrective action or listings
+cats. <code> --notify,  -N -</code> matching posts will prompt for corrective action
+cats. <code> --autofix, -X -</code> matching posts will be automatically corrected
+cats. <code> --delete,  -D -</code> remove this entry from the database
+cats. <code> --fix,     -x -</code> fix matching posts right now
+janitor.blits. <code>/blits</code>	
+blits. A <i>BLIT</i> is a tag that is not eligible to be part of a <i>CAT</i>. Such tags are usually very short, and occur coincidentally at the start or end of other tags. All tags 2 characters or shorter are <i>BLIT</i>s by default, and all tags longer than that are not. This can be overridden or clarified for specific tags using this command.
+blits. Listing options:
+blits. <code> (no arguments) -</code> list some candidate <i>BLIT</i>s with no status
+blits. <code> --list-yes, -y -</code> list known <i>BLIT</i>s
+blits. <code> --list-no,  -n -</code> list known non-<i>BLIT</i>s
+blits. <code> --list,     -l -</code> shorthand for -y and -n
+blits. Editing options:
+blits. <code> --mark,   -M TAG -</code> mark <code>TAG</code> as a <i>BLIT</i>
+blits. <code> --ignore, -I TAG -</code> mark <code>TAG</code> as a non-<i>BLIT</i>
+blits. <code> --delete, -D TAG -</code> clear <code>TAG</code> entirely from <i>BLIT</i> list
+janitor.syncposts. <code>/syncposts</code>
+syncposts. This command is used to keep my internal index of ` + api.ApiName + ` data up to date. This index is used to speed up operations like searching for similar tag names and listing all posts with a tag. Some metadata is maintained for each tag, each tag alias, and each post, on the site.
+syncposts. <i>Control</i> options:
+syncposts. <code> (no arguments) -</code> incremental sync of tags and posts (default)
+syncposts. <code> --full         -</code> discard local database and sync from scratch
+syncposts. <code> --aliases      -</code> sync tag aliases as well
+syncposts. <code> --recount      -</code> tally post tag counts afterwards
+syncposts. You do not normally need to use this command. Commands which push changes to ` + api.ApiName + ` should apply them locally as well, and an incremental sync is performed by the bot's internal maintenance routine every five minutes (with an alias sync and a tag recount happening every 60 minutes).
+najitor.indextags. <code>/indextags</code>
+indextags. This command syncs new changes on ` + api.ApiName + ` to the local tag database.
+indextags. <i>Control</i> options:
+indextags. <code> (no arguments) -</code> perform an incremental sync of tags
+indextags. <code> --full         -</code> discard local database and sync from scratch
+indextags. This operation is invoked by <code>/syncposts</code>, which passes <code>--full</code> to this command if it is present.
+janitor.indextagaliases. <code>/indextagaliases</code>
+indextagaliases. This command syncs tag aliases between ` + api.ApiName + ` and the local alias database. Because of how aliases are listed on ` + api.ApiName + `, an incremental sync is not possible, and a full sync is always performed. This command takes no options. It is invoked by <code>/syncposts</code> if <code>--aliases</code> is specified.
+janitor.findtagtypos. <code>/findtagtypos</code>
+findtagtypos. This command searches for likely typos of a tag, as determined by their edit distance to other tags. The way you should use this command is broadly at first, listing all typos, and then more and more specifically as you investigate each possible option on the site, adding selection options until you have a comprehensive, accurate listing of typos, then apply them to the site by issuing the command again with <code>--fix</code> and using <code>--save</code> to store them for auto-fixing in the future.
+findtagtypos. <i>Listing</i> options:
+findtagtypos. <code> [other args] TAG  -</code> find typos of <code>TAG</code> (required)
+findtagtypos. <code> --all,         -a -</code> include known or ignored possible typos
+findtagtypos. <code> --all-posts,   -p -</code> include deleted posts
+findtagtypos. <code> --allow-short, -s -</code> include tags less than 3 characters long
+findtagtypos. <code> --show-zero,   -z -</code> show tags with zero posts
+findtagtypos. <code> --threshhold,-t N -</code> show tags with edit distance <code>N</code> or less
+findtagtypos. <i>Selection</i> options:
+findtagtypos. <code> --exclude,  -e E -</code> mark <code>E</code> as not a typo
+findtagtypos. <code> --distinct, -d E -</code> excludes all tags closer to <code>E</code> than <code>TAG</code>
+findtagtypos. <code> --include,  -i I -</code> mark <code>I</code> as a typo
+findtagtypos. <i>Editing</i> options:
+findtagtypos. Saving changes will store <code>--exclude</code> tags for ignore behavior, and <code>--include</code> tags with prompt-to-fix behavior by default.
+findtagtypos. <code> --save,    -S -</code> store changes for corrective action
+findtagtypos. <code> --autofix, -X -</code> tags are marked for autofix instead of prompt
+findtagtypos. <code> --fix,     -x -</code> push changes to ` + api.ApiName + ` now
+findtagtypos. <code> --reason,-r R -</code> use edit reason <code>R</code> instead of "likely typo"
+janitor.recounttags. <code>/recounttags</code>
+recounttags. This command recounts the cached tag counts, providing an accurate count (the site itself becomes desynced sometimes and its counts are not always accurate). It does so for both visible and deleted posts. It takes no arguments. It is invoked by <code>/syncposts</code> if the <code>--recount</code> option is specified.
+janitor.resyncdeleted. <code>/resyncdeleted</code>
+resyncdeleted. <s>This command is disabled.</s> You should not need to use it. It enumerates all deleted posts from ` + api.ApiName + ` and updates the local database's deleted status. It exists because at one point, that information was not stored, but it affects certain parts of the API (namely, ordinary users can no longer edit deleted posts) and it needed to be re-imported. It takes no options. If you need to use it again, you should clear the deleted status of all posts manually from the database console first.
 post. 
 post. Post Command
 post. Posting a file to ` + api.ApiName + ` requires gathering some information. This command pulls everything together, and then does an upload. You must connect to your ` + api.ApiName + ` account to use this.
