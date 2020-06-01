@@ -1196,8 +1196,9 @@ func Concatenations(ctx *gogram.MessageCtx) {
 				for _, line := range prev_cats {
 					var t Triplet
 					tokens := strings.Split(line, " ")
-					t.subtag1.Name = strings.TrimSuffix(tokens[1], ",")
-					t.subtag2.Name = tokens[2]
+					if !(len(tokens) == 4 && tokens[2] == "+") { continue }
+					t.subtag1.Name = tokens[1]
+					t.subtag2.Name = tokens[3]
 					t.tag.Name = t.subtag1.Name + t.subtag2.Name
 					cats = append(cats, t)
 				}
@@ -1289,7 +1290,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 		}
 
 		for i, t := range cats {
-			message.WriteString(fmt.Sprintf("%d: <code>%s</code>, <code>%s</code> (%d)\n", i, t.subtag1.Name, t.subtag2.Name, t.tag.Count))
+			message.WriteString(fmt.Sprintf("%d: <code>%s</code> + <code>%s</code> (%d)\n", i, t.subtag1.Name, t.subtag2.Name, t.tag.Count))
 		}
 
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: message.String(), ParseMode: data.ParseHTML}}, nil)
