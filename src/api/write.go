@@ -84,7 +84,7 @@ func UpdatePost(user, apitoken string,
 	if parent != nil && *parent != -1 { req.FormArg("post[parent_id]", strconv.Itoa(*parent)) }
 	if source != nil { req.FormArg("post[source]", *source) }
 	if description != nil { req.FormArg("post[description]", *description) }
-	if reason != nil { req.FormArg("reason", *reason) }
+	if reason != nil { req.FormArg("post[edit_reason]", *reason) }
 	r, e := req.Do()
 
 	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
