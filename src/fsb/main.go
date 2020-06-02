@@ -82,6 +82,7 @@ func main() {
 	thebot.SetCallbackCallback(machine)
 	thebot.SetInlineCallback(&behavior)
 	thebot.AddMaintenanceCallback(&behavior)
+	thebot.AddMaintenanceCallback(&votes)
 
 	thebot.MainLoop()
 	os.Exit(0)
