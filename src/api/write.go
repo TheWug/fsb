@@ -85,7 +85,6 @@ func UpdatePost(user, apitoken string,
 	if source != nil { req.FormArg("post[source]", *source) }
 	if description != nil { req.FormArg("post[description]", *description) }
 	if reason != nil { req.FormArg("reason", *reason) }
-	panic("unauthorized!")
 	r, e := req.Do()
 
 	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
