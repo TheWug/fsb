@@ -683,7 +683,7 @@ func (this *VoteState) GetInterval() int64 {
 	return 30
 }
 
-func (this *VoteState) DoMaintenance() {
+func (this *VoteState) DoMaintenance(bot *gogram.TelegramBot) {
 	go func(){
 		now := time.Now()
 
