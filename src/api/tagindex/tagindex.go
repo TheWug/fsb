@@ -859,7 +859,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 	var distinct, include, exclude []string
 	var threshhold int = -1
 	var fix, save, autofix bool
-	var show_short, show_zero, show_all, show_all_posts bool
+	var show_short, show_zero, show_all, show_all_posts, only_general bool
 	var start_tag string
 	reason := "likely typo"
 	results := make(map[string]TagEditBox)
@@ -892,6 +892,8 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 				show_short = true
 			} else if token == "--show-zero"   || token == "-z" {
 				show_zero = true
+			} else if token == "--only-general"|| token == "-g" {
+				only_general = true
 			} else if token == "--threshhold"  || token == "-t" {
 				mode = MODE_THRESHHOLD
 			} else if token == "--exclude"     || token == "-e" {
@@ -1051,6 +1053,16 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 	if err != nil { log.Printf("Error when searching for aliases to %s: %s", start_tag, err.Error()) }
 	for _, item := range aliases {
 		delete(results, item.Name)
+	}
+
+	// filter only the general tags, removing any typed ones
+	if only_general {
+		progress.SetStatus("remove non-general")
+		for k, v := range results {
+			if v.Tag.Type != types.TCGeneral {
+				delete(results, k)
+			}
+		}
 	}
 
 	// aaaaaand finally add any matches manually included.
