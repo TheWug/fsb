@@ -1232,9 +1232,6 @@ func RefetchDeletedPostsInternal(user, api_key string, settings storage.UpdaterS
 
 	message("Syncing deleted posts... ")
 
-	api_timeout := time.NewTicker(750 * time.Millisecond)
-	defer api_timeout.Stop()
-
 	fixed_posts := make(chan []int)
 
 	limit := 10000
@@ -1276,8 +1273,6 @@ func RefetchDeletedPostsInternal(user, api_key string, settings storage.UpdaterS
 		fixed_posts <- post_ids
 
 		suffix(fmt.Sprintf("%.1f%%", float32(latest_id) * 100.0 / float32(highest_id)))
-
-		<- api_timeout.C
 	}
 
 	close(fixed_posts)
