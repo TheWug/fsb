@@ -706,8 +706,6 @@ func SyncAliasesInternal(user, api_key string, settings storage.UpdaterSettings,
 
 	consecutive_errors := 0
 	page := types.After(0)
-	api_timeout := time.NewTicker(750 * time.Millisecond)
-	defer api_timeout.Stop()
 
 	fixed_aliases := make(chan types.TAliasData)
 
@@ -739,8 +737,6 @@ func SyncAliasesInternal(user, api_key string, settings storage.UpdaterSettings,
 		for _, a := range list {
 			fixed_aliases <- a
 		}
-
-		<- api_timeout.C
 	}
 
 	close(fixed_aliases)
