@@ -859,7 +859,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 	var distinct, include, exclude []string
 	var threshhold int = -1
 	var fix, save, autofix bool
-	var allow_short, show_zero, show_all, show_all_posts bool
+	var show_short, show_zero, show_all, show_all_posts bool
 	var start_tag string
 	reason := "likely typo"
 	results := make(map[string]TagEditBox)
@@ -888,8 +888,8 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 				show_all = true
 			} else if token == "--all-posts"   || token == "-p" {
 				show_all_posts = true
-			} else if token == "--allow-short" || token == "-s" {
-				allow_short = true
+			} else if token == "--show-short"  || token == "-s" {
+				show_short = true
 			} else if token == "--show-zero"   || token == "-z" {
 				show_zero = true
 			} else if token == "--threshhold"  || token == "-t" {
@@ -995,7 +995,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		notblit := reg_blit2 && !is_blit2
 		zero := t2.ApparentCount(show_all_posts) <= 0
 
-		if tooshort && !notblit && !allow_short ||
+		if tooshort && !notblit && !show_short ||
 		   blit && !show_all ||
 		   zero && !show_zero {
 			// if it's too short and not a confirmed non-blit, AND the short override isn't specified OR

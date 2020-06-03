@@ -553,7 +553,7 @@ findtagtypos. <i>Listing</i> options:
 findtagtypos. <code> [other args] TAG  -</code> find typos of <code>TAG</code> (required)
 findtagtypos. <code> --all,         -a -</code> include known or ignored possible typos
 findtagtypos. <code> --all-posts,   -p -</code> include deleted posts
-findtagtypos. <code> --allow-short, -s -</code> include tags less than 3 characters long
+findtagtypos. <code> --show-short,  -s -</code> include tags less than 3 characters long
 findtagtypos. <code> --show-zero,   -z -</code> show tags with zero posts
 findtagtypos. <code> --threshhold,-t N -</code> show tags with edit distance <code>N</code> or less
 findtagtypos. <i>Selection</i> options:
