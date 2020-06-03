@@ -80,8 +80,8 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 		foo.ReplyMarkup = &data.TInlineKeyboard{
 			Buttons: [][]data.TInlineKeyboardButton{
 				[]data.TInlineKeyboardButton{
-					data.TInlineKeyboardButton{Text: "\U0001F44D Up", Data: s2p(fmt.Sprintf("/upvote %d", result.Id))},
-					data.TInlineKeyboardButton{Text: "\U0001F44E Down", Data: s2p(fmt.Sprintf("/downvote %d", result.Id))},
+					data.TInlineKeyboardButton{Text: fmt.Sprintf("\U0001F44D %d", result.Upvotes), Data: s2p(fmt.Sprintf("/upvote %d", result.Id))},
+					data.TInlineKeyboardButton{Text: fmt.Sprintf("\U0001F44E %d", result.Downvotes), Data: s2p(fmt.Sprintf("/downvote %d", result.Id))},
 					data.TInlineKeyboardButton{Text: "\u2764\uFE0F Fav", Data: s2p(fmt.Sprintf("/favorite %d", result.Id))},
 				},
 			},
