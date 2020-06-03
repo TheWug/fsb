@@ -1103,7 +1103,6 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		progress.AppendNotice("Fixing tags on ??? posts...")
 
 		updated := 1
-		api_timeout := time.NewTicker(750 * time.Millisecond)
 		diffs := make(map[int]types.TagDiff)
 
 		for _, v := range results {
@@ -1128,8 +1127,6 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 
 		for id, diff := range diffs {
 			if diff.IsZero() { continue }
-
-			if updated != 1 { <- api_timeout.C }
 
 			reason := fmt.Sprintf("Bulk retag: %s (%s)", diff.APIString(), reason)
 			newp, err := api.UpdatePost(user, api_key, id, diff, nil, nil, nil, nil, &reason)
@@ -1158,7 +1155,6 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 			updated++
 		}
 		progress.SetStatus("done.")
-		api_timeout.Stop()
 	}
 
 	if save {
