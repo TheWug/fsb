@@ -578,9 +578,6 @@ func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSetting
 		}
 	}
 
-	api_timeout := time.NewTicker(750 * time.Millisecond)
-	defer api_timeout.Stop()
-
 	fixed_posts := make(chan types.TPostInfo)
 
 	limit := 320
@@ -625,8 +622,6 @@ func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSetting
 		update(list)
 
 		if len(list) < limit { break }
-
-		<- api_timeout.C
 	}
 
 	close(fixed_posts)
