@@ -109,6 +109,172 @@ func ProgressMessage(ctx *gogram.MessageCtx, initial_status, initial_suffix stri
 	return new_status, new_suffix
 }
 
+type ProgMessage struct {
+	// externally accessible fields
+	status, notice string
+	previous string
+	active string
+	running bool
+
+	// shared fields
+	text_updates chan string
+	initialized sync.WaitGroup
+	err error
+
+	// public shared fields. These must be initialized before anything calls.
+	UpdateInterval time.Duration
+	MessageCallback func(string, data.MessageParseMode) (*data.TMessage, error)
+	ParseMode data.MessageParseMode
+	Bot *gogram.TelegramBot
+
+	// public shared fields which are initialized after the first push.
+	Ctx *gogram.MessageCtx
+
+	// internally accessible fields
+	target, actual string
+	updater <- chan time.Time
+}
+
+func (this *ProgMessage) Respin(previous, notice, status string) string {
+	lenprev, lenline := len(previous), len(status)
+	spacer_1, spacer_2 := ternary(lenprev > 0, "\n", ""), ternary(lenline > 0, " ", "")
+	return previous + spacer_1 + notice + spacer_2 + status
+}
+
+func ternary(b bool, x, y string) string {
+	if b { return x }
+	return y
+}
+
+// go-routine service host for a ProgMessage
+func (this *ProgMessage) run() {
+	for {
+		select {
+		case <- this.updater:
+			this.update()
+		case fetched, ok := <- this.text_updates:
+			if !ok {
+				this.update()
+				return
+			}
+			this.target = fetched
+			if this.updater == nil {
+				this.update()
+			}
+		}
+	}
+}
+
+// an update is needed, maybe.
+// if our target message is different from the last one we wrote,
+// trigger an update. otherwise, reset the timer to wait for a change.
+func (this *ProgMessage) update() {
+	this.Bot.Log.Println("howdy")
+	if this.target != this.actual {
+		if this.Ctx == nil {
+			msg, err := this.MessageCallback(this.target, this.ParseMode)
+			this.Ctx = gogram.NewMessageCtx(msg, false, this.Bot)
+			if this.Ctx == nil {
+				this.err = err
+				if this.err == nil { this.err = errors.New("ProgMessage:update(): MessageCallback() returned nil") }
+				this.initialized.Done()
+			} else {
+				this.initialized.Done()
+				this.actual = this.target
+			}
+		} else {
+			this.Ctx.EditTextAsync(data.OMessageEdit{
+				SendData: data.SendData{
+					Text: this.target,
+					ParseMode: this.ParseMode,
+				},
+			}, nil)
+			this.actual = this.target
+		}
+		this.updater = time.NewTimer(this.UpdateInterval).C
+	} else {
+		this.updater = nil
+	}
+}
+
+func (this *ProgMessage) Push(text string) (error) {
+	if this.err != nil {
+		return this.err
+	} else if !this.running {
+		this.running = true
+		this.text_updates = make(chan string, 4)
+		this.initialized.Add(1)
+		go this.run()
+		this.text_updates <- text
+		this.initialized.Wait()
+		if this.err != nil { this.Close() }
+		return this.err
+	} else {
+		this.text_updates <- text
+	}
+	return nil
+}
+
+func (this *ProgMessage) AppendNotice(text string) (error) {
+	if len(this.previous) > 0 {
+		this.previous = this.previous + "\n" + this.notice
+	} else {
+		this.previous = this.notice
+	}
+	this.status = ""
+	this.notice = text
+	this.active = this.Respin(this.previous, this.notice, this.status)
+	return this.Push(this.active)
+}
+
+func (this *ProgMessage) ReplaceNotice(text string) (error) {
+	this.notice = text
+	this.active = this.Respin(this.previous, this.notice, this.status)
+	return this.Push(this.active)
+}
+
+func (this *ProgMessage) SetStatus(text string) (error) {
+	this.status = text
+	this.active = this.Respin(this.previous, this.notice, this.status)
+	return this.Push(this.active)
+}
+
+func (this *ProgMessage) SetMessage(text string) (error) {
+	this.active = text
+	this.previous = ""
+	this.status = ""
+	this.notice = text
+	return this.Push(this.active)
+}
+
+func (this *ProgMessage) Active() string {
+	return this.active
+}
+
+func (this *ProgMessage) Close() {
+	if this.running {
+		close(this.text_updates)
+		this.running = false
+	}
+}
+
+func ProgressMessage2(message_factory func(string, data.MessageParseMode) (*data.TMessage, error),
+		      initial_text string,
+		      pm data.MessageParseMode,
+		      interval time.Duration,
+		      bot *gogram.TelegramBot) (*ProgMessage, error) {
+	x := ProgMessage{
+		UpdateInterval: interval,
+		MessageCallback: message_factory,
+		ParseMode: pm,
+		Bot: bot,
+	}
+
+	err := x.SetMessage(initial_text)
+	if err != nil { return nil, err }
+	return &x, nil
+}
+
 func SyncTagsCommand(ctx *gogram.MessageCtx) {
 	full := false
 	for _, token := range ctx.Cmd.Args {
@@ -703,6 +869,7 @@ func NewTagsFromOldTags(oldtags []string, deltags, addtags map[string]bool) (str
 }
 
 func FindTagTypos(ctx *gogram.MessageCtx) {
+	defer ctx.Bot.Log.Println("yay done")
 	mode := MODE_READY
 	var distinct, include, exclude []string
 	var threshhold int = -1
@@ -807,9 +974,15 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	msg, sfx := ProgressMessage(ctx, "Checking for typos...", "(enumerate tags)")
-	defer close(sfx)
-	defer close(msg)
+	progress, err := ProgressMessage2(func(t string, m data.MessageParseMode) (*data.TMessage, error) {
+		nctx, err := ctx.Reply(data.OMessage{SendData: data.SendData{Text: t, ParseMode: m}, DisableWebPagePreview: true})
+		return nctx.Msg, err
+	}, "Checking for typos...", data.ParseHTML, 3 * time.Second, ctx.Bot)
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("ProgressMessage2() failed:", err.Error())
+		return
+	}
+	defer progress.Close()
 
 	tags, err := storage.EnumerateAllTags(ctrl)
 	blits, err := storage.EnumerateAllBlits(ctrl)
@@ -871,13 +1044,13 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 
 	// now for selectors, which take priority over all of the blanket filter options
 	// remove any matches that were manually excluded.
-	sfx <- "(remove excluded)"
+	progress.SetStatus("remove excluded")
 	for _, item := range exclude {
 		delete(results, item)
 	}
 
 	// now remove any matches which are more closely matched by the distinct list.
-	sfx <- "(remove distinct)"
+	progress.SetStatus("remove distinct")
 	for _, item := range distinct {
 		for k, v := range results {
 			if wordset.Levenshtein(item, k) < v.EditDistance {
@@ -888,7 +1061,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 	}
 
 	// now remove any matches which are already aliased to the target tag.
-	sfx <- "(remove aliases)"
+	progress.SetStatus("remove aliases")
 	aliases, err := storage.GetAliasesFor(start_tag, ctrl)
 	if err != nil { log.Printf("Error when searching for aliases to %s: %s", start_tag, err.Error()) }
 	for _, item := range aliases {
@@ -896,34 +1069,54 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 	}
 
 	// aaaaaand finally add any matches manually included.
-	sfx <- "(merge included)"
+	progress.SetStatus("merge included")
 	ctrl.CreatePhantom = false
 	for _, item := range include {
 		t, _ := storage.GetTag(item, ctrl)
 		if t != nil { results[item] = TagEditBox{Tag: *t, EditDistance: wordset.Levenshtein(t1.Name, t.Name)} }
 	}
 
-	sfx <- "done."
+	progress.SetStatus("done.")
 
 	total_posts := 0
 	for _, v := range results {
 		total_posts += v.Tag.ApparentCount(show_all_posts)
 	}
 
-	var buf bytes.Buffer
-	buf.WriteString(fmt.Sprintf("Possible typos of <code>%s</code>: %d (%d estimated posts)\n<pre>", html.EscapeString(start_tag), len(results), total_posts))
-	for _, v := range results {
-		alert := " "
-		if v.Tag.Type != types.TCGeneral { alert = "!" }
-		buf.WriteString(fmt.Sprintf("%7d %s%s %s\n", v.Tag.ApparentCount(show_all_posts), v.Mode.Display(), alert, html.EscapeString(v.Tag.Name)))
+	if len(results) > 50 {
+		var buf bytes.Buffer
+		buf.WriteString(fmt.Sprintf("Possible typos of %s: %d (%d estimated posts)\n", start_tag, len(results), total_posts))
+		for _, v := range results {
+			alert := " "
+			if v.Tag.Type != types.TCGeneral { alert = "!" }
+			buf.WriteString(fmt.Sprintf("%8d %s%s %s\n", v.Tag.ApparentCount(show_all_posts), v.Mode.Display(), alert, v.Tag.Name))
+		}
+		ctx.Bot.Remote.SendDocumentAsync(data.ODocument{
+			SendData: data.SendData{
+				TargetData: data.TargetData{ChatId: progress.Ctx.Msg.Chat.Id},
+				ReplyToId: &progress.Ctx.Msg.Id,
+			},
+			MediaData: data.MediaData{
+				FileName: "tag_duplicates.txt",
+				File: buf.Bytes(),
+			},
+		}, nil)
+		progress.AppendNotice(fmt.Sprintf("Possible typos of <code>%s</code>: %d (%d estimated posts)\n\nResults not shown, too many of them!\nSee attached text file.", html.EscapeString(start_tag), len(results), total_posts))
+	} else {
+		var buf bytes.Buffer
+		buf.WriteString(fmt.Sprintf("Possible typos of <code>%s</code>: %d (%d estimated posts)\n<pre>", html.EscapeString(start_tag), len(results), total_posts))
+		for _, v := range results {
+			alert := " "
+			if v.Tag.Type != types.TCGeneral { alert = "!" }
+			buf.WriteString(fmt.Sprintf("%7d %s%s %s\n", v.Tag.ApparentCount(show_all_posts), v.Mode.Display(), alert, html.EscapeString(v.Tag.Name)))
+		}
+		buf.WriteString("</pre>")
+		progress.AppendNotice(buf.String())
 	}
-	buf.WriteString("</pre>")
-	if fix {
-		buf.WriteString("\nFixing tags...")
-	}
-	msg <- buf.String()
 
 	if fix {
+		progress.AppendNotice("Fixing tags on ??? posts...")
+
 		updated := 1
 		api_timeout := time.NewTicker(750 * time.Millisecond)
 		diffs := make(map[int]types.TagDiff)
@@ -931,7 +1124,8 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		for _, v := range results {
 			array, err := storage.PostsWithTag(v.Tag, ctrl)
 			if err != nil {
-				sfx <- fmt.Sprintf(" (error: %s)", err.Error())
+				ctx.Bot.ErrorLog.Println("Error in FindTagTypos()/PostsWithTag():", err.Error())
+				progress.SetStatus("error!")
 				return
 			}
 
@@ -945,6 +1139,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 
 		// we now know for sure that exactly this many edits are required
 		total_posts = len(diffs)
+		progress.ReplaceNotice(fmt.Sprintf("Fixing tags on %d posts...", total_posts))
 
 		for id, diff := range diffs {
 			if diff.IsZero() { continue }
@@ -960,28 +1155,29 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 			}
 
 			if err != nil {
-				log.Println(err.Error())
-				sfx <- fmt.Sprintf(" (error: %s)", err.Error())
+				ctx.Bot.ErrorLog.Println("Error in FindTagTypos()/api.UpdatePost():", err.Error())
+				progress.SetStatus("error!")
 				break
 			}
 
 			if newp != nil {
 				err = storage.UpdatePost(types.TPostInfo{Id: id}, *newp, storage.UpdaterSettings{Transaction: ctrl.Transaction})
 				if err != nil {
-					log.Println(err.Error())
-					sfx <- fmt.Sprintf(" (error: %s)", err.Error())
+					ctx.Bot.ErrorLog.Println("Error in FindTagTypos()/storage.UpdatePost():", err.Error())
+					progress.SetStatus("error!")
 					break
 				}
 			}
 
-			sfx <- fmt.Sprintf(" (%d/%d %d: <code>%s</code>)", updated, total_posts, id, diff.APIString())
+			progress.SetStatus(fmt.Sprintf("(%d/%d %d: <code>%s</code>)", updated, total_posts, id, diff.APIString()))
 			updated++
 		}
-		sfx <- " done."
+		progress.SetStatus("done.")
 		api_timeout.Stop()
 	}
 
 	if save {
+		progress.AppendNotice(fmt.Sprintf("Saving %d identified typos...", len(results)))
 		// everything in results goes into the database as either prompt or auto
 		mode := storage.Prompt
 		if autofix { mode = storage.AutoFix }
@@ -1003,6 +1199,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 				return
 			}
 		}
+		progress.SetStatus("done.")
 	}
 
 	ctrl.Transaction.MarkForCommit()
