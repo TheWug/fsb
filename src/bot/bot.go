@@ -555,6 +555,7 @@ findtagtypos. <code> --all,         -a -</code> include known or ignored possibl
 findtagtypos. <code> --all-posts,   -p -</code> include deleted posts
 findtagtypos. <code> --show-short,  -s -</code> include tags less than 3 characters long
 findtagtypos. <code> --show-zero,   -z -</code> show tags with zero posts
+findtagtypos. <code> --only-general,-g -</code> hide specialty tags (<code>--include</code> overrides)
 findtagtypos. <code> --threshhold,-t N -</code> show tags with edit distance <code>N</code> or less
 findtagtypos. <i>Selection</i> options:
 findtagtypos. <code> --exclude,  -e E -</code> mark <code>E</code> as not a typo
