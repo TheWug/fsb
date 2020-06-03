@@ -362,8 +362,9 @@ func (this *Behavior) DismissPromptPost(bot *gogram.TelegramBot, post_info *stor
 
 	bot.Remote.DeleteMessageAsync(data.ODelete{SourceChatId: post_info.ChatId, SourceMessageId: post_info.MsgId}, nil)
 
-	if !diff.IsZero() {
-		edit_string := fmt.Sprintf("Applied the following tags:\n<pre>%s</pre>", diff.APIString())
+	if !diff.IsZero() || len(post_info.Edit.AutoFix) > 0 {
+		api_string := diff.APIString()
+		edit_string := fmt.Sprintf("Applied the following tags:\n<pre>%s</pre>", ternary(len(api_string) != 0, api_string, "[no changes made]"))
 		message := ""
 		// figure out what the message should be
 		if post_info.PostType == "png" || post_info.PostType == "jpg" {
