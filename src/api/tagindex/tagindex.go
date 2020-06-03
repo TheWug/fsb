@@ -1552,7 +1552,6 @@ func Concatenations(ctx *gogram.MessageCtx) {
 	}
 	msg <- "\nUpdating posts which need fixing... "
 
-	api_timeout := time.NewTicker(750 * time.Millisecond)
 	updated := 1
 	for _, i := range fix_list {
 		t, err := storage.GetTag(cats[i].tag.Name, storage.EnumerateControl{Transaction: txbox})
@@ -1586,11 +1585,9 @@ func Concatenations(ctx *gogram.MessageCtx) {
 
 			sfx <- fmt.Sprintf(" (%d/%d %d: <code>%s</code> -> <code>%s</code>, <code>%s</code>)", updated, -1, p.Id, cats[i].tag.Name, cats[i].subtag1.Name, cats[i].subtag2.Name)
 
-			<- api_timeout.C
 			updated++
 		}
 		sfx <- " done."
-		api_timeout.Stop()
 		message.WriteString(fmt.Sprintf("Fixing %d: <code>%s</code> -> <code>%s, %s</code>\n", i, cats[i].tag.Name, cats[i].subtag1.Name, cats[i].subtag2.Name))
 	}
 
