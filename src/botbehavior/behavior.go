@@ -381,6 +381,24 @@ func DismissPromptPost(bot *gogram.TelegramBot, post_info *storage.PromptPostInf
 	return storage.SavePromptPost(post_info.PostId, nil, settings)
 }
 
+func ClearPromptPostsOlderThan(bot *gogram.TelegramBot, time_ago time.Duration) error {
+	var err error
+	var settings storage.UpdaterSettings
+	settings.Transaction, err = storage.NewTxBox()
+	if err != nil { return err }
+	defer settings.Transaction.Finalize(true)
+
+	post_infos, err := storage.FindPromptPostsOlderThan(time_ago, settings)
+	if err != nil { return err }
+
+	for _, post_info := range post_infos {
+		DismissPromptPost(bot, &post_info, apitypes.TagDiff{}, settings)
+	}
+
+	settings.Transaction.MarkForCommit()
+	return nil
+}
+
 // inline query, do tag search.
 func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 	debugmode := strings.Contains(ctx.Query.Query, "special:debugoutput") && (ctx.Query.From.Id == this.MySettings.Owner)

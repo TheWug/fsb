@@ -1355,6 +1355,27 @@ func FindPromptPostByMessage(chat_id tgtypes.ChatID, msg_id tgtypes.MsgID, setti
 	}
 }
 
+func FindPromptPostsOlderThan(time_ago time.Duration, settings UpdaterSettings) ([]PromptPostInfo, error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
+
+	query := "SELECT post_id, post_type, post_url, sample_url, post_hash, post_width, post_height, msg_id, chat_id, msg_ts, msg_captioned, edit_list_json FROM prompt_posts WHERE msg_ts <= NOW() - ($1 * '1 second'::interval)"
+	rows, err := tx.Query(query, time_ago.Seconds())
+	if err != nil { return nil, err }
+
+	var out []PromptPostInfo
+	for rows.Next() {
+		var x PromptPostInfo
+		err = rows.Scan(&x.PostId, &x.PostType, &x.PostURL, &x.SampleURL, &x.PostMd5, &x.PostWidth, &x.PostHeight, &x.MsgId, &x.ChatId, &x.Timestamp, &x.Captioned, &x.Edit)
+		if err != nil { return nil, err }
+		out = append(out, x)
+	}
+
+	settings.Transaction.commit = mine
+	return out, nil
+}
+
 func SavePromptPost(id int, x *PromptPostInfo, settings UpdaterSettings) (error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
