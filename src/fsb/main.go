@@ -6,6 +6,7 @@ import (
 	"botbehavior"
 	"bot"
 	"github.com/thewug/gogram"
+	"apiextra"
 )
 
 // This bot runs by polling telegram for updates, and then making synchronous calls to api. Because of the latency
@@ -41,6 +42,12 @@ func main() {
 	}
 
 	api.Init(settings)
+	if e != nil {
+		fmt.Println(e.Error())
+		os.Exit(1)
+	}
+
+	apiextra.Init(settings)
 	if e != nil {
 		fmt.Println(e.Error())
 		os.Exit(1)
