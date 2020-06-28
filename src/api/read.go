@@ -23,7 +23,7 @@ func TagSearch(user, apitoken string, tags string, page int, limit int) (types.T
 			URLArg("tags", tags).
 			URLArg("page", strconv.Itoa(page)).
 			URLArg("limit", strconv.Itoa(limit)).
-			Into(&temp).
+			JSONInto(&temp).
 			Do()
 
 	APILog(url, user, len(temp.Posts), r, e)
@@ -46,7 +46,7 @@ func ListTagHistory(user, apitoken string, limit int, before, after *int) (types
 	req := api.New(url).
 			BasicAuthentication(user, apitoken).
 			URLArg("limit", strconv.Itoa(limit)).
-			Into(&hist)
+			JSONInto(&hist)
 	if before != nil { req.URLArg("before", strconv.Itoa(*before)) }
 	if after != nil { req.URLArg("after", strconv.Itoa(*after)) }
 	r, e := req.Do()
@@ -74,7 +74,7 @@ func ListTags(user, apitoken string, options types.ListTagsOptions) (types.TTagI
 			URLArg("search[hide_empty]", options.HideEmpty).
 			URLArg("search[has_wiki]", options.HasWiki).
 			URLArg("search[has_artist]", options.HasArtist).
-			Into(&results).
+			JSONInto(&results).
 			Do()
 
 	APILog(url, user, len(results.Tags), r, e)
@@ -98,7 +98,7 @@ func ListTagAliases(user, apitoken string, options types.ListTagAliasOptions) (t
 			URLArgDefault("search[name_matches]", options.MatchAliases, "").
 			URLArgDefault("search[status]", options.Status, "").
 			URLArgDefault("search[order]", options.Order, "").
-			Into(&results).
+			JSONInto(&results).
 			Do()
 
 	APILog(url, user, len(results.Aliases), r, e)
@@ -120,7 +120,7 @@ func ListPosts(user, apitoken string, options types.ListPostOptions) (types.TPos
 			URLArgDefault("tags", options.SearchQuery, "").
 			URLArgDefault("limit", options.Limit, "0").
 			URLArgDefault("page", options.Page, "").
-			Into(&results).
+			JSONInto(&results).
 			Do()
 
 	APILog(url, user, len(results.Posts), r, e)
@@ -142,7 +142,7 @@ func FetchOnePost(user, apitoken string, id int) (*types.TPostInfo, error) {
 
 	r, e := api.New(url).
 			BasicAuthentication(user, apitoken).
-			Into(&post).
+			JSONInto(&post).
 			Do()
 
 	APILog(url, user, -1, r, e)
@@ -172,7 +172,7 @@ func GetTagData(user, apitoken string, id int) (*types.TTagData, error) {
 
 	r, e := api.New(url).
 			BasicAuthentication(user, apitoken).
-			Into(&tag).
+			JSONInto(&tag).
 			Do()
 
 	APILog(url, user, -1, r, e)
@@ -192,8 +192,8 @@ func FetchUser(username, api_key string) (*types.TUserInfo, error) {
 
 	req := api.New(url).
 			Arg("search[name_matches]", username).
-			Into(&user).
-			Into(&status)
+			JSONInto(&user).
+			JSONInto(&status)
 
 	if api_key != "" {
 		req.BasicAuthentication(username, api_key)

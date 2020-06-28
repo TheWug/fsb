@@ -32,7 +32,7 @@ func UploadFile(file_data io.Reader, upload_url, tags, rating, source, descripti
 			FormArg("upload[description]", description).
 			FormArg("upload[tag_string]", tags).
 			FormArg("upload[rating]", rating).
-			Into(&out).
+			JSONInto(&out).
 			Multipart()
 	if parent != nil { req.FormArg("upload[parent_id]", strconv.Itoa(*parent)) }
 
@@ -74,7 +74,7 @@ func UpdatePost(user, apitoken string,
 	req := api.New(url).
 			Method(reqtify.PATCH).
 			BasicAuthentication(user, apitoken).
-			Into(&post)
+			JSONInto(&post)
 	if !tagdiff.IsZero() { req.FormArgDefault("post[tag_string_diff]", tagdiff.APIString(), "") }
 	if rating != nil { req.FormArg("post[rating]", *rating) }
 	if parent != nil && *parent == -1 { req.FormArg("post[parent_id]", "") }
@@ -110,7 +110,7 @@ func VotePost(user, apitoken string,
 			BasicAuthentication(user, apitoken).
 			FormArg("score", vote.Value()).
 			FormArgDefault("no_unvote", no_unvote, false).
-			Into(&score).
+			JSONInto(&score).
 			Do()
 
 	APILog(url, user, -1, r, e)
@@ -165,7 +165,7 @@ func FavoritePost(user, apitoken string,
 		Method(reqtify.POST).
 		BasicAuthentication(user, apitoken).
 		FormArg("post_id", id).
-		Into(&post).
+		JSONInto(&post).
 		DebugPrint().
 		Do()
 
