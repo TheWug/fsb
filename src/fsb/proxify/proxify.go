@@ -174,7 +174,6 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 			GifHeight:   &height,
 			ParseMode:   data.ParseHTML,
 			Caption:     &caption,
-			Title:       &caption,
 		}
 		if debugmode { GenerateDebugText(&foo, result) }
 		return foo
@@ -202,7 +201,6 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 			PhotoHeight: &height,
 			ParseMode:   data.ParseHTML,
 			Caption:     &caption,
-			Title:       &caption,
 		}
 
 		if debugmode { GenerateDebugText(&foo, result) }
