@@ -80,7 +80,6 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 	go func() {
 		for maintenances := 0; true; maintenances++ {
 			_ = <- channel
-			bot.Log.Println("Maintenance sync.")
 
 			var err error
 			extra_expensive := (maintenances % 144 == 143)
@@ -120,8 +119,6 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 
 			settings.Transaction.MarkForCommit()
 			settings.Transaction.Finalize(true)
-
-			bot.Log.Println("Maintenance sync complete. Processing updated posts...")
 
 			settings.Transaction, err = storage.NewTxBox()
 			if err != nil {
@@ -194,8 +191,6 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 
 			settings.Transaction.MarkForCommit()
 			settings.Transaction.Finalize(true)
-
-			bot.Log.Println("Update processing complete.")
 		}
 	}()
 	return channel
