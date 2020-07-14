@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"bot/dialogs"
 	"botbehavior"
 	"api"
 	"api/tagindex"
@@ -13,6 +14,7 @@ import (
 	"github.com/thewug/gogram/data"
 
 	"bytes"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -42,6 +44,7 @@ const (
 		postparent
 		postupload
 		postnext
+	editreason
 )
 
 const (
@@ -950,6 +953,312 @@ func (this *VoteState) HandleCmd(from *data.TUser, cmd *gogram.CommandData, repl
 	}
 
 	return response, false
+}
+
+type EditState struct {
+	user, api_key string
+
+	MsgId data.MsgID
+	ChatId data.ChatID
+	PostId int
+}
+
+func (this *EditState) Handle(ctx *gogram.MessageCtx) {
+	if ctx.Cmd.Command == "/edit" && ctx.GetState() == nil {
+		this.Edit(ctx)
+	} else if ctx.Cmd.Command == "/cancel" {
+		this.Cancel(ctx)
+	} else {
+		this.Freeform(ctx)
+	}
+}
+
+func (this *EditState) HandleCallback(ctx *gogram.CallbackCtx) {
+	txbox, err := storage.NewTxBox()
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("Error occurred opening transaction: ", err.Error())
+		return
+	}
+	settings := storage.UpdaterSettings{Transaction: txbox}
+	defer settings.Transaction.Finalize(true)
+
+	p, err := dialogs.LoadEditPrompt(settings, this.MsgId, this.ChatId)
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("Error loading edit prompt: ", err.Error())
+		return
+	}
+
+	switch ctx.Cmd.Command {
+	case "/tags":
+		p.Prefix = "Enter a list of tag changes, seperated by spaces. You can clear tags by prefixing them with a minus (-) and reset them by prefixing with an equals (=)."
+		p.State = dialogs.WAIT_TAGS
+	case "/sources":
+		p.Prefix = "Post some source changes, seperated by newlines. You can remove sources by prefixing them with a minus (-)."
+		p.State = dialogs.WAIT_SOURCE
+	case "/rating":
+		p.Prefix = "Post the new rating."
+		p.State = dialogs.WAIT_RATING
+	case "/description":
+		p.Prefix = `Post the new description. You can use <a href="https://` + api.Endpoint + `/help/dtext">dtext</a>.`
+		p.State = dialogs.WAIT_DESC
+	case "/parent":
+		p.Prefix = `Post the new parent.`
+		p.State = dialogs.WAIT_PARENT
+	case "/reason":
+		p.Prefix = "Why are you editing this post? Post an edit reason, 250 characters max."
+		p.State = dialogs.WAIT_REASON
+	case "/file":
+		p.Prefix = `Upload a file.`
+		p.State = dialogs.WAIT_FILE
+	case "/save":
+		p.Prefix = ""
+		p.State = dialogs.SAVED
+		p.Finalize(settings, ctx.Bot, nil)
+		ctx.Answer(data.OCallback{Notification: "\U0001F7E2 Edit submitted."})
+		if !p.IsNoop() {
+			var rating *string
+			var parent *int
+			var description *string
+			var reason *string
+
+			if p.Rating != "" { rating = &p.Rating }
+			if p.Parent != 0 { parent = &p.Parent }
+			if p.Description != "" { description = &p.Description }
+			if p.Reason != "" { reason = &p.Reason }
+
+			update, err := api.UpdatePost(this.user, this.api_key, p.PostId, p.TagChanges, rating, parent, p.SourceChanges, description, reason)
+			if err != nil {
+				ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "An error occurred when editing the post! Try again later."}}, nil)
+				ctx.Bot.ErrorLog.Println("Error updating post: ", err.Error())
+				return
+			}
+
+			if update != nil {
+				err = storage.UpdatePost(*update, settings)
+				if err != nil {
+					ctx.Bot.ErrorLog.Println("Error updating internal post: ", err.Error())
+					return
+				}
+			}
+		}
+		ctx.SetState(nil)
+		settings.Transaction.MarkForCommit()
+		return
+	case "/discard":
+		p.Prefix = ""
+		p.State = dialogs.DISCARDED
+		p.Finalize(settings, ctx.Bot, nil)
+		ctx.AnswerAsync(data.OCallback{Notification: "\U0001F534 Edit discarded."}, nil) // finalize dialog post and discard edit
+		ctx.SetState(nil)
+		settings.Transaction.MarkForCommit()
+		return
+	default:
+	}
+
+	p.Prompt(settings, ctx.Bot, nil)
+	settings.Transaction.MarkForCommit()
+}
+
+func (this *EditState) Freeform(ctx *gogram.MessageCtx) {
+	txbox, err := storage.NewTxBox()
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("Error occurred opening transaction: ", err.Error())
+		return
+	}
+	settings := storage.UpdaterSettings{Transaction: txbox}
+	defer settings.Transaction.Finalize(true)
+
+	p, err := dialogs.LoadEditPrompt(settings, this.MsgId, this.ChatId)
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("Error occurred loading edit prompt: ", err.Error())
+		return
+	}
+
+	if p.State == dialogs.WAIT_TAGS {
+		p.TagChanges.ApplyString(ctx.Msg.PlainText())
+		p.Prefix = "Got it. Continue sending more tag changes, and pick a button from below when you're done."
+	} else if p.State == dialogs.WAIT_SOURCE {
+		p.SourceChanges = append(p.SourceChanges, strings.Split(ctx.Msg.PlainText(), "\n")...)
+		p.Prefix = "Got it. Continue sending more source changes, and pick a button from below when you're done."
+	} else if p.State == dialogs.WAIT_RATING {
+		rating, err := api.SanitizeRatingForEdit(ctx.Msg.PlainText())
+
+		if err != nil {
+			p.Prefix = "Please enter a <i>valid</i> rating. (Pick from <code>explicit</code>, <code>questionable</code>, <code>safe</code>, or <code>original</code>.)"
+		} else {
+			p.Rating = rating
+			p.ResetState()
+		}
+	} else if p.State == dialogs.WAIT_DESC {
+		p.Description = ctx.Msg.PlainText() // TODO: convert telegram markup to dtext
+		p.ResetState()
+	} else if p.State == dialogs.WAIT_PARENT {
+		parent := scrapePostIdFromMessage(ctx.Msg)
+
+		if parent == 0 {
+			parent, err = strconv.Atoi(ctx.Msg.PlainText())
+		}
+
+		if parent <= 0 {
+			err = errors.New("negative parent post")
+		} else if strings.ToLower(ctx.Msg.PlainText()) == "none" {
+			parent = -1
+			err = nil
+		} else if strings.ToLower(ctx.Msg.PlainText()) == "original" {
+			parent = 0
+			err = nil
+		}
+
+		if err != nil {
+			p.Prefix = "Please enter a <i>valid</i> parent post. (You can either send a link to a post, a bare numeric ID, 'none' for no parent, or 'original' to not attempt to update the parent at all.)"
+		} else {
+			p.Parent = parent
+			p.ResetState()
+		}
+	} else if p.State == dialogs.WAIT_REASON {
+		p.Reason = ctx.Msg.PlainText()
+		p.ResetState()
+	} else {
+		return
+	}
+
+	p.Prompt(settings, ctx.Bot, nil)
+	ctx.DeleteAsync(nil)
+	settings.Transaction.MarkForCommit()
+}
+
+func (this *EditState) Cancel(ctx *gogram.MessageCtx) {
+	txbox, err := storage.NewTxBox()
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("Error occurred opening transaction: ", err.Error())
+		return
+	}
+	settings := storage.UpdaterSettings{Transaction: txbox}
+	defer settings.Transaction.Finalize(true)
+
+	p, err := dialogs.LoadEditPrompt(settings, this.MsgId, this.ChatId)
+	if err != nil { ctx.Bot.ErrorLog.Println(err.Error()) }
+	p.State = dialogs.DISCARDED
+	p.Prefix = ""
+	p.Finalize(settings, ctx.Bot, nil)
+	ctx.SetState(nil)
+	settings.Transaction.MarkForCommit()
+}
+
+func scrapePostIdFromMessage(msg *data.TMessage) (int) {
+	text := msg.PlainText()
+	submatches := apiurlmatch.FindStringSubmatch(text)
+	if len(submatches) == 5 {
+		temp, err := strconv.Atoi(submatches[4])
+		if err == nil { return temp }
+	}
+
+	for _, entity := range msg.GetEntities() {
+		if entity.Url != nil {
+			submatches := apiurlmatch.FindStringSubmatch(*entity.Url)
+			if len(submatches) == 5 {
+				temp, err := strconv.Atoi(submatches[4])
+				if err == nil { return temp }
+			}
+		}
+	}
+
+	return 0
+}
+
+func (this *EditState) Edit(ctx *gogram.MessageCtx) {
+	var post int
+	var mode int
+	var e dialogs.EditPrompt
+
+	if ctx.Msg.From == nil { return }
+
+	if ctx.Msg.ReplyToMessage != nil {
+		post = scrapePostIdFromMessage(ctx.Msg.ReplyToMessage)
+	}
+
+	user, api_key, _, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+	if err != nil {
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to use this command!"}}, nil)
+		if err != storage.ErrNoLogin {
+			ctx.Bot.ErrorLog.Println("Error while checking credentials: ", err.Error())
+		}
+		return
+	}
+
+	for _, token := range ctx.Cmd.Args {
+		if mode != root {
+			if mode == posttags {
+				e.TagChanges.ApplyString(token)
+			} else if mode == postsource {
+				e.SourceChanges = append(e.SourceChanges, strings.Split(token, "\n")...)
+			} else if mode == postrating {
+				rating, err := api.SanitizeRatingForEdit(token)
+				if err != nil {
+					ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Please try again with a valid rating."}}, nil)
+					return
+				} else {
+					e.Rating = rating
+				}
+			} else if mode == postdescription {
+				e.Description = token // at some point i should make it convert telegram markup to dtext but i can't do that right now
+			} else if mode == postparent {
+				submatches := apiurlmatch.FindStringSubmatch(token)
+				var err error
+				if len(submatches) == 5 {
+					e.Parent, err = strconv.Atoi(submatches[4])
+				}
+
+				if len(submatches) != 5 || err != nil {
+					e.Parent, err = strconv.Atoi(token)
+				}
+
+				if err != nil {
+					ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Please try again wth a valid parent post."}}, nil)
+					return
+				}
+			} else if mode == editreason {
+				e.Reason = token
+			}
+			mode = root
+		}
+		if token == "" {
+		} else if token == "--tags" {
+			mode = posttags
+		} else if token == "--sources" {
+			mode = postsource
+		} else if token == "--rating" {
+			mode = postrating
+		} else if token == "--description" {
+			mode = postdescription
+		} else if token == "--parent" {
+			mode = postparent
+		} else if token == "--reason" {
+			mode = editreason
+		} else {
+			temp, err := strconv.Atoi(token)
+			if err == nil { post = temp }
+		}
+	}
+
+	if post <= 0 {
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Sorry, I can't figure out which post you're talking about!\n\nYou can reply to a message with a post URL, or you can pass an ID or a link directly."}}, nil)
+		return
+	}
+
+	e.PostId = post
+	e.ResetState()
+
+	prompt := e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx)
+	this = &EditState{
+		user: user,
+		api_key: api_key,
+		MsgId: prompt.Msg.Id,
+		ChatId: prompt.Msg.Chat.Id,
+		PostId: post,
+	}
+
+	ctx.SetState(this)
 }
 
 type LoginState struct {
