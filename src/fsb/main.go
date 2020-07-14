@@ -74,6 +74,7 @@ func main() {
 	var janitor bot.JanitorState
 	var votes bot.VoteState
 	autofix := bot.AutofixState{Behavior: &behavior}
+	var edit bot.EditState
 	machine.AddCommand("/help", &help)
 	machine.AddCommand("/login", &login)
 	machine.AddCommand("/logout", &login)
@@ -94,6 +95,7 @@ func main() {
 	machine.AddCommand("/af-commit", &autofix)
 	machine.AddCommand("/af-dismiss", &autofix)
 	machine.AddCommand("/af-toggle", &autofix)
+	machine.AddCommand("/edit", &edit)
 
 	thebot.SetMessageCallback(machine)
 	thebot.SetStateMachine(machine)
