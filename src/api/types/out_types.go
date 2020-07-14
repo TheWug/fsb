@@ -270,5 +270,14 @@ func (this TagDiffArray) Flatten() TagDiff {
 	return n
 }
 
+func (this *TagDiff) UnmarshalJSON(obj []byte) error {
+	if string(obj) == "null" { return nil }
+	var tags string
+	err := json.Unmarshal(obj, &tags)
+	*this = TagDiffFromString(tags)
+	return err
+}
 
-
+func (this TagDiff) MarshalJSON() ([]byte, error) {
+	return json.Marshal(this.APIString())
+}
