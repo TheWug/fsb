@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -154,23 +155,29 @@ func (this *TagDiff) ApplyArray(tag_diff []string) {
 			this.RemoveTag(strings.TrimPrefix(tag, "-"))
 		} else if strings.HasPrefix(tag, "+") {
 			this.AddTag(strings.TrimPrefix(tag, "+"))
+		} else if strings.HasPrefix(tag, "=") {
+			this.ResetTag(strings.TrimPrefix(tag, "="))
 		} else {
 			this.AddTag(tag)
 		}
 	}
 }
 
-func (this *TagDiff) ApplyStrings(add_tags, remove_tags string) {
-	this.ApplyArrays(strings.Split(add_tags, " "), strings.Split(remove_tags, " "))
+func (this *TagDiff) ApplyStrings(add_tags, remove_tags, reset_tags string) {
+	this.ApplyArrays(strings.Split(add_tags, " "), strings.Split(remove_tags, " "), strings.Split(reset_tags, " "))
 }
 
-func (this *TagDiff) ApplyArrays(add_tags, remove_tags []string) {
+func (this *TagDiff) ApplyArrays(add_tags, remove_tags, reset_tags []string) {
 	for _, tag := range add_tags {
-		this.AddTag(strings.TrimPrefix(strings.TrimPrefix(tag, "+"), "-"))
+		this.AddTag(strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(tag, "="), "+"), "-"))
 	}
 
 	for _, tag := range remove_tags {
-		this.RemoveTag(strings.TrimPrefix(strings.TrimPrefix(tag, "+"), "-"))
+		this.RemoveTag(strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(tag, "="), "+"), "-"))
+	}
+
+	for _, tag := range reset_tags {
+		this.ResetTag(strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(tag, "="), "+"), "-"))
 	}
 }
 
@@ -182,8 +189,8 @@ func TagDiffFromString(tag_diff string) (TagDiff) {
 	return TagDiffFromArray(strings.Split(tag_diff, " "))
 }
 
-func TagDiffFromStrings(add_tags, remove_tags string) (TagDiff) {
-	return TagDiffFromArrays(strings.Split(add_tags, " "), strings.Split(remove_tags, " "))
+func TagDiffFromStrings(add_tags, remove_tags, reset_tags string) (TagDiff) {
+	return TagDiffFromArrays(strings.Split(add_tags, " "), strings.Split(remove_tags, " "), strings.Split(reset_tags, " "))
 }
 
 func TagDiffFromArray(tag_diff []string) (TagDiff) {
@@ -192,9 +199,9 @@ func TagDiffFromArray(tag_diff []string) (TagDiff) {
 	return diff
 }
 
-func TagDiffFromArrays(add_tags, remove_tags []string) (TagDiff) {
+func TagDiffFromArrays(add_tags, remove_tags, reset_tags []string) (TagDiff) {
 	var diff TagDiff
-	diff.ApplyArrays(add_tags, remove_tags)
+	diff.ApplyArrays(add_tags, remove_tags, reset_tags)
 	return diff
 }
 
