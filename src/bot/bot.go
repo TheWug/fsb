@@ -596,6 +596,18 @@ post. <code>/parent, /p      -</code> set the parent post.
 post. <code>/reset           -</code> reset everything and start over.
 post. <code>/preview         -</code> show all of the collected info.
 post. <code>/upload          -</code> upload the file and finish!
+edit.
+edit. Edit Command
+edit. Editing a post on ` + api.ApiName + ` requires gathering some information. This command pulls everything together, then does an update. You must connect to your ` + api.ApiName + ` account to use this.
+edit. <code>/edit (reply to message with ` + api.ApiName + ` post URL)</code>
+edit. <code>/edit [file ID]</code>
+edit. <code>/edit [` + api.ApiName + ` post URL]</code>
+edit.
+edit. The following subcommand exists:
+edit. <code>/cancel -</code> cancel this edit.
+edit.
+edit. Use the buttons on the edit wizard to configure the edit you wish to make. The default for every option is "leave it the way it was".
+edit. Notes: tags support three prefixes. <code>+</code> (implied if no prefix is present) adds a tag, <code>-</code> removes it, and <code>=</code> resets to "no change". Sources also operate as a diff, supporting the + and - prefixes.
 .wizard. 
 .wizard. <b>The tag wizard</b>
 .wizard. The tag wizard is probably my most powerful feature. With this, you can specify your own suggestions for tagging posts, and the wizard will guide you through them, one at a time.
