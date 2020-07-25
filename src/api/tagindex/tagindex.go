@@ -10,10 +10,12 @@ import (
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"
 
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
 	"html"
+	"io"
 	"log"
 	"math/rand"
 	"sort"
@@ -273,6 +275,148 @@ func ProgressMessage2(message_factory func(string, data.MessageParseMode) (*data
 	err := x.SetMessage(initial_text)
 	if err != nil { return nil, err }
 	return &x, nil
+}
+
+type UserError struct {
+	err string
+}
+
+func (this UserError) Error() string {
+	return this.err
+}
+
+func ResyncListCommand(ctx *gogram.MessageCtx) {
+	err := ResyncList(ctx, storage.UpdaterSettings{}, nil, nil)
+	if err == storage.ErrNoLogin {
+		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
+		return
+	} else if err != nil {
+		if u, ok := err.(UserError); ok {
+			ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: u.Error(), ParseMode: data.ParseHTML}}, nil)
+		} else {
+			ctx.Bot.Log.Println("Error occurred syncing tags: %s", err.Error())
+		}
+	}
+}
+
+func ResyncList(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+	user, api_key, janitor, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
+	if err != nil || !janitor { return err }
+
+	doc := ctx.Msg.Document
+	if doc == nil {
+		return UserError{err: "This command requires an input file."}
+	}
+
+	file, err := ctx.Bot.Remote.GetFile(data.OGetFile{Id: doc.Id})
+	if err != nil {
+		return UserError{err: "This command requires an input file."}
+	}
+
+	if file.FilePath == nil {
+		return UserError{err: "Couldn't read file data. Maybe it's too large?"}
+	}
+
+	file_data, err := ctx.Bot.Remote.DownloadFile(data.OFile{FilePath: *file.FilePath})
+	if file_data == nil || err != nil {
+		return UserError{err: "Couldn't download file?"}
+	}
+
+	defer file_data.Close()
+
+	if msg == nil || sfx == nil {
+		msg, sfx = ProgressMessage(ctx, "", "")
+		defer close(msg)
+		defer close(sfx)
+	}
+
+	return ResyncListInternal(user, api_key, settings, file_data, msg, sfx)
+}
+
+
+func ResyncListInternal(user, api_key string, settings storage.UpdaterSettings, file_data io.Reader, msg, sfx chan string) (error) {
+	message := func(x string) {
+		if msg != nil {
+			msg <- x
+		}
+	}
+	suffix := func(x string) {
+		if sfx != nil {
+			sfx <- x
+		}
+	}
+
+	message("Updating posts from list...")
+
+	idpipe := make(chan string)
+	go func() {
+		buf := bufio.NewReader(file_data)
+		for {
+			str, err := buf.ReadString('\n')
+			tokens := strings.Split(str, " ")
+			for _, tok := range tokens {
+				tok = strings.TrimSpace(tok)
+				// everything after a token beginning in a hash sign is a comment.
+				if strings.HasPrefix(tok, "#") { break }
+
+				// errors are silently discarded, and valid input continues to be processed.
+				_, e := strconv.Atoi(tok)
+				if e == nil { idpipe <- tok }
+			}
+			if err == io.EOF { break }
+		}
+		close(idpipe)
+	} ()
+
+
+	fixed_posts := make(chan types.TPostInfo)
+
+	limit := 100
+	consecutive_errors := 0
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		err := storage.PostUpdater(fixed_posts, settings)
+		wg.Done()
+		if err != nil { log.Println(err.Error()) }
+	}()
+
+	var ids []string
+	for {
+		id, ok := <- idpipe
+		if ok {
+			ids = append(ids, id)
+		}
+		if !ok && len(ids) == 0 { break }
+		for !ok && len(ids) > 0 || len(ids) == limit {
+			list, err := api.ListPosts(user, api_key, types.ListPostOptions{Limit: limit, SearchQuery: "status:any id:" + strings.Join(ids, ",")})
+			if err != nil {
+				if consecutive_errors++; consecutive_errors == 10 {
+					// transient API errors are okay, they might be because of network issues or whatever, but give up if they last too long.
+					close(fixed_posts)
+					return errors.New(fmt.Sprintf("Repeated failure while calling " + api.ApiName + " API (%s)", err.Error()))
+				}
+				time.Sleep(30 * time.Second)
+				continue
+			}
+
+			consecutive_errors = 0
+
+			for _, post := range list {
+				fixed_posts <- post
+			}
+
+			// breaks the loop
+			ids = nil
+		}
+	}
+
+	close(fixed_posts)
+	wg.Wait()
+
+	suffix("done.")
+	return nil
 }
 
 func SyncTagsCommand(ctx *gogram.MessageCtx) {
