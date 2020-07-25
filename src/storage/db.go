@@ -340,7 +340,7 @@ func PostUpdater(input chan apitypes.TPostInfo, settings UpdaterSettings) (error
 				 post.Id, pq.Array(post.Tags()))
 		if err != nil { return err }
 		_, err = tx.Exec("INSERT INTO post_index (post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-				 post.Id, post.Change, post.Rating, post.Description, strings.Join(post.Sources, " "), post.Md5, post.Deleted)
+				 post.Id, post.Change, post.Rating, post.Description, strings.Join(post.Sources, "\n"), post.Md5, post.Deleted)
 		if err != nil { return err }
 	}
 
