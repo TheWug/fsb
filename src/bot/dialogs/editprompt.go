@@ -30,6 +30,38 @@ const WAIT_FILE   string = "wait_file"
 const SAVED       string = "saved"
 const DISCARDED   string = "discarded"
 
+const PF_UNSET int = 0
+const PF_FROM_TELEGRAM int = 1
+const PF_FROM_URL int = 2
+
+type PostFile struct {
+	Mode int `json:"pf_mode"`
+	FileId data.FileID `json:"pf_tfid"`
+	FileName string `json:"pf_tfname"`
+	Url string `json:"pf_furl"`
+}
+
+func (this *PostFile) SetTelegramFile(id data.FileID, name string) {
+	this.Mode = PF_FROM_TELEGRAM
+	this.FileId = id
+	this.FileName = name
+	this.Url = ""
+}
+
+func (this *PostFile) SetUrl(url string) {
+	this.Mode = PF_FROM_TELEGRAM
+	this.Url = url
+	this.FileId = ""
+	this.FileName = ""
+}
+
+func (this *PostFile) Clear() {
+	this.Mode = PF_UNSET
+	this.FileId = ""
+	this.FileName = ""
+	this.Url = ""
+}
+
 type EditPrompt struct {
 	dialog.TelegramDialogPost `json:"-"`
 
@@ -43,7 +75,7 @@ type EditPrompt struct {
 	Parent int `json:"parent"`
 	Rating string `json:"rating"`
 	Description string `json:"description"`
-	File interface{} `json:"file"`
+	File PostFile `json:"file"`
 	Reason string `json:"reason"`
 }
 
@@ -109,6 +141,15 @@ func (this *EditPrompt) IsNoop() bool {
 
 func (this *EditPrompt) PostStatus(b *bytes.Buffer) {
 	no_changes := true
+	if this.File.Mode == PF_FROM_TELEGRAM {
+		b.WriteString("File: <i>")
+		b.WriteString(html.EscapeString(this.File.FileName))
+		b.WriteString("</i>\n")
+	} else if this.File.Mode == PF_FROM_URL {
+		b.WriteString("File: <a href=\"")
+		b.WriteString(this.File.Url)
+		b.WriteString("\">Fetch from here</a>\n")
+	}
 	if len(this.Rating) != 0 {
 		b.WriteString("Rating: <code>")
 		b.WriteString(this.Rating)
