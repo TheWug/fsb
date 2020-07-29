@@ -279,7 +279,6 @@ func GetAliasedTags() (apitypes.TTagInfoArray, error) {
 	sql := "SELECT tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM tag_index INNER JOIN alias_index ON alias_name = tag_name WHERE tag_count != 0 AND tag_name != ''"
 	rows, err := Db_pool.Query(sql)
 	if err != nil {
-		log.Printf("An error occurred when enumerating aliased tags: %s\n", err.Error())
 		return nil, err
 	}
 
@@ -290,7 +289,6 @@ func GetAliasedTags() (apitypes.TTagInfoArray, error) {
 	for rows.Next() {
 		err = rows.Scan(&d.Id, &d.Name, &d.Count, &d.Type, &d.Locked)
 		if err != nil {
-			log.Printf("An error occurred when enumerating tags with negative counts: %s\n", err.Error())
 			return nil, err
 		}
 		out = append(out, d)
