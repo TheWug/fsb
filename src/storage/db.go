@@ -353,7 +353,7 @@ func PostDeleter(input chan []int, settings UpdaterSettings) (error) {
 
 	for list := range input {
 		_, err := tx.Exec("UPDATE post_index SET post_deleted = true WHERE post_id = ANY($1::int[])", pq.Array(list))
-		if err != nil { log.Println(err.Error()); return err }
+		if err != nil { return err }
 	}
 
 	settings.Transaction.commit = mine
