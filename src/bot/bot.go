@@ -35,6 +35,7 @@ const (
 	settagrules
 	post
 		postfile
+		postfileurl
 		postpublic
 		posttags
 		postwizard
@@ -1235,6 +1236,8 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 					ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Please try again wth a valid parent post."}}, nil)
 					return
 				}
+			} else if mode == postfileurl {
+				e.File.SetUrl(token)
 			} else if mode == editreason {
 				e.Reason = token
 			}
@@ -1253,9 +1256,25 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 			mode = postparent
 		} else if token == "--reason" {
 			mode = editreason
+		} else if token == "--file" {
+			mode = postfile
+		} else if token == "--url" {
+			mode = postfileurl
 		} else {
 			temp, err := strconv.Atoi(token)
 			if err == nil { post = temp }
+		}
+
+		if mode == postfile {
+			doc := ctx.Msg.Document
+			if doc == nil && ctx.Msg.ReplyToMessage != nil {
+				doc = ctx.Msg.ReplyToMessage.Document
+			}
+
+			if doc != nil && doc.FileName != nil{
+				e.File.SetTelegramFile(doc.Id, *doc.FileName)
+			}
+			mode = root
 		}
 	}
 
