@@ -1137,8 +1137,6 @@ func GetSuggestedPostEdits(posts []int, settings UpdaterSettings) (map[int]PostS
 		err = rows.Scan(&id, &typo, &fixed, &mode)
 		if err != nil { return nil, err }
 
-		log.Println(id, typo, fixed, mode)
-
 		diff := populate(id, mode)
 
 		diff.RemoveTag(typo)
@@ -1156,8 +1154,6 @@ func GetSuggestedPostEdits(posts []int, settings UpdaterSettings) (map[int]PostS
 		var mode CorrectionMode
 		err = rows.Scan(&id, &cat, &first, &second, &mode)
 		if err != nil { return nil, err }
-
-		log.Println(id, cat, first, second, mode)
 
 		diff := populate(id, mode)
 
