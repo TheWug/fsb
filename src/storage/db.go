@@ -222,7 +222,6 @@ func getTagsWithCount(count int, differentiator string) (apitypes.TTagInfoArray,
 	sql := fmt.Sprintf("SELECT tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM tag_index WHERE tag_count %s $1", differentiator)
 	rows, err := Db_pool.Query(sql, count)
 	if err != nil {
-		log.Printf("An error occurred when enumerating tags with negative counts: %s\n", err.Error())
 		return nil, err
 	}
 
@@ -233,7 +232,6 @@ func getTagsWithCount(count int, differentiator string) (apitypes.TTagInfoArray,
 	for rows.Next() {
 		err = rows.Scan(&d.Id, &d.Name, &d.Count, &d.Type, &d.Locked)
 		if err != nil {
-			log.Printf("An error occurred when enumerating tags with negative counts: %s\n", err.Error())
 			return nil, err
 		}
 		out = append(out, d)
