@@ -1179,9 +1179,11 @@ func (this *EditState) Cancel(ctx *gogram.MessageCtx) {
 
 	p, err := dialogs.LoadEditPrompt(settings, this.data.MsgId, this.data.ChatId)
 	if err != nil { ctx.Bot.ErrorLog.Println(err.Error()) }
-	p.State = dialogs.DISCARDED
-	p.Prefix = ""
-	p.Finalize(settings, ctx.Bot, nil)
+	if p != nil {
+		p.State = dialogs.DISCARDED
+		p.Prefix = ""
+		p.Finalize(settings, ctx.Bot, nil)
+	}
 	ctx.SetState(nil)
 	settings.Transaction.MarkForCommit()
 }
