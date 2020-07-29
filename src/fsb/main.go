@@ -3,8 +3,10 @@ package main
 import (
 	"bot"
 	"botbehavior"
+	"storage"
 
 	"github.com/thewug/gogram"
+	"github.com/thewug/gogram/persist"
 
 	"fmt"
 	"os"
@@ -68,13 +70,15 @@ func main() {
 
 	behavior.MySettings = settings
 
+	p := persist.InitStatePersistence(storage.Db_pool, "state_persistence")
+
 	help := bot.HelpState{StateBase: gogram.StateBase{StateMachine: machine}}
 	login := bot.LoginState{StateBase: gogram.StateBase{StateMachine: machine}}
 	post := bot.PostState{StateBase: gogram.StateBase{StateMachine: machine}}
 	janitor := bot.JanitorState{StateBase: gogram.StateBase{StateMachine: machine}}
 	votes := bot.VoteState{StateBase: gogram.StateBase{StateMachine: machine}}
 	autofix := bot.AutofixState{StateBase: gogram.StateBase{StateMachine: machine}, Behavior: &behavior}
-	edit := bot.EditState{StateBase: gogram.StateBase{StateMachine: machine}}
+	edit := bot.EditState{StateBasePersistent: persist.Register(p, machine, "edit", bot.EditStateFactory)}
 
 	machine.AddCommand("/help", &help)
 	machine.AddCommand("/login", &login)
@@ -106,6 +110,9 @@ func main() {
 	thebot.AddMaintenanceCallback(&behavior)
 	thebot.AddMaintenanceCallback(&votes)
 	thebot.AddMaintenanceCallback(&autofix)
+
+	err := p.LoadAllStates(machine)
+	if err != nil { thebot.ErrorLog.Println(err.Error()) }
 
 	thebot.MainLoop()
 	os.Exit(0)

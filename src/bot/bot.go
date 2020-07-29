@@ -12,8 +12,10 @@ import (
 	"github.com/kballard/go-shellquote"
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"
+	"github.com/thewug/gogram/persist"
 
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
@@ -984,9 +986,22 @@ type esp struct {
 }
 
 type EditState struct {
-	gogram.StateBase
+	persist.StateBasePersistent
 
 	data esp
+}
+
+func EditStateFactory(jstr []byte, sbp persist.StateBasePersistent) gogram.State {
+	return EditStateFactoryWithData(jstr, sbp, esp{})
+}
+
+func EditStateFactoryWithData(jstr []byte, sbp persist.StateBasePersistent, data esp) gogram.State {
+	var e EditState
+	e.StateBasePersistent = sbp
+	e.StateBasePersistent.Persist = &e.data
+	e.data = data
+	json.Unmarshal(jstr, e.StateBasePersistent.Persist)
+	return &e
 }
 
 func (this *EditState) Handle(ctx *gogram.MessageCtx) {
@@ -1287,17 +1302,13 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 	e.ResetState()
 
 	prompt := e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx)
-	this = &EditState{
-		data: esp{
-			User: user,
-			ApiKey: api_key,
-			MsgId: prompt.Msg.Id,
-			ChatId: prompt.Msg.Chat.Id,
-			PostId: post,
-		},
-	}
-
-	ctx.SetState(this)
+	ctx.SetState(EditStateFactoryWithData(nil, this.StateBasePersistent, esp{
+		User: user,
+		ApiKey: api_key,
+		MsgId: prompt.Msg.Id,
+		ChatId: prompt.Msg.Chat.Id,
+		PostId: post,
+	}))
 }
 
 type LoginState struct {
