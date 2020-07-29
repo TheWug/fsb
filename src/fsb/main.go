@@ -68,13 +68,14 @@ func main() {
 
 	behavior.MySettings = settings
 
-	var help bot.HelpState
-	var login bot.LoginState
-	var post bot.PostState
-	var janitor bot.JanitorState
-	var votes bot.VoteState
-	autofix := bot.AutofixState{Behavior: &behavior}
-	var edit bot.EditState
+	help := bot.HelpState{StateBase: gogram.StateBase{StateMachine: machine}}
+	login := bot.LoginState{StateBase: gogram.StateBase{StateMachine: machine}}
+	post := bot.PostState{StateBase: gogram.StateBase{StateMachine: machine}}
+	janitor := bot.JanitorState{StateBase: gogram.StateBase{StateMachine: machine}}
+	votes := bot.VoteState{StateBase: gogram.StateBase{StateMachine: machine}}
+	autofix := bot.AutofixState{StateBase: gogram.StateBase{StateMachine: machine}, Behavior: &behavior}
+	edit := bot.EditState{StateBase: gogram.StateBase{StateMachine: machine}}
+
 	machine.AddCommand("/help", &help)
 	machine.AddCommand("/login", &login)
 	machine.AddCommand("/logout", &login)

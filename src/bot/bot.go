@@ -672,7 +672,7 @@ birds. We just don't know.`
 }
 
 type HelpState struct {
-	gogram.StateIgnoreMessages
+	gogram.StateBase
 }
 
 func (this *HelpState) Handle(ctx *gogram.MessageCtx) {
@@ -684,6 +684,8 @@ func (this *HelpState) Handle(ctx *gogram.MessageCtx) {
 }
 
 type AutofixState struct {
+	gogram.StateBase
+
 	Behavior *botbehavior.Behavior
 }
 
@@ -799,6 +801,8 @@ type lookup_faves struct {
 }
 
 type VoteState struct {
+	gogram.StateBase
+
 	votes map[data.UserID]lookup_votes
 	faves map[data.UserID]lookup_faves
 	lock sync.Mutex
@@ -979,6 +983,7 @@ type esp struct {
 }
 
 type EditState struct {
+	gogram.StateBase
 
 	data esp
 }
@@ -1277,7 +1282,7 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 }
 
 type LoginState struct {
-	gogram.StateIgnoreCallbacks
+	gogram.StateBase
 
 	user	string
 	apikey	string
@@ -1350,7 +1355,7 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 }
 
 type TagRuleState struct {
-	gogram.StateIgnoreCallbacks
+	gogram.StateBase
 
 	tagwizardrules string
 	tagrulename string
@@ -1427,6 +1432,8 @@ func (this *TagRuleState) Handle(ctx *gogram.MessageCtx) {
 }
 
 type PostState struct {
+	gogram.StateBase
+
 	postmode	int
 	postfile	PostFile
 	postrating	string
@@ -1738,7 +1745,7 @@ func (this *PostState) HandleCmd(cmd *gogram.CommandData,
 }
 
 type JanitorState struct {
-	gogram.StateIgnoreMessages
+	gogram.StateBase
 }
 
 func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
