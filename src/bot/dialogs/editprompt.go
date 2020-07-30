@@ -271,7 +271,7 @@ func (this *EditPrompt) PostStatus(b *bytes.Buffer) {
 	}
 	if !this.SourceChanges.IsZero() {
 		b.WriteString("Sources:\n<pre>  ")
-		b.WriteString(html.EscapeString(this.SourceChanges.APIString()))
+		b.WriteString(html.EscapeString(this.SourceChanges.APIStringWithDelimiter("\n")))
 		b.WriteString("</pre>\n")
 		no_changes = false
 	}
