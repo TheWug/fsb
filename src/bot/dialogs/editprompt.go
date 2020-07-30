@@ -142,6 +142,42 @@ func (this *EditPrompt) ApplyReset(state string) {
 	}
 }
 
+func (this *EditPrompt) SourceButton(n int, pick bool) {
+	// buttons will never not have been seen before so just ignore (but handle gracefully) buttons which are for invalid indexes, as they shouldn't happen
+	if n < 0 || n >= len(this.SeenSourcesReverse) { return }
+	this.SourceStringLiteral(this.SeenSourcesReverse[n], pick)
+}
+
+func (this *EditPrompt) SourceStringLiteral(source string, pick bool) {
+	if pick { // make sure we've seen it if we're adding it
+		this.SeeSource(source)
+	}
+
+	_, live := this.OrigSources[source]
+	if !live && pick {
+		this.SourceChanges.AddTag(source)
+	} else if live && !pick {
+		this.SourceChanges.RemoveTag(source)
+	} else {
+		this.SourceChanges.ResetTag(source)
+	}
+}
+
+func (this *EditPrompt) SourceStringPrefixed(source string) {
+	if strings.HasPrefix(source, "-") {
+		this.SourceChanges.RemoveTag(source[1:])
+	} else if strings.HasPrefix(source, "=") {
+		this.SourceChanges.ResetTag(source[1:])
+	} else {
+		if strings.HasPrefix(source, "+") {
+			source = source[1:]
+		}
+
+		this.SeeSource(source)
+		this.SourceChanges.AddTag(source)
+	}
+}
+
 func (this *EditPrompt) SeeSource(source string) {
 	if _, ok := this.SeenSources[source]; ok { return } // already seen
 	if this.SeenSources == nil { this.SeenSources = make(map[string]int) }
@@ -306,6 +342,31 @@ func (this *EditPrompt) GenerateMarkup() interface{} {
 	kb.Buttons[2] = append(kb.Buttons[2], data.TInlineKeyboardButton{Text: fmt.Sprintf("\u2622\uFE0F Reset %s", GetNameOfState(WAIT_ALL)), Data: sptr(fmt.Sprintf("/reset %s", WAIT_ALL))})
 	kb.Buttons[3] = append(kb.Buttons[3], data.TInlineKeyboardButton{Text: "\U0001F7E2 Save", Data: sptr("/save")})
 	kb.Buttons[3] = append(kb.Buttons[3], data.TInlineKeyboardButton{Text: "\U0001F534 Discard", Data: sptr("/discard")})
+
+	var extra_buttons [][]data.TInlineKeyboardButton
+	if this.State == WAIT_RATING {
+		extra_buttons = append(extra_buttons, nil)
+		extra_buttons[0] = append(extra_buttons[0], data.TInlineKeyboardButton{Text: "\U0001F7E9 Safe", Data: sptr("/rating s")})
+		extra_buttons[0] = append(extra_buttons[0], data.TInlineKeyboardButton{Text: "\U0001F7E8 Questionable", Data: sptr("/rating q")})
+		extra_buttons[0] = append(extra_buttons[0], data.TInlineKeyboardButton{Text: "\U0001F7E5 Explicit", Data: sptr("/rating e")})
+	} else if this.State == WAIT_SOURCE {
+		for i, source := range this.SeenSourcesReverse {
+			var selected bool
+			if this.SourceChanges.TagStatus(source) == apitypes.AddsTag {
+				selected = true
+			} else if this.SourceChanges.TagStatus(source) == apitypes.RemovesTag {
+				selected = false
+			} else if _, ok := this.OrigSources[source]; ok {
+				selected = true
+			}
+
+			prefixes := map[bool]string{true:"\U0001F7E9 ", false:"\U0001F7E5 "}
+			extra_buttons = append(extra_buttons, append([]data.TInlineKeyboardButton(nil), data.TInlineKeyboardButton{Text: prefixes[selected] + source, Data: sptr(fmt.Sprintf("/sources %d %t", i, !selected))}))
+		}
+	} else if this.State == WAIT_PARENT {
+		extra_buttons = append(extra_buttons, append([]data.TInlineKeyboardButton(nil), data.TInlineKeyboardButton{Text: "Delete parent", Data: sptr("/parent none")}))
+	}
+	kb.Buttons = append(extra_buttons, kb.Buttons...)
 	return kb
 }
 

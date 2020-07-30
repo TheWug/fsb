@@ -1037,15 +1037,31 @@ func (this *EditState) HandleCallback(ctx *gogram.CallbackCtx) {
 		p.Prefix = "Enter a list of tag changes, seperated by spaces. You can clear tags by prefixing them with a minus (-) and reset them by prefixing with an equals (=)."
 		p.State = dialogs.WAIT_TAGS
 	case "/sources":
+		if len(ctx.Cmd.Args) == 2 {
+			index, err := strconv.Atoi(ctx.Cmd.Args[0])
+			pick := ctx.Cmd.Args[1] == "true"
+			if err != nil { return }
+			p.SourceButton(index, pick)
+		}
 		p.Prefix = "Post some source changes, seperated by newlines. You can remove sources by prefixing them with a minus (-)."
 		p.State = dialogs.WAIT_SOURCE
 	case "/rating":
+		if len(ctx.Cmd.Args) == 1 {
+			rating, err := api.SanitizeRatingForEdit(ctx.Cmd.Args[0])
+
+			if err == nil {
+				p.Rating = rating
+			}
+		}
 		p.Prefix = "Post the new rating."
 		p.State = dialogs.WAIT_RATING
 	case "/description":
 		p.Prefix = `Post the new description. You can use <a href="https://` + api.Endpoint + `/help/dtext">dtext</a>.`
 		p.State = dialogs.WAIT_DESC
 	case "/parent":
+		if len(ctx.Cmd.Args) == 1 && ctx.Cmd.Args[0] == "none" {
+			p.Parent = -1
+		}
 		p.Prefix = `Post the new parent.`
 		p.State = dialogs.WAIT_PARENT
 	case "/reason":
