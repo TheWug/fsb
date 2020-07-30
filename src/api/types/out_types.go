@@ -225,13 +225,17 @@ func TagDiffFromArrays(add_tags, remove_tags, reset_tags []string) (TagDiff) {
 
 // the output of this function is stable and can be used to compare TagDiff objects
 func (this TagDiff) APIString() string {
+	return this.APIStringWithDelimiter(" ")
+}
+
+func (this TagDiff) APIStringWithDelimiter(delim string) string {
 	var buf bytes.Buffer
 	keys := make([]string, 0, len(this.Add))
 	for k, v := range this.Add { if v { keys = append(keys, k) } }
 	sort.Slice(keys, func(i, j int) bool {return keys[i] < keys[j]})
 	for _, k := range keys {
 		if buf.Len() != 0 {
-			buf.WriteString(" ")
+			buf.WriteString(delim)
 		}
 		buf.WriteString(k)
 	}
@@ -240,7 +244,7 @@ func (this TagDiff) APIString() string {
 	sort.Slice(keys, func(i, j int) bool {return keys[i] < keys[j]})
 	for _, k := range keys {
 		if buf.Len() != 0 {
-			buf.WriteString(" ")
+			buf.WriteString(delim)
 		}
 		buf.WriteRune('-')
 		buf.WriteString(k)
