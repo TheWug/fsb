@@ -49,6 +49,11 @@ const Upvote   PostVote = 1
 const Downvote PostVote = -1
 const Neutral  PostVote = 0 // this can show up in API responses but you can't vote by specifying it, if you want to delete your vote, use the endpoint for that
 
+type TagDiffMembership int
+const AddsTag TagDiffMembership = 1
+const ResetsTag TagDiffMembership = 0
+const RemovesTag TagDiffMembership = -1
+
 type PageSelector struct {
 	Before *int
 	After  *int
@@ -116,6 +121,16 @@ type ListPostOptions struct {
 type TagDiff struct {
 	Add    map[string]bool `json:"add"`
 	Remove map[string]bool `json:"remove"`
+}
+
+func (this *TagDiff) TagStatus(tag string) TagDiffMembership {
+	if _, ok := this.Add[tag]; ok {
+		return AddsTag
+	} else if _, ok := this.Remove[tag]; ok {
+		return RemovesTag
+	}
+
+	return ResetsTag
 }
 
 func (this *TagDiff) AddTag(tag string) {
