@@ -32,26 +32,23 @@ func (this *TagDiff) TagStatus(tag string) TagDiffMembership {
 	return ResetsTag
 }
 
-func (this *TagDiff) AddTag(tag string) {
+func baseAddRemove(x, y map[string]bool, tag string) {
 	if tag == "" { return }
 
-	if this.Add == nil {
-		this.Add = make(map[string]bool)
+	if x == nil {
+		x = make(map[string]bool)
 	}
 
-	this.Add[tag] = true
-	delete(this.Remove, tag)
+	x[tag] = true
+	delete(y, tag)
+}
+
+func (this *TagDiff) AddTag(tag string) {
+	baseAddRemove(this.Add, this.Remove, tag)
 }
 
 func (this *TagDiff) RemoveTag(tag string) {
-	if tag == "" { return }
-
-	if this.Remove == nil {
-		this.Remove = make(map[string]bool)
-	}
-
-	this.Remove[tag] = true
-	delete(this.Add, tag)
+	baseAddRemove(this.Remove, this.Add, tag)
 }
 
 func (this *TagDiff) ResetTag(tag string) {
@@ -99,24 +96,8 @@ func (this TagDiff) IsZero() bool {
 	return len(this.Add) == 0 && len(this.Remove) == 0
 }
 
-func TagDiffFromString(tag_diff string) (TagDiff) {
-	return TagDiffFromArray(strings.Split(tag_diff, " "))
-}
-
-func TagDiffFromStrings(add_tags, remove_tags, reset_tags string) (TagDiff) {
-	return TagDiffFromArrays(strings.Split(add_tags, " "), strings.Split(remove_tags, " "), strings.Split(reset_tags, " "))
-}
-
-func TagDiffFromArray(tag_diff []string) (TagDiff) {
-	var diff TagDiff
-	diff.ApplyArray(tag_diff)
-	return diff
-}
-
-func TagDiffFromArrays(add_tags, remove_tags, reset_tags []string) (TagDiff) {
-	var diff TagDiff
-	diff.ApplyArrays(add_tags, remove_tags, reset_tags)
-	return diff
+func (this TagDiff) Len() int {
+	return len(this.Add) + len(this.Remove)
 }
 
 // the output of this function is stable and can be used to compare TagDiff objects
@@ -201,4 +182,28 @@ func (this TagDiffArray) Flatten() TagDiff {
 		for r, v := range other.Remove { if v { n.RemoveTag(r) } }
 	}
 	return n
+}
+
+func TagDiffFromString(tag_diff string) (TagDiff) {
+	return TagDiffFromStringWithDelimiter(tag_diff, " ")
+}
+
+func TagDiffFromStringWithDelimiter(tag_diff, delimiter string) (TagDiff) {
+	return TagDiffFromArray(strings.Split(tag_diff, delimiter))
+}
+
+func TagDiffFromStrings(add_tags, remove_tags, reset_tags string) (TagDiff) {
+	return TagDiffFromArrays(strings.Split(add_tags, " "), strings.Split(remove_tags, " "), strings.Split(reset_tags, " "))
+}
+
+func TagDiffFromArray(tag_diff []string) (TagDiff) {
+	var diff TagDiff
+	diff.ApplyArray(tag_diff)
+	return diff
+}
+
+func TagDiffFromArrays(add_tags, remove_tags, reset_tags []string) (TagDiff) {
+	var diff TagDiff
+	diff.ApplyArrays(add_tags, remove_tags, reset_tags)
+	return diff
 }
