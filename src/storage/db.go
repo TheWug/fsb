@@ -757,7 +757,7 @@ func PostByID(id int, ctrl UpdaterSettings) (*apitypes.TPostInfo, error) {
 	query := "SELECT post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted, ARRAY(SELECT tag_name FROM tag_index INNER JOIN post_tags USING (tag_id) WHERE post_id = $1) AS post_tags FROM post_index WHERE post_id = $1;"
 	err := tx.QueryRow(query, id).Scan(&item.Id, &item.Change, &item.Rating, &item.Description, &sources, &item.Md5, &item.Deleted, pq.Array(&item.General))
 	if err != sql.ErrNoRows && err != nil  { return nil, err }
-	item.Sources = strings.Split(sources, " ")
+	item.Sources = strings.Split(sources, "\n")
 
 	ctrl.Transaction.commit = mine
 	return &item, nil	
