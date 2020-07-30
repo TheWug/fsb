@@ -17,6 +17,9 @@ func NewTagSet() (*TagSet) {
 	return &t
 }
 
+// apply a single tag.
+// accepts tags prefixed with -, which negates the tag.
+// when negating tags, accepts simple asterisk wildcards to match any number of characters (as a trivial example, '-*' unsets all tags)
 func (this *TagSet) ApplyTag(t string) {
 	if strings.HasPrefix(t, "-") { // if it's a negation
 		t = strings.ToLower(t[1:])
@@ -30,10 +33,14 @@ func (this *TagSet) ApplyTag(t string) {
 	} // if it's a positive tag, add it in.
 }
 
+// set a tag.
+// does not accept prefixed tags.
 func (this *TagSet) SetTag(t string) {
 	this.Tags[strings.ToLower(t)] = 1
 }
 
+// unset a tag.
+// does not accept prefixed tags.
 func (this *TagSet) ClearTag(t string) {
 	t = strings.ToLower(t)
 	if _, ok := this.Tags[t]; ok {
@@ -41,15 +48,21 @@ func (this *TagSet) ClearTag(t string) {
 	}
 }
 
+// checks to see if a specific tag is set.
+// does not accept prefixed tags.
 func (this *TagSet) IsSet(tag string) (bool) {
 	val, ok := this.Tags[strings.ToLower(tag)]
 	return ok && val != 0
 }
 
+// applies each tag in an array.
+// accepts tags prefixed with -.
 func (this *TagSet) MergeTags(tags []string) {
 	for _, t := range tags { this.ApplyTag(t) }
 }
 
+// toggles each tag in an array, deselecting them if they are currently selected and vice versa.
+// accepts tags prefixed with either + or -, which overrides toggling behavior (the prefix always signals the end state)
 func (this *TagSet) ToggleTags(tags []string) {
 	for _, t := range tags {
 		tag := t
@@ -66,6 +79,7 @@ func (this *TagSet) ToggleTags(tags []string) {
 	}
 }
 
+// Emits the tag set as a space delimited string.
 func (this *TagSet) ToString() (string) {
 	builder := bytes.NewBuffer(nil)
 	for k, v := range this.Tags {
@@ -77,14 +91,17 @@ func (this *TagSet) ToString() (string) {
 	return builder.String()
 }
 
+// Counts the number of tags set.
 func (this *TagSet) Len() (int) {
 	return len(this.Tags)
 }
 
+// Clears all tags.
 func (this *TagSet) Reset() {
 	*this = *NewTagSet()
 }
 
+// attempts to find a "rating:*" tag and interpret it, returning a rating string if it does and returning nothing if there isn't one.
 func (this *TagSet) Rating() (string) {
 	var s, q, e bool
 	for t, v := range this.Tags {
@@ -101,6 +118,7 @@ func (this *TagSet) Rating() (string) {
 	return ""
 }
 
+// apply a tag diff to the tag set.
 func (this *TagSet) ApplyDiff(diff types.TagDiff) {
 	for tag, _ := range diff.Add {
 		this.SetTag(tag)
