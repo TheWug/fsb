@@ -298,10 +298,38 @@ func (this *EditPrompt) PostStatus(b *bytes.Buffer) {
 	}
 }
 
+func (this *EditPrompt) Warnings(b *bytes.Buffer) {
+	any := false
+
+	tagset := api.NewTagSet()
+	for osource, _ := range this.OrigSources {
+		tagset.SetTag(osource)
+	}
+	tagset.ApplyDiff(this.SourceChanges)
+	if tagset.Len() > 10 {
+		b.WriteString("Too many sources, each post can only have 10! Remove some before committing.\n")
+		any = true
+	}
+
+	for tag, _ := range tagset.Tags {
+		if len(tag) > 1024 {
+			b.WriteString("One of the sources is too long, each source can only be 1024 characters long. Shorten them before committing.\n")
+			any = true
+			break
+		}
+	}
+
+	if any {
+		b.WriteString("\n")
+	}
+}
+
 func (this *EditPrompt) GenerateMessage(privacy_disabled bool) string {
 	var b bytes.Buffer
 	b.WriteString(this.Prefix)
 	if b.Len() != 0 { b.WriteString("\n\n") }
+
+	this.Warnings(&b)
 
 	if this.State == SAVED {
 		if (this.IsNoop()) {
