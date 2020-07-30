@@ -252,6 +252,23 @@ func (this TagDiff) APIStringWithDelimiter(delim string) string {
 	return buf.String()
 }
 
+func (this TagDiff) APIArray() []string {
+	var out []string
+	keys := make([]string, 0, len(this.Add))
+	for k, v := range this.Add { if v { keys = append(keys, k) } }
+	sort.Slice(keys, func(i, j int) bool {return keys[i] < keys[j]})
+	for _, k := range keys {
+		out = append(out, k)
+	}
+	keys = make([]string, 0, len(this.Add))
+	for k, v := range this.Remove { if v { keys = append(keys, k) } }
+	sort.Slice(keys, func(i, j int) bool {return keys[i] < keys[j]})
+	for _, k := range keys {
+		out = append(out, "-" + k)
+	}
+	return out
+}
+
 func (this TagDiff) String() string {
 	return this.APIString()
 }
