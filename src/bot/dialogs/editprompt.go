@@ -331,9 +331,10 @@ func (this *EditPrompt) GenerateMarkup() interface{} {
 	var kb data.TInlineKeyboard
 	kb.Buttons = make([][]data.TInlineKeyboardButton, 4)
 	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "Tags", Data: sptr("/tags")})
-	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "Sources", Data: sptr("/sources")})
 	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "Rating", Data: sptr("/rating")})
-	kb.Buttons[1] = append(kb.Buttons[1], data.TInlineKeyboardButton{Text: "Parent", Data: sptr("/parent")})
+	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "Parent", Data: sptr("/parent")})
+//	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "File", Data: sptr("/file")})
+	kb.Buttons[1] = append(kb.Buttons[1], data.TInlineKeyboardButton{Text: "Sources", Data: sptr("/sources")})
 	kb.Buttons[1] = append(kb.Buttons[1], data.TInlineKeyboardButton{Text: "Description", Data: sptr("/description")})
 	kb.Buttons[1] = append(kb.Buttons[1], data.TInlineKeyboardButton{Text: "Edit Reason", Data: sptr("/reason")})
 	if this.State != WAIT_MODE {
