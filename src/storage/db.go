@@ -324,9 +324,7 @@ func PostUpdater(input chan apitypes.TPostInfo, settings UpdaterSettings) (error
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }
 
-	i := 0
 	for post := range input {
-		i++
 		_, err := tx.Exec("DELETE FROM post_tags_by_name WHERE post_id = $1", post.Id)
 		if err != nil { return err }
 		_, err = tx.Exec("DELETE FROM post_index WHERE post_id = $1", post.Id)
