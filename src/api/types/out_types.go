@@ -122,6 +122,10 @@ type TagDiff struct {
 	Remove map[string]bool `json:"remove"`
 }
 
+func (this *TagDiff) Reset() {
+	*this = TagDiff{}
+}
+
 func (this *TagDiff) TagStatus(tag string) TagDiffMembership {
 	if _, ok := this.Add[tag]; ok {
 		return AddsTag
