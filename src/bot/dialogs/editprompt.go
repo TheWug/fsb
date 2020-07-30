@@ -19,7 +19,9 @@ import (
 
 const EDIT_PROMPT_ID data.DialogID = "editprompt"
 
+// state constants
 const WAIT_MODE   string = ""
+const WAIT_ALL    string = "wait_all"
 const WAIT_TAGS   string = "wait_tags"
 const WAIT_SOURCE string = "wait_source"
 const WAIT_RATING string = "wait_rating"
@@ -29,6 +31,25 @@ const WAIT_REASON string = "wait_reason"
 const WAIT_FILE   string = "wait_file"
 const SAVED       string = "saved"
 const DISCARDED   string = "discarded"
+
+// special parent constants
+const PARENT_NONE int = -1
+const PARENT_RESET int = 0
+
+var name_of_state = map[string]string{
+	WAIT_TAGS:   "Tags",
+	WAIT_SOURCE: "Sources",
+	WAIT_RATING: "Rating",
+	WAIT_DESC:   "Description",
+	WAIT_PARENT: "Parent",
+	WAIT_FILE:   "File",
+	WAIT_REASON: "Edit Reason",
+	WAIT_ALL:    "Everything",
+}
+
+func GetNameOfState(state string) string {
+	return name_of_state[state]
+}
 
 const PF_UNSET int = 0
 const PF_FROM_TELEGRAM int = 1
@@ -77,6 +98,44 @@ type EditPrompt struct {
 	Description string `json:"description"`
 	File PostFile `json:"file"`
 	Reason string `json:"reason"`
+}
+
+func (this *EditPrompt) ApplyReset(state string) {
+	switch state {
+	case WAIT_ALL:
+		this.TagChanges.Reset()
+		this.SourceChanges.Reset()
+		this.SeenSources = nil
+		this.SeenSourcesReverse = nil
+		for s, _ := range this.OrigSources {
+			this.SeeSource(s)
+		}
+		this.Rating = ""
+		this.Description = ""
+		this.Parent = PARENT_RESET
+		this.Reason = ""
+		this.File = PostFile{}
+	case WAIT_TAGS:
+		this.TagChanges.Reset()
+	case WAIT_SOURCE:
+		this.SourceChanges.Reset()
+		this.SeenSources = nil
+		this.SeenSourcesReverse = nil
+		for s, _ := range this.OrigSources {
+			this.SeeSource(s)
+		}
+	case WAIT_RATING:
+		this.Rating = ""
+	case WAIT_DESC:
+		this.Description = ""
+	case WAIT_PARENT:
+		this.Parent = PARENT_RESET
+	case WAIT_REASON:
+		this.Reason = ""
+	case WAIT_FILE:
+		this.File = PostFile{}
+	default:
+	}
 }
 
 func (this *EditPrompt) JSON() (string, error) {
@@ -222,15 +281,19 @@ func (this *EditPrompt) GenerateMarkup() interface{} {
 	if this.State == DISCARDED || this.State == SAVED { return nil }
 
 	var kb data.TInlineKeyboard
-	kb.Buttons = make([][]data.TInlineKeyboardButton, 3)
+	kb.Buttons = make([][]data.TInlineKeyboardButton, 4)
 	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "Tags", Data: sptr("/tags")})
 	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "Sources", Data: sptr("/sources")})
 	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "Rating", Data: sptr("/rating")})
 	kb.Buttons[1] = append(kb.Buttons[1], data.TInlineKeyboardButton{Text: "Parent", Data: sptr("/parent")})
 	kb.Buttons[1] = append(kb.Buttons[1], data.TInlineKeyboardButton{Text: "Description", Data: sptr("/description")})
 	kb.Buttons[1] = append(kb.Buttons[1], data.TInlineKeyboardButton{Text: "Edit Reason", Data: sptr("/reason")})
-	kb.Buttons[2] = append(kb.Buttons[2], data.TInlineKeyboardButton{Text: "\U0001F7E2 Save", Data: sptr("/save")})
-	kb.Buttons[2] = append(kb.Buttons[2], data.TInlineKeyboardButton{Text: "\U0001F534 Discard", Data: sptr("/discard")})
+	if this.State != WAIT_MODE {
+		kb.Buttons[2] = append(kb.Buttons[2], data.TInlineKeyboardButton{Text: fmt.Sprintf("\u21A9\uFE0F Reset %s", GetNameOfState(this.State)), Data: sptr(fmt.Sprintf("/reset %s", this.State))})
+	}
+	kb.Buttons[2] = append(kb.Buttons[2], data.TInlineKeyboardButton{Text: fmt.Sprintf("\u2622\uFE0F Reset %s", GetNameOfState(WAIT_ALL)), Data: sptr(fmt.Sprintf("/reset %s", WAIT_ALL))})
+	kb.Buttons[3] = append(kb.Buttons[3], data.TInlineKeyboardButton{Text: "\U0001F7E2 Save", Data: sptr("/save")})
+	kb.Buttons[3] = append(kb.Buttons[3], data.TInlineKeyboardButton{Text: "\U0001F534 Discard", Data: sptr("/discard")})
 	return kb
 }
 

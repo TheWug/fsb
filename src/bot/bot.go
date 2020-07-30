@@ -1030,6 +1030,9 @@ func (this *EditState) HandleCallback(ctx *gogram.CallbackCtx) {
 	}
 
 	switch ctx.Cmd.Command {
+	case "/reset":
+		if len(ctx.Cmd.Args) != 1 { return }
+		p.ApplyReset(ctx.Cmd.Args[0])
 	case "/tags":
 		p.Prefix = "Enter a list of tag changes, seperated by spaces. You can clear tags by prefixing them with a minus (-) and reset them by prefixing with an equals (=)."
 		p.State = dialogs.WAIT_TAGS
