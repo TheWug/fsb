@@ -76,15 +76,8 @@ func (this *TagSet) ToggleTags(tags []string) {
 }
 
 // Emits the tag set as a space delimited string.
-func (this *TagSet) ToString() (string) {
-	builder := bytes.NewBuffer(nil)
-	for k, v := range this.Tags {
-		if v != 0 {
-			if builder.Len() != 0 { builder.WriteRune(' ') }
-			builder.WriteString(k)
-		}
-	}
-	return builder.String()
+func (this TagSet) String() (string) {
+	return strings.Join(sorted_keys(this.Tags), " ")
 }
 
 // Counts the number of tags set.
