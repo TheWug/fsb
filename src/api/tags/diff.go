@@ -190,8 +190,8 @@ func StringDiffFromStringWithDelimiter(tag_diff, delimiter string) (StringDiff) 
 	return StringDiffFromArray(strings.Split(tag_diff, delimiter))
 }
 
-func StringDiffFromStringsWithDelimiter(add_tags, remove_tags, reset_tags, delimiter string) (StringDiff) {
-	return StringDiffFromArrays(strings.Split(add_tags,delimiter), strings.Split(remove_tags, delimiter), strings.Split(reset_tags, delimiter))
+func StringDiffFromStringsWithDelimiter(add_tags, remove_tags, delimiter string) (StringDiff) {
+	return StringDiffFromArrays(strings.Split(add_tags,delimiter), strings.Split(remove_tags, delimiter))
 }
 
 func StringDiffFromArray(tag_diff []string) (StringDiff) {
@@ -200,8 +200,8 @@ func StringDiffFromArray(tag_diff []string) (StringDiff) {
 	return diff
 }
 
-func StringDiffFromArrays(add_tags, remove_tags, reset_tags []string) (StringDiff) {
+func StringDiffFromArrays(add_tags, remove_tags []string) (StringDiff) {
 	var diff StringDiff
-	diff.ApplyArrays(add_tags, remove_tags, reset_tags)
+	diff.ApplyArrays(add_tags, remove_tags, nil)
 	return diff
 }
