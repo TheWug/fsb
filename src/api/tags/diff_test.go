@@ -2,6 +2,7 @@ package tags
 
 import (
 	"testing"
+	"reflect"
 )
 
 func TestEqual(t *testing.T) {
@@ -304,6 +305,144 @@ func TestLen(t *testing.T) {
 			l := x.test.Len()
 			if l != x.length {
 				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.length, l)
+			}
+		})
+	}
+}
+
+func TestStringWithDelimiter(t *testing.T) {
+	var pairs = []struct {
+		name, delim, expected string
+		test StringDiff
+	}{
+		{"null", " ", "",
+			StringDiff{}},
+		{"empty", " ", "",
+			StringDiff{AddList:map[string]bool{}, RemoveList:map[string]bool{}}},
+		{"mixture space", " ", "bar foo -bar2 -foo2",
+			StringDiff{AddList:map[string]bool{"foo":true, "bar":true}, RemoveList:map[string]bool{"foo2":true, "bar2":true}}},
+		{"mixture CR", "\r", "bar\rfoo\r-bar2\r-foo2",
+			StringDiff{AddList:map[string]bool{"foo":true, "bar":true}, RemoveList:map[string]bool{"foo2":true, "bar2":true}}},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			str := x.test.StringWithDelimiter(x.delim)
+			if str != x.expected {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.expected, str)
+			}
+		})
+	}
+}
+
+func TestArray(t *testing.T) {
+	var pairs = []struct {
+		name string
+		expected []string
+		test StringDiff
+	}{
+		{"null", []string{},
+			StringDiff{}},
+		{"empty", []string{},
+			StringDiff{AddList:map[string]bool{}, RemoveList:map[string]bool{}}},
+		{"mixture", []string{"bar", "foo", "-bar2", "-foo2"},
+			StringDiff{AddList:map[string]bool{"foo":true, "bar":true}, RemoveList:map[string]bool{"foo2":true, "bar2":true}}},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			array := x.test.Array()
+			if !(reflect.DeepEqual(array, x.expected) || (len(array) == 0 && len(x.expected) == 0)) {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.expected, array)
+			}
+		})
+	}
+}
+
+func TestDifference(t *testing.T) {
+	var pairs = []struct {
+		name string
+		first, second, answer StringDiff
+	}{
+		{"minus null",
+			StringDiff{AddList:map[string]bool{"foo":true, "bar":true}, RemoveList:map[string]bool{"foo2":true, "bar2":true}},
+			StringDiff{},
+			StringDiff{AddList:map[string]bool{"foo":true, "bar":true}, RemoveList:map[string]bool{"foo2":true, "bar2":true}}},
+		{"null minus",
+			StringDiff{},
+			StringDiff{AddList:map[string]bool{"foo":true, "bar":true}, RemoveList:map[string]bool{"foo2":true, "bar2":true}},
+			StringDiff{}},
+		{"identity",
+			StringDiff{AddList:map[string]bool{"foo":true}, RemoveList:map[string]bool{"bar":true}},
+			StringDiff{AddList:map[string]bool{"foo":true}, RemoveList:map[string]bool{"bar":true}},
+			StringDiff{}},
+		{"normal",
+			StringDiff{AddList:map[string]bool{"foo":true, "bar":true}, RemoveList:map[string]bool{"foo2":true, "bar2":true}},
+			StringDiff{AddList:map[string]bool{"foo":true, "bar2":true}, RemoveList:map[string]bool{"foo2":true, "bar":true}},
+			StringDiff{AddList:map[string]bool{"bar":true}, RemoveList:map[string]bool{"bar2":true}}},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			diff := x.first.Difference(x.second)
+			if !diff.Equal(x.answer) {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.answer, diff)
+			}
+		})
+	}
+}
+
+func TestUnion(t *testing.T) {
+	var pairs = []struct {
+		name string
+		first, second, answer StringDiff
+	}{
+		{"null",
+			StringDiff{},
+			StringDiff{},
+			StringDiff{}},
+		{"identity",
+			StringDiff{AddList:map[string]bool{"foo":true}, RemoveList:map[string]bool{"bar":true}},
+			StringDiff{AddList:map[string]bool{"foo":true}, RemoveList:map[string]bool{"bar":true}},
+			StringDiff{AddList:map[string]bool{"foo":true}, RemoveList:map[string]bool{"bar":true}}},
+		{"normal",
+			StringDiff{AddList:map[string]bool{"foo":true}, RemoveList:map[string]bool{"bar":true}},
+			StringDiff{AddList:map[string]bool{"foo2":true}, RemoveList:map[string]bool{"bar2":true}},
+			StringDiff{AddList:map[string]bool{"foo":true, "foo2":true}, RemoveList:map[string]bool{"bar":true, "bar2":true}}},
+		{"overlapping",
+			StringDiff{AddList:map[string]bool{"foo":true, "foo2":true}, RemoveList:map[string]bool{"bar":true, "bar2":true}},
+			StringDiff{AddList:map[string]bool{"foo3":true, "bar2":true}, RemoveList:map[string]bool{"bar3":true, "foo2":true}},
+			StringDiff{AddList:map[string]bool{"foo":true, "foo3":true, "bar2":true}, RemoveList:map[string]bool{"bar":true, "bar3":true, "foo2":true}}},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			diff := x.first.Union(x.second)
+			if !diff.Equal(x.answer) {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.answer, diff)
+			}
+		})
+	}
+}
+
+func TestInvert(t *testing.T) {
+	var pairs = []struct {
+		name string
+		first, answer StringDiff
+	}{
+		{"null",
+			StringDiff{},
+			StringDiff{}},
+		{"normal",
+			StringDiff{AddList:map[string]bool{"foo":true}, RemoveList:map[string]bool{"bar":true}},
+			StringDiff{AddList:map[string]bool{"bar":true}, RemoveList:map[string]bool{"foo":true}}},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			diff := x.first.Invert()
+			if !diff.Equal(x.answer) {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.answer, diff)
 			}
 		})
 	}
