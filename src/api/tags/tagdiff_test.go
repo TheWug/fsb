@@ -5,6 +5,40 @@ import (
 )
 
 func TestTagDiff(t *testing.T) {
+	for _, x := range []struct {
+		name string
+		expected bool
+		d1, d2 TagDiff
+	}{
+		{"nil", true,
+			TagDiff{},
+			TagDiff{}},
+		{"nil to empty", true,
+			TagDiff{},
+			TagDiff{StringDiff: StringDiff{AddList: map[string]bool{}, RemoveList: map[string]bool{}}}},
+		{"empty", true,
+			TagDiff{StringDiff: StringDiff{AddList: map[string]bool{}, RemoveList: map[string]bool{}}},
+			TagDiff{StringDiff: StringDiff{AddList: map[string]bool{}, RemoveList: map[string]bool{}}}},
+		{"identity", true,
+			TagDiff{StringDiff: StringDiff{AddList: map[string]bool{"foo":true}, RemoveList: map[string]bool{"bar":true}}},
+			TagDiff{StringDiff: StringDiff{AddList: map[string]bool{"foo":true}, RemoveList: map[string]bool{"bar":true}}}},
+		{"real to nil", false,
+			TagDiff{StringDiff: StringDiff{AddList: map[string]bool{"foo":true}, RemoveList: map[string]bool{"bar":true}}},
+			TagDiff{}},
+		{"real to empty", false,
+			TagDiff{StringDiff: StringDiff{AddList: map[string]bool{"foo":true}, RemoveList: map[string]bool{"bar":true}}},
+			TagDiff{StringDiff: StringDiff{AddList: map[string]bool{}, RemoveList: map[string]bool{}}}},
+		{"distinct", false,
+			TagDiff{StringDiff: StringDiff{AddList: map[string]bool{"foo":true}, RemoveList: map[string]bool{"bar":true}}},
+			TagDiff{StringDiff: StringDiff{AddList: map[string]bool{"foo":true}, RemoveList: map[string]bool{"derp":true}}}},
+	}{
+		t.Run("Equal/" + x.name, func(t *testing.T) {
+			if x.d1.Equal(x.d2) != x.expected {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.expected, !x.expected)
+			}
+		})
+	}
+
 	t.Run("ApplyString", func(t *testing.T) {
 		desired := TagDiff{StringDiff: StringDiff{AddList:map[string]bool{"string3":true, "string4":true}, RemoveList:map[string]bool{"string1":true}}}
 		out := TagDiff{StringDiff: StringDiff{AddList:map[string]bool{"string1":true}, RemoveList:map[string]bool{"string2":true}}}
