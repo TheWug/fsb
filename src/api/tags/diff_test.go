@@ -447,3 +447,122 @@ func TestInvert(t *testing.T) {
 		})
 	}
 }
+
+func TestFlatten(t *testing.T) {
+	var pairs = []struct {
+		name string
+		stack StringDiffArray
+		answer StringDiff
+	}{
+		{"empty", StringDiffArray{
+			},
+			StringDiff{}},
+		{"identity", StringDiffArray{
+				StringDiff{AddList:map[string]bool{"foo":true}, RemoveList:map[string]bool{"bar":true}},
+			},
+			StringDiff{AddList:map[string]bool{"foo":true}, RemoveList:map[string]bool{"bar":true}}},
+		{"stack", StringDiffArray{
+				StringDiff{AddList:map[string]bool{"foo":true}, RemoveList:map[string]bool{"bar":true}},
+				StringDiff{AddList:map[string]bool{"foo2":true}, RemoveList:map[string]bool{"bar2":true}},
+				StringDiff{AddList:map[string]bool{"bar":true}, RemoveList:map[string]bool{"foo":true}},
+			},
+			StringDiff{AddList:map[string]bool{"foo2":true, "bar":true}, RemoveList:map[string]bool{"bar2":true, "foo":true}}},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			diff := x.stack.Flatten()
+			if !diff.Equal(x.answer) {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.answer, diff)
+			}
+		})
+	}
+}
+
+func TestStringDiffFromStringWithDelimiter(t *testing.T) {
+	var pairs = []struct {
+		name, test, delim string
+		expected StringDiff
+	}{
+		{"null", "", " ",
+			StringDiff{}},
+		{"simple", "foo -bar derp -bork", " ",
+			StringDiff{AddList:map[string]bool{"foo":true, "derp":true}, RemoveList:map[string]bool{"bar":true, "bork":true}}},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			diff := StringDiffFromStringWithDelimiter(x.test, x.delim)
+			if !diff.Equal(x.expected) {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.expected, diff)
+			}
+		})
+	}
+}
+
+func TestStringDiffFromStringsWithDelimiter(t *testing.T) {
+	var pairs = []struct {
+		name string
+		add, remove string
+		delim string
+		expected StringDiff
+	}{
+		{"null", "", "", " ",
+			StringDiff{}},
+		{"simple", "foo derp", "bar bork", " ",
+			StringDiff{AddList:map[string]bool{"foo":true, "derp":true}, RemoveList:map[string]bool{"bar":true, "bork":true}}},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			diff := StringDiffFromStringsWithDelimiter(x.add, x.remove, x.delim)
+			if !diff.Equal(x.expected) {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.expected, diff)
+			}
+		})
+	}
+}
+
+func TestStringDiffFromArray(t *testing.T) {
+	var pairs = []struct {
+		name string
+		array []string
+		expected StringDiff
+	}{
+		{"null", []string{},
+			StringDiff{}},
+		{"simple", []string{"foo", "-bar", "derp", "-bork"},
+			StringDiff{AddList:map[string]bool{"foo":true, "derp":true}, RemoveList:map[string]bool{"bar":true, "bork":true}}},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			diff := StringDiffFromArray(x.array)
+			if !diff.Equal(x.expected) {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.expected, diff)
+			}
+		})
+	}
+}
+
+func TestStringDiffFromArrays(t *testing.T) {
+	var pairs = []struct {
+		name string
+		add, remove []string
+		expected StringDiff
+	}{
+		{"null", []string{}, []string{},
+			StringDiff{}},
+		{"simple", []string{"foo", "derp"}, []string{"bar", "bork"},
+			StringDiff{AddList:map[string]bool{"foo":true, "derp":true}, RemoveList:map[string]bool{"bar":true, "bork":true}}},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			diff := StringDiffFromArrays(x.add, x.remove)
+			if !diff.Equal(x.expected) {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.expected, diff)
+			}
+		})
+	}
+}
