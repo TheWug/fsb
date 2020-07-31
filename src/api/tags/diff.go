@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"sort"
 	"strings"
+	"reflect"
 )
 
 type DiffMembership int
@@ -167,6 +168,13 @@ func (this StringDiff) Union(other StringDiff) StringDiff {
 	for r, v := range this.RemoveList { if v { n.Remove(r) } }
 	for r, v := range other.RemoveList { if v { n.Remove(r) } }
 	return n
+}
+
+func (this StringDiff) Equal(other StringDiff) bool {
+	// the complexity here is necessary because DeepEqual returns false when comparing
+	// nil to an empty map, and we want to treat this comparison as true.
+	return	(len(this.AddList)    == 0 && len(other.AddList)    == 0 || reflect.DeepEqual(this.AddList,    other.AddList))    &&
+		(len(this.RemoveList) == 0 && len(other.RemoveList) == 0 || reflect.DeepEqual(this.RemoveList, other.RemoveList))
 }
 
 func (this StringDiffArray) Flatten() StringDiff {
