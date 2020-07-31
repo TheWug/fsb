@@ -1,17 +1,16 @@
 package tags
 
 import (
-	"bytes"
 	"strings"
 	"reflect"
 )
 
 type TagSet struct {
-	Tags map[string]int
+	Tags map[string]bool
 }
 
 func NewTagSet() (*TagSet) {
-	t := TagSet{Tags: make(map[string]int)}
+	t := TagSet{Tags: make(map[string]bool)}
 	return &t
 }
 
@@ -38,23 +37,19 @@ func (this *TagSet) ApplyTag(t string) {
 // set a tag.
 // does not accept prefixed tags.
 func (this *TagSet) SetTag(t string) {
-	this.Tags[strings.ToLower(t)] = 1
+	this.Tags[strings.ToLower(t)] = true
 }
 
 // unset a tag.
 // does not accept prefixed tags.
 func (this *TagSet) ClearTag(t string) {
-	t = strings.ToLower(t)
-	if _, ok := this.Tags[t]; ok {
-		this.Tags[t] = 0
-	}
+	delete(this.Tags, strings.ToLower(t))
 }
 
 // checks to see if a specific tag is set.
 // does not accept prefixed tags.
 func (this *TagSet) IsSet(tag string) (bool) {
-	val, ok := this.Tags[strings.ToLower(tag)]
-	return ok && val != 0
+	return this.Tags[strings.ToLower(tag)]
 }
 
 // applies each tag in an array.
@@ -106,13 +101,11 @@ func (this *TagSet) Reset() {
 // attempts to find a "rating:*" tag and interpret it, returning a rating string if it does and returning nothing if there isn't one.
 func (this *TagSet) Rating() (string) {
 	var s, q, e bool
-	for t, v := range this.Tags {
-		if v != 0 {
-			t = strings.ToLower(t)
-			s = s || strings.HasPrefix(t, "rating:s")
-			q = q || strings.HasPrefix(t, "rating:q")
-			e = e || strings.HasPrefix(t, "rating:e")
-		}
+	for t, _ := range this.Tags {
+		t = strings.ToLower(t)
+		s = s || strings.HasPrefix(t, "rating:s")
+		q = q || strings.HasPrefix(t, "rating:q")
+		e = e || strings.HasPrefix(t, "rating:e")
 	}
 	if e { return "explicit" }
 	if q { return "questionable" }
