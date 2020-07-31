@@ -257,3 +257,54 @@ func TestApplyArrays(t *testing.T) {
 		})
 	}
 }
+
+func TestIsZero(t *testing.T) {
+	var pairs = []struct {
+		name string
+		zero bool
+		test StringDiff
+	}{
+		{"null", true,
+			StringDiff{}},
+		{"empty", true,
+			StringDiff{AddList:map[string]bool{}, RemoveList:map[string]bool{}}},
+		{"added", false,
+			StringDiff{AddList:map[string]bool{"tag":true}}},
+		{"removed", false,
+			StringDiff{RemoveList:map[string]bool{"tag":true}}},
+		{"both", false,
+			StringDiff{AddList:map[string]bool{"tag2":true}, RemoveList:map[string]bool{"tag":true}}},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			if x.test.IsZero() != x.zero {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.zero, !x.zero)
+			}
+		})
+	}
+}
+
+func TestLen(t *testing.T) {
+	var pairs = []struct {
+		name string
+		length int
+		test StringDiff
+	}{
+		{"null", 0,
+			StringDiff{}},
+		{"empty", 0,
+			StringDiff{AddList:map[string]bool{}, RemoveList:map[string]bool{}}},
+		{"4", 4,
+			StringDiff{AddList:map[string]bool{"tag":true, "tag2":true}, RemoveList:map[string]bool{"tag3":true, "tag4":true}}},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			l := x.test.Len()
+			if l != x.length {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.length, l)
+			}
+		})
+	}
+}
