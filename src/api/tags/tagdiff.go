@@ -59,12 +59,12 @@ func TagDiffFromStringWithDelimiter(tag_diff, delimiter string) (TagDiff) {
 	return TagDiffFromArray(strings.Split(tag_diff, delimiter))
 }
 
-func TagDiffFromStrings(add_tags, remove_tags, reset_tags string) (TagDiff) {
-	return TagDiffFromStringsWithDelimiter(add_tags, remove_tags, reset_tags, " ")
+func TagDiffFromStrings(add_tags, remove_tags string) (TagDiff) {
+	return TagDiffFromStringsWithDelimiter(add_tags, remove_tags, " ")
 }
 
-func TagDiffFromStringsWithDelimiter(add_tags, remove_tags, reset_tags, delimiter string) (TagDiff) {
-	return TagDiffFromArrays(strings.Split(add_tags, delimiter), strings.Split(remove_tags, delimiter), strings.Split(reset_tags, delimiter))
+func TagDiffFromStringsWithDelimiter(add_tags, remove_tags, delimiter string) (TagDiff) {
+	return TagDiffFromArrays(strings.Split(add_tags, delimiter), strings.Split(remove_tags, delimiter))
 }
 
 func TagDiffFromArray(tag_diff []string) (TagDiff) {
@@ -73,8 +73,8 @@ func TagDiffFromArray(tag_diff []string) (TagDiff) {
 	return diff
 }
 
-func TagDiffFromArrays(add_tags, remove_tags, reset_tags []string) (TagDiff) {
+func TagDiffFromArrays(add_tags, remove_tags []string) (TagDiff) {
 	var diff TagDiff
-	diff.ApplyArrays(add_tags, remove_tags, reset_tags)
+	diff.ApplyArrays(add_tags, remove_tags, nil)
 	return diff
 }
