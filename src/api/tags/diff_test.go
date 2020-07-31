@@ -128,3 +128,132 @@ func TestReset(t *testing.T) {
 		})
 	}
 }
+
+func TestApply(t *testing.T) {
+	var pairs = []struct {
+		name, apply string
+		before, after StringDiff
+	}{
+		{"default",  "new",
+			StringDiff{AddList:map[string]bool{"added":true}, RemoveList:map[string]bool{"removed":true}},
+			StringDiff{AddList:map[string]bool{"new":true, "added":true}, RemoveList:map[string]bool{"removed":true}}},
+		{"+ prefix", "+new",
+			StringDiff{AddList:map[string]bool{"added":true}, RemoveList:map[string]bool{"removed":true}},
+			StringDiff{AddList:map[string]bool{"new":true, "added":true}, RemoveList:map[string]bool{"removed":true}}},
+		{"- prefix", "-new",
+			StringDiff{AddList:map[string]bool{"added":true}, RemoveList:map[string]bool{"removed":true}},
+			StringDiff{AddList:map[string]bool{"added":true}, RemoveList:map[string]bool{"new":true, "removed":true}}},
+		{"= prefix", "=new",
+			StringDiff{AddList:map[string]bool{"added":true, "new":true}, RemoveList:map[string]bool{"removed":true}},
+			StringDiff{AddList:map[string]bool{"added":true}, RemoveList:map[string]bool{"removed":true}}},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			x.before.Apply(x.apply)
+			if !x.before.Equal(x.after) {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.after, x.before)
+			}
+		})
+	}
+}
+
+func TestApplyStringWithDelimiter(t *testing.T) {
+	var pairs = []struct {
+		name, apply, delim string
+		before, after StringDiff
+	}{
+		{"null",  "", " ",
+			StringDiff{AddList:map[string]bool{"added":true}, RemoveList:map[string]bool{"removed":true}},
+			StringDiff{AddList:map[string]bool{"added":true}, RemoveList:map[string]bool{"removed":true}}},
+		{"comprehensive space", "+plus -minus =equals default -added +removed", " ",
+			StringDiff{AddList:map[string]bool{"added":true, "equals":true}, RemoveList:map[string]bool{"removed":true}},
+			StringDiff{AddList:map[string]bool{"default":true, "removed":true, "plus":true}, RemoveList:map[string]bool{"added":true, "minus":true}}},
+		{"comprehensive CR", "+plus\r-minus\r=equals\rdefault\r-added\r+removed", "\r",
+			StringDiff{AddList:map[string]bool{"added":true, "equals":true}, RemoveList:map[string]bool{"removed":true}},
+			StringDiff{AddList:map[string]bool{"default":true, "removed":true, "plus":true}, RemoveList:map[string]bool{"added":true, "minus":true}}},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			x.before.ApplyStringWithDelimiter(x.apply, x.delim)
+			if !x.before.Equal(x.after) {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.after, x.before)
+			}
+		})
+	}
+}
+
+func TestApplyArray(t *testing.T) {
+	var pairs = []struct {
+		name string
+		apply []string
+		before, after StringDiff
+	}{
+		{"null", []string{},
+			StringDiff{AddList:map[string]bool{"added":true}, RemoveList:map[string]bool{"removed":true}},
+			StringDiff{AddList:map[string]bool{"added":true}, RemoveList:map[string]bool{"removed":true}}},
+		{"comprehensive", []string{"+plus","-minus","=equals","default","-added","+removed"},
+			StringDiff{AddList:map[string]bool{"added":true, "equals":true}, RemoveList:map[string]bool{"removed":true}},
+			StringDiff{AddList:map[string]bool{"default":true, "removed":true, "plus":true}, RemoveList:map[string]bool{"added":true, "minus":true}}},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			x.before.ApplyArray(x.apply)
+			if !x.before.Equal(x.after) {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.after, x.before)
+			}
+		})
+	}
+}
+
+func TestApplyStringsWithDelimiter(t *testing.T) {
+	var pairs = []struct {
+		name, add, remove, reset, delim string
+		before, after StringDiff
+	}{
+		{"null", "", "", "", " ",
+			StringDiff{AddList:map[string]bool{"added":true, "resetfoo":true}, RemoveList:map[string]bool{"removed":true, "resetbar":true}},
+			StringDiff{AddList:map[string]bool{"added":true, "resetfoo":true}, RemoveList:map[string]bool{"removed":true, "resetbar":true}}},
+		{"comprehensive space", "addfoo addbar", "removefoo removebar", "resetfoo resetbar", " ",
+			StringDiff{AddList:map[string]bool{"added":true, "resetfoo":true}, RemoveList:map[string]bool{"removed":true, "resetbar":true}},
+			StringDiff{AddList:map[string]bool{"added":true, "addfoo":true, "addbar":true}, RemoveList:map[string]bool{"removed":true, "removefoo":true, "removebar":true}}},
+		{"comprehensive CR", "addfoo\raddbar", "removefoo\rremovebar", "resetfoo\rresetbar", "\r",
+			StringDiff{AddList:map[string]bool{"added":true, "resetfoo":true}, RemoveList:map[string]bool{"removed":true, "resetbar":true}},
+			StringDiff{AddList:map[string]bool{"added":true, "addfoo":true, "addbar":true}, RemoveList:map[string]bool{"removed":true, "removefoo":true, "removebar":true}}},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			x.before.ApplyStringsWithDelimiter(x.add, x.remove, x.reset, x.delim)
+			if !x.before.Equal(x.after) {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.after, x.before)
+			}
+		})
+	}
+}
+
+func TestApplyArrays(t *testing.T) {
+	var pairs = []struct {
+		name string
+		add, remove, reset []string
+		before, after StringDiff
+	}{
+		{"null", []string{}, []string{}, []string{},
+			StringDiff{AddList:map[string]bool{"added":true, "resetfoo":true}, RemoveList:map[string]bool{"removed":true, "resetbar":true}},
+			StringDiff{AddList:map[string]bool{"added":true, "resetfoo":true}, RemoveList:map[string]bool{"removed":true, "resetbar":true}}},
+		{"comprehensive", []string{"addfoo", "addbar"}, []string{"removefoo", "removebar"}, []string{"resetfoo", "resetbar"},
+			StringDiff{AddList:map[string]bool{"added":true, "resetfoo":true}, RemoveList:map[string]bool{"removed":true, "resetbar":true}},
+			StringDiff{AddList:map[string]bool{"added":true, "addfoo":true, "addbar":true}, RemoveList:map[string]bool{"removed":true, "removefoo":true, "removebar":true}}},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			x.before.ApplyArrays(x.add, x.remove, x.reset)
+			if !x.before.Equal(x.after) {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.after, x.before)
+			}
+		})
+	}
+}
