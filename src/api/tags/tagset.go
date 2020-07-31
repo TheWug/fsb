@@ -3,6 +3,7 @@ package tags
 import (
 	"bytes"
 	"strings"
+	"reflect"
 )
 
 type TagSet struct {
@@ -12,6 +13,10 @@ type TagSet struct {
 func NewTagSet() (*TagSet) {
 	t := TagSet{Tags: make(map[string]int)}
 	return &t
+}
+
+func (this TagSet) Equal(other TagSet) bool {
+	return len(this.Tags) == 0 && len(other.Tags) == 0 || reflect.DeepEqual(this.Tags, other.Tags)
 }
 
 // apply a single tag.
