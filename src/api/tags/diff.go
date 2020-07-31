@@ -164,8 +164,8 @@ func (this StringDiff) Invert() StringDiff {
 func (this StringDiff) Union(other StringDiff) StringDiff {
 	var n StringDiff
 	for a, v := range this.AddList { if v { n.Add(a) } }
-	for a, v := range other.AddList { if v { n.Add(a) } }
 	for r, v := range this.RemoveList { if v { n.Remove(r) } }
+	for a, v := range other.AddList { if v { n.Add(a) } }
 	for r, v := range other.RemoveList { if v { n.Remove(r) } }
 	return n
 }
