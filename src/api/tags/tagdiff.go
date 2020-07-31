@@ -10,6 +10,10 @@ type TagDiff struct {
 
 type TagDiffArray []TagDiff
 
+func (this TagDiff) Equal(other TagDiff) bool {
+	return this.StringDiff.Equal(other.StringDiff)
+}
+
 func (this *TagDiff) ApplyString(tag_diff string) {
 	this.ApplyStringWithDelimiter(tag_diff, " ")
 }
