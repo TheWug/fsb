@@ -9,11 +9,6 @@ type TagSet struct {
 	Tags map[string]bool
 }
 
-func NewTagSet() (*TagSet) {
-	t := TagSet{Tags: make(map[string]bool)}
-	return &t
-}
-
 func (this TagSet) Equal(other TagSet) bool {
 	return len(this.Tags) == 0 && len(other.Tags) == 0 || reflect.DeepEqual(this.Tags, other.Tags)
 }
@@ -37,6 +32,10 @@ func (this *TagSet) ApplyTag(t string) {
 // set a tag.
 // does not accept prefixed tags.
 func (this *TagSet) SetTag(t string) {
+	if this.Tags == nil {
+		this.Tags = make(map[string]bool)
+	}
+
 	this.Tags[strings.ToLower(t)] = true
 }
 
@@ -95,7 +94,7 @@ func (this *TagSet) Len() (int) {
 
 // Clears all tags.
 func (this *TagSet) Reset() {
-	*this = *NewTagSet()
+	*this = TagSet{}
 }
 
 // attempts to find a "rating:*" tag and interpret it, returning a rating string if it does and returning nothing if there isn't one.

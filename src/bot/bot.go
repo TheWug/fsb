@@ -305,7 +305,7 @@ func (this *TagWizard) Abort() {
 }
 
 func (this *TagWizard) Reset() {
-	if this.tags == nil { this.tags = tags.NewTagSet() }
+	if this.tags == nil { this.tags.Reset() }
 	if this.wizard_ctx != nil { this.wizard_ctx.DeleteAsync(nil) }
 	*this = TagWizard{tags: this.tags, rules: this.rules, ctx: this.ctx}
 	this.tags.Reset()
@@ -313,12 +313,12 @@ func (this *TagWizard) Reset() {
 }
 
 func (this *TagWizard) Len() (int) {
-	if this.tags == nil { this.tags = tags.NewTagSet() }
+	if this.tags == nil { this.tags.Reset() }
 	return this.tags.Len()
 }
 
 func (this *TagWizard) Rating() (string) {
-	if this.tags == nil { this.tags = tags.NewTagSet() }
+	if this.tags == nil { this.tags.Reset() }
 	return this.tags.Rating()
 }
 
@@ -326,8 +326,7 @@ func (this *TagWizard) TagString() (string) {
 	if this.tags == nil { return "" }
 
 	builder := bytes.NewBuffer(nil)
-	for k, v := range this.tags.Tags {
-		if v == 0 { continue }
+	for k, _ := range this.tags.Tags {
 		t := strings.ToLower(k)
 		if strings.HasPrefix(t, "rating:") { continue }
 		if strings.HasPrefix(t, "meta:") { continue }
@@ -411,7 +410,7 @@ func (this *TagWizard) DoOver() {
 }
 
 func NewTagWizard(ctx *gogram.MessageCtx) (*TagWizard) {
-	w := TagWizard{tags: tags.NewTagSet(), rules:WizardRuleset{visitval: 1}, ctx: ctx}
+	w := TagWizard{rules: WizardRuleset{visitval: 1}, ctx: ctx}
 	return &w
 }
 
