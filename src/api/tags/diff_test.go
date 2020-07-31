@@ -46,6 +46,37 @@ func TestEqual(t *testing.T) {
 	}
 }
 
+func TestClear(t *testing.T) {
+	diff := StringDiff{AddList:map[string]bool{"tag1":true, "tag2":true}, RemoveList:map[string]bool{"tag3":true}}
+	diff.Clear()
+	if !diff.Equal(StringDiff{}) {
+		t.Errorf("\nExpected: %+v\nActual:   %+v\n", StringDiff{}, diff)
+	}
+}
+
+func TestTagStatus(t *testing.T) {
+	diff := StringDiff{AddList:map[string]bool{"tag1":true, "tag2":true}, RemoveList:map[string]bool{"tag3":true}}
+
+	var pairs = []struct {
+		name string
+		find string
+		expected DiffMembership
+	}{
+		{"adds", "tag1", AddsTag},
+		{"removes", "tag3", RemovesTag},
+		{"reset", "nonexistent", ResetsTag},
+	}
+
+	for _, x := range pairs {
+		t.Run(x.name, func(t *testing.T) {
+			status := diff.TagStatus(x.find)
+			if status != x.expected {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.expected, status)
+			}
+		})
+	}
+}
+
 func TestAdd(t *testing.T) {
 	var pairs = []struct {
 		name, add string
