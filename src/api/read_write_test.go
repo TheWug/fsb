@@ -454,3 +454,55 @@ func TestFetchOnePost(t *testing.T) {
 		}
 	}
 }
+
+func TestGetTagData(t *testing.T) {
+	examiner := apiMock.Examine()
+	var wg sync.WaitGroup
+
+	var tuples = []struct{
+		user, apikey string
+		id int
+		response http.Response
+		err error
+		expectedRequest reqtify.RequestImpl
+		expectedOutput *types.TTagData
+		expectedError error
+	}{
+		{"testuser", "testpassword", 123,
+			http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"id":123,"name":"kel","post_count":121}`))},
+			nil,
+			reqtify.RequestImpl{URLPath: "/tags/123.json", Verb: reqtify.GET,
+				BasicUser: "testuser", BasicPassword: "testpassword",
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
+			&types.TTagData{Id: 123, Name: "kel", Count: 121},
+			nil},
+	}
+
+	for _, x := range tuples {
+		var tag *types.TTagData
+		var err error
+
+		wg.Add(1)
+		go func() {
+			tag, err = GetTagData(x.user, x.apikey, x.id)
+			wg.Done()
+		}()
+
+		req := <- examiner.Requests
+		if !CompareRequests(req.RequestImpl, x.expectedRequest) {
+			t.Errorf("Discrepancy in request!\nActual: %+v\nExpected: %+v\n", req.RequestImpl, x.expectedRequest)
+		}
+		examiner.Responses <- mock.ResponseAndError{
+			Response: &x.response,
+			Error: x.err,
+		}
+
+		wg.Wait()
+		if !reflect.DeepEqual(tag, x.expectedOutput) {
+			t.Errorf("Discrepancy in tag!\nActual: %+v\nExpected: %+v\n", tag, x.expectedOutput)
+		}
+		if !reflect.DeepEqual(err, x.expectedError) {
+			t.Errorf("Discrepancy in error!\nActual: %+v\nExpected: %+v\n", err, x.expectedError)
+		}
+	}
+}
