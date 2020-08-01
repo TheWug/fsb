@@ -18,6 +18,27 @@ import (
 
 var apiMock *mock.ReqtifierMock
 
+var samplePost types.TPostInfo = types.TPostInfo{
+	TPostScore: types.TPostScore{Upvotes:158, Downvotes:-3, Score:161, OurScore:0},
+	TPostFile: types.TPostFile{Width:635, Height:860, File_ext:"jpg", File_size:414628, File_url:"https://api.static.endpoint/data/27/f6/27f64791b434b92622f97eafbb75d321.jpg", Md5:"27f64791b434b92622f97eafbb75d321"},
+	TPostPreview: types.TPostPreview{Preview_width:110, Preview_height:150, Preview_url:"https://api.static.endpoint/data/preview/27/f6/27f64791b434b92622f97eafbb75d321.jpg"},
+	TPostSample: types.TPostSample{Sample_width:635, Sample_height:860, Sample_url:"https://api.static.endpoint/data/27/f6/27f64791b434b92622f97eafbb75d321.jpg", Has_sample:false},
+	TPostFlags: types.TPostFlags{Pending:false, Flagged:false, Locked_notes:false, Locked_status:false, Locked_rating:false, Deleted:false},
+	TPostRelationships: types.TPostRelationships{Parent_id:0, Has_children:true, Has_active_children:false, Children:[]int{2207557, 2234052}},
+	TPostTags: types.TPostTags{
+		General: []string{"alley","amazing_background","bicycle","building","dappled_light","day","detailed_background","female","hair","house","light","memory","outside","scenery","shadow","sky","solo","standing","street","sunlight","tree","wood","young"},
+		Species: []string{"animal_humanoid","cat_humanoid","felid","felid_humanoid","feline","feline_humanoid","humanoid","mammal","mammal_humanoid"},
+		Character: []string{},
+		Copyright: []string{"by-nc-nd","creative_commons"},
+		Artist: []string{"tysontan"},
+		Meta: []string{"signature"},
+		Invalid: []string{},
+		Lore: []string{},
+	}, Id:12345, Description:"", Creator_id:46, Change:28668882, Fav_count:196, Rating:"s", Comment_count:21, Sources: []string{"https://tysontan.deviantart.com/art/Alley-in-the-Memory-66157556"},
+}
+
+var samplePostJson string = `{"id":12345,"created_at":"2007-10-07T17:25:15.019-04:00","updated_at":"2020-07-29T00:57:30.518-04:00","file":{"width":635,"height":860,"ext":"jpg","size":414628,"md5":"27f64791b434b92622f97eafbb75d321","url":"https://api.static.endpoint/data/27/f6/27f64791b434b92622f97eafbb75d321.jpg"},"preview":{"width":110,"height":150,"url":"https://api.static.endpoint/data/preview/27/f6/27f64791b434b92622f97eafbb75d321.jpg"},"sample":{"has":false,"height":860,"width":635,"url":"https://api.static.endpoint/data/27/f6/27f64791b434b92622f97eafbb75d321.jpg"},"score":{"up":158,"down":-3,"total":161},"tags":{"general":["alley","amazing_background","bicycle","building","dappled_light","day","detailed_background","female","hair","house","light","memory","outside","scenery","shadow","sky","solo","standing","street","sunlight","tree","wood","young"],"species":["animal_humanoid","cat_humanoid","felid","felid_humanoid","feline","feline_humanoid","humanoid","mammal","mammal_humanoid"],"character":[],"copyright":["by-nc-nd","creative_commons"],"artist":["tysontan"],"invalid":[],"lore":[],"meta":["signature"]},"locked_tags":[],"change_seq":28668882,"flags":{"pending":false,"flagged":false,"note_locked":false,"status_locked":false,"rating_locked":false,"deleted":false},"rating":"s","fav_count":196,"sources":["https://tysontan.deviantart.com/art/Alley-in-the-Memory-66157556"],"pools":[],"relationships":{"parent_id":null,"has_children":true,"has_active_children":false,"children":[2207557,2234052]},"approver_id":null,"uploader_id":46,"description":"","comment_count":21,"is_favorited":false,"has_notes":false}`
+
 func TestMain(m *testing.M) {
 	ApiName = "website name"
 	Endpoint = "website"
@@ -103,13 +124,13 @@ func TestTagSearch(t *testing.T) {
 			nil,
 			nil},
 		{"testuser2", "testpassword2", "+tag -othertag anotherthing", 2, 200,
-			http.Response{Status: "200 Testing Different", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"posts":[], "extra crap":""}`))},
+			http.Response{Status: "200 Testing Different", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"posts":[` + samplePostJson + `]}`))},
 			nil,
 			reqtify.RequestImpl{URLPath: "/posts.json", Verb: reqtify.GET,
 				QueryParams: url.Values{"tags":[]string{"+tag -othertag anotherthing"}, "page":[]string{"2"}, "limit":[]string{"200"}},
 				BasicUser: "testuser2", BasicPassword: "testpassword2",
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
-			nil,
+			types.TPostInfoArray{samplePost},
 			nil},
 	}
 
