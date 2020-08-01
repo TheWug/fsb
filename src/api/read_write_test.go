@@ -269,3 +269,67 @@ func TestTestLogin(t *testing.T) {
 		}
 	}
 }
+
+func TestListTags(t *testing.T) {
+	examiner := apiMock.Examine()
+	var wg sync.WaitGroup
+	species := types.TCSpecies
+	f := false
+
+	var tuples = []struct{
+		user, apikey string
+		options types.ListTagsOptions
+		response http.Response
+		err error
+		expectedRequest reqtify.RequestImpl
+		expectedOutput types.TTagInfoArray
+		expectedError error
+	}{
+		{"testuser", "testpassword", types.ListTagsOptions{Page: types.Page(5), Limit: 100, MatchTags: "*_(artwork)", Category: &species, Order: types.TSOCount, HideEmpty: true, HasWiki: &f, HasArtist: &f},
+			http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"tags":[]}`))},
+			nil,
+			reqtify.RequestImpl{URLPath: "/tags.json", Verb: reqtify.GET,
+				QueryParams: url.Values{"page":[]string{"5"}, "limit":[]string{"100"}, "search[name_matches]":[]string{"*_(artwork)"}, "search[order]":[]string{string(types.TSOCount)}, "search[category]":[]string{"5"}, "search[hide_empty]":[]string{"true"}, "search[has_wiki]":[]string{"false"}, "search[has_artist]":[]string{"false"}},
+				BasicUser: "testuser", BasicPassword: "testpassword",
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
+			types.TTagInfoArray{},
+			nil},
+		{"testuser2", "testpassword2", types.ListTagsOptions{Page: types.Page(3)},
+			http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`[{"id":123,"name":"kel","post_count":121}]`))},
+			nil,
+			reqtify.RequestImpl{URLPath: "/tags.json", Verb: reqtify.GET,
+				QueryParams: url.Values{"page":[]string{"3"}, "search[hide_empty]":[]string{"false"}},
+				BasicUser: "testuser2", BasicPassword: "testpassword2",
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
+			types.TTagInfoArray{types.TTagData{Id: 123, Name: "kel", Count: 121}},
+			nil},
+	}
+
+	for _, x := range tuples {
+		var taginfo types.TTagInfoArray
+		var err error
+
+		wg.Add(1)
+		go func() {
+			taginfo, err = ListTags(x.user, x.apikey, x.options)
+			wg.Done()
+		}()
+
+		req := <- examiner.Requests
+		if !CompareRequests(req.RequestImpl, x.expectedRequest) {
+			t.Errorf("Discrepancy in request!\nActual: %+v\nExpected: %+v\n", req.RequestImpl, x.expectedRequest)
+		}
+		examiner.Responses <- mock.ResponseAndError{
+			Response: &x.response,
+			Error: x.err,
+		}
+
+		wg.Wait()
+		if !(len(taginfo) == 0 && len(x.expectedOutput) == 0 || reflect.DeepEqual(taginfo, x.expectedOutput)) {
+			t.Errorf("Discrepancy in tags!\nActual: %+v\nExpected: %+v\n", taginfo, x.expectedOutput)
+		}
+		if !reflect.DeepEqual(err, x.expectedError) {
+			t.Errorf("Discrepancy in error!\nActual: %+v\nExpected: %+v\n", err, x.expectedError)
+		}
+	}
+}
