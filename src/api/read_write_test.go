@@ -333,3 +333,65 @@ func TestListTags(t *testing.T) {
 		}
 	}
 }
+
+func TestListTagAliases(t *testing.T) {
+	examiner := apiMock.Examine()
+	var wg sync.WaitGroup
+
+	var tuples = []struct{
+		user, apikey string
+		options types.ListTagAliasOptions
+		response http.Response
+		err error
+		expectedRequest reqtify.RequestImpl
+		expectedOutput types.TAliasInfoArray
+		expectedError error
+	}{
+		{"testuser", "testpassword", types.ListTagAliasOptions{Page: types.Before(100), Limit: 75, MatchAliases: "abc*", Status: types.ASActive, Order: types.ASOUpdated},
+			http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"posts":[]}`))},
+			nil,
+			reqtify.RequestImpl{URLPath: "/tag_aliases.json", Verb: reqtify.GET,
+				QueryParams: url.Values{"page":[]string{"b100"}, "limit":[]string{"75"}, "search[name_matches]":[]string{"abc*"}, "search[status]":[]string{string(types.ASActive)}, "search[order]":[]string{string(types.ASOUpdated)}},
+				BasicUser: "testuser", BasicPassword: "testpassword",
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
+			nil,
+			nil},
+		{"testuser2", "testpassword2", types.ListTagAliasOptions{Page: types.After(100), Limit: 99, MatchAliases: "def*", Status: types.ASRetired, Order: types.ASOName},
+			http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`[{"id":46006,"antecedent_name":"champion_(pokemon)","consequent_name":"pokémon_champion","post_count":0}]`))},
+			nil,
+			reqtify.RequestImpl{URLPath: "/tag_aliases.json", Verb: reqtify.GET,
+				QueryParams: url.Values{"page":[]string{"a100"}, "limit":[]string{"99"}, "search[name_matches]":[]string{"def*"}, "search[status]":[]string{string(types.ASRetired)}, "search[order]":[]string{string(types.ASOName)}},
+				BasicUser: "testuser2", BasicPassword: "testpassword2",
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
+			types.TAliasInfoArray{types.TAliasData{Id: 46006, Name: "pokémon_champion", Alias: "champion_(pokemon)"}},
+			nil},
+	}
+
+	for _, x := range tuples {
+		var aliases types.TAliasInfoArray
+		var err error
+
+		wg.Add(1)
+		go func() {
+			aliases, err = ListTagAliases(x.user, x.apikey, x.options)
+			wg.Done()
+		}()
+
+		req := <- examiner.Requests
+		if !CompareRequests(req.RequestImpl, x.expectedRequest) {
+			t.Errorf("Discrepancy in request!\nActual: %+v\nExpected: %+v\n", req.RequestImpl, x.expectedRequest)
+		}
+		examiner.Responses <- mock.ResponseAndError{
+			Response: &x.response,
+			Error: x.err,
+		}
+
+		wg.Wait()
+		if !(len(aliases) == 0 && len(x.expectedOutput) == 0 || reflect.DeepEqual(aliases, x.expectedOutput)) {
+			t.Errorf("Discrepancy in aliases!\nActual: %+v\nExpected: %+v\n", aliases, x.expectedOutput)
+		}
+		if !reflect.DeepEqual(err, x.expectedError) {
+			t.Errorf("Discrepancy in error!\nActual: %+v\nExpected: %+v\n", err, x.expectedError)
+		}
+	}
+}
