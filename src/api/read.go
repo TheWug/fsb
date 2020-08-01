@@ -135,16 +135,6 @@ func FetchOnePost(user, apitoken string, id int) (*types.TPostInfo, error) {
 	return nil, nil
 }
 
-func ListOnePageOfDeletedPosts(user, apitoken string, page int) (types.TPostInfoArray, bool, int, error) {
-	posts, err := TagSearch(user, apitoken, "status:deleted", page, 10000)
-
-	if err != nil {
-		return posts, true, page, err
-	}
-
-	return posts, len(posts) != 0, page + 1, nil
-}
-
 func GetTagData(user, apitoken string, id int) (*types.TTagData, error) {
 	url := fmt.Sprintf("/tags/%d.json", id)
 
