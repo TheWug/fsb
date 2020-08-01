@@ -395,3 +395,63 @@ func TestListTagAliases(t *testing.T) {
 		}
 	}
 }
+
+func TestFetchOnePost(t *testing.T) {
+	examiner := apiMock.Examine()
+	var wg sync.WaitGroup
+
+	var tuples = []struct{
+		user, apikey string
+		id int
+		response http.Response
+		err error
+		expectedRequest reqtify.RequestImpl
+		expectedOutput *types.TPostInfo
+		expectedError error
+	}{
+		{"testuser", "testpassword", 123,
+			http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"post":` + samplePostJson + `}`))},
+			nil,
+			reqtify.RequestImpl{URLPath: "/posts/123.json", Verb: reqtify.GET,
+				BasicUser: "testuser", BasicPassword: "testpassword",
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
+			&samplePost,
+			nil},
+		{"testuser", "testpassword", 456,
+			http.Response{Status: "404 Testing", StatusCode: 404, Body: ioutil.NopCloser(strings.NewReader(`{"success":false,"reason":"not found"}`))},
+			nil,
+			reqtify.RequestImpl{URLPath: "/posts/456.json", Verb: reqtify.GET,
+				BasicUser: "testuser", BasicPassword: "testpassword",
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
+			nil,
+			nil},
+	}
+
+	for _, x := range tuples {
+		var post *types.TPostInfo
+		var err error
+
+		wg.Add(1)
+		go func() {
+			post, err = FetchOnePost(x.user, x.apikey, x.id)
+			wg.Done()
+		}()
+
+		req := <- examiner.Requests
+		if !CompareRequests(req.RequestImpl, x.expectedRequest) {
+			t.Errorf("Discrepancy in request!\nActual: %+v\nExpected: %+v\n", req.RequestImpl, x.expectedRequest)
+		}
+		examiner.Responses <- mock.ResponseAndError{
+			Response: &x.response,
+			Error: x.err,
+		}
+
+		wg.Wait()
+		if !reflect.DeepEqual(post, x.expectedOutput) {
+			t.Errorf("Discrepancy in post!\nActual: %+v\nExpected: %+v\n", post, x.expectedOutput)
+		}
+		if !reflect.DeepEqual(err, x.expectedError) {
+			t.Errorf("Discrepancy in error!\nActual: %+v\nExpected: %+v\n", err, x.expectedError)
+		}
+	}
+}
