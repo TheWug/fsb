@@ -14,6 +14,7 @@ import (
 	"api/types"
 	"reflect"
 	"io/ioutil"
+	"errors"
 )
 
 var apiMock *mock.ReqtifierMock
@@ -156,6 +157,112 @@ func TestTagSearch(t *testing.T) {
 		wg.Wait()
 		if !(len(posts) == 0 && len(x.expectedOutput) == 0 || reflect.DeepEqual(posts, x.expectedOutput)) {
 			t.Errorf("Discrepancy in posts!\nActual: %+v\nExpected: %+v\n", posts, x.expectedOutput)
+		}
+		if !reflect.DeepEqual(err, x.expectedError) {
+			t.Errorf("Discrepancy in error!\nActual: %+v\nExpected: %+v\n", err, x.expectedError)
+		}
+	}
+}
+
+func TestTestLogin(t *testing.T) {
+	examiner := apiMock.Examine()
+	var wg sync.WaitGroup
+
+	var tuples = []struct{
+		user, apikey string
+		response http.Response
+		err error
+		expectedRequest reqtify.RequestImpl
+		expectedOutput bool
+		expectedError error
+	}{
+		{"Snergal", "testpassword",
+			http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`[{"id":292290,"name":"Snergal","email":"this is an email"}]`))},
+			nil,
+			reqtify.RequestImpl{URLPath: "/users.json", Verb: reqtify.GET,
+				AutoParams: url.Values{"search[name_matches]":[]string{"Snergal"}},
+				BasicUser: "Snergal", BasicPassword: "testpassword",
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
+			true,
+			nil},
+		{"Snergal", "testpassword",
+			http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`[{"id":292290,"name":"Snergal","email":"this is an email"}]`))},
+			errors.New("endpoint failed"),
+			reqtify.RequestImpl{URLPath: "/users.json", Verb: reqtify.GET,
+				AutoParams: url.Values{"search[name_matches]":[]string{"Snergal"}},
+				BasicUser: "Snergal", BasicPassword: "testpassword",
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
+			false,
+			errors.New("endpoint failed")},
+		{"Snergal", "testpassword",
+			http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`[]`))},
+			nil,
+			reqtify.RequestImpl{URLPath: "/users.json", Verb: reqtify.GET,
+				AutoParams: url.Values{"search[name_matches]":[]string{"Snergal"}},
+				BasicUser: "Snergal", BasicPassword: "testpassword",
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
+			false,
+			nil},
+		{"Snergal", "testpassword",
+			http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`[{"id":292290,"name":"Snergal"}]`))},
+			nil,
+			reqtify.RequestImpl{URLPath: "/users.json", Verb: reqtify.GET,
+				AutoParams: url.Values{"search[name_matches]":[]string{"Snergal"}},
+				BasicUser: "Snergal", BasicPassword: "testpassword",
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
+			false,
+			nil},
+		{"Snergal", "testpassword",
+			http.Response{Status: "401 Testing", StatusCode: 401, Body: ioutil.NopCloser(strings.NewReader(`[{"id":292290,"name":"Snerg","email":"this is an email"}]`))},
+			nil,
+			reqtify.RequestImpl{URLPath: "/users.json", Verb: reqtify.GET,
+				AutoParams: url.Values{"search[name_matches]":[]string{"Snergal"}},
+				BasicUser: "Snergal", BasicPassword: "testpassword",
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
+			false,
+			errors.New("Got non-matching user?")},
+		{"Snergal", "testpassword",
+			http.Response{Status: "401 Testing", StatusCode: 401, Body: ioutil.NopCloser(strings.NewReader(`[{"id":292290,"name":"Snergal","email":"this is an email"}, {"id":292291,"name":"Snergle"}]`))},
+			nil,
+			reqtify.RequestImpl{URLPath: "/users.json", Verb: reqtify.GET,
+				AutoParams: url.Values{"search[name_matches]":[]string{"Snergal"}},
+				BasicUser: "Snergal", BasicPassword: "testpassword",
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
+			false,
+			errors.New("Got wrong number of users?")},
+		{"Snergal", "testpassword",
+			http.Response{Status: "401 Testing", StatusCode: 401, Body: ioutil.NopCloser(strings.NewReader(`{"success": false,"message": "SessionLoader::AuthenticationFailure","code": null}`))},
+			nil,
+			reqtify.RequestImpl{URLPath: "/users.json", Verb: reqtify.GET,
+				AutoParams: url.Values{"search[name_matches]":[]string{"Snergal"}},
+				BasicUser: "Snergal", BasicPassword: "testpassword",
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
+			false,
+			nil},
+	}
+
+	for _, x := range tuples {
+		var loggedIn bool
+		var err error
+
+		wg.Add(1)
+		go func() {
+			loggedIn, err = TestLogin(x.user, x.apikey)
+			wg.Done()
+		}()
+
+		req := <- examiner.Requests
+		if !CompareRequests(req.RequestImpl, x.expectedRequest) {
+			t.Errorf("Discrepancy in request!\nActual: %+v\nExpected: %+v\n", req.RequestImpl, x.expectedRequest)
+		}
+		examiner.Responses <- mock.ResponseAndError{
+			Response: &x.response,
+			Error: x.err,
+		}
+
+		wg.Wait()
+		if loggedIn != x.expectedOutput {
+			t.Errorf("Discrepancy in loggedIn!\nActual: %+v\nExpected: %+v\n", loggedIn, x.expectedOutput)
 		}
 		if !reflect.DeepEqual(err, x.expectedError) {
 			t.Errorf("Discrepancy in error!\nActual: %+v\nExpected: %+v\n", err, x.expectedError)
