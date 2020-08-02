@@ -5,6 +5,7 @@ import (
 	"github.com/thewug/reqtify/mock"
 	"testing"
 	"os"
+	"io"
 	"flag"
 	"fmt"
 	"strings"
@@ -606,6 +607,97 @@ func TestFetchUser(t *testing.T) {
 		wg.Wait()
 		if !reflect.DeepEqual(user, x.expectedOutput) {
 			t.Errorf("Discrepancy in tag!\nActual: %+v\nExpected: %+v\n", user, x.expectedOutput)
+		}
+		if !reflect.DeepEqual(err, x.expectedError) {
+			t.Errorf("Discrepancy in error!\nActual: %+v\nExpected: %+v\n", err, x.expectedError)
+		}
+	}
+}
+
+func sptr(s string) *string {
+	return &s
+}
+
+func TestUploadFile(t *testing.T) {
+	examiner := apiMock.Examine()
+	var wg sync.WaitGroup
+
+	var tuples = []struct{
+		file_data io.Reader
+		upload_url, tags, rating, source, description string
+		parent *int
+		user, apikey string
+		response *http.Response
+		err error
+		expectedRequest reqtify.RequestImpl
+		expectedOutput *UploadCallResult
+		expectedError error
+	}{
+		{strings.NewReader("file data"), "", "foo bar", "e", "source", "description", nil,
+			"testuser", "testpassword",
+			&http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"success":true,"location":"url"}`))},
+			nil,
+			reqtify.RequestImpl{URLPath: "/uploads.json", Verb: reqtify.POST,
+				BasicUser: "testuser", BasicPassword: "testpassword",
+				FormParams: url.Values{"upload[source]":[]string{"source"}, "upload[description]":[]string{"description"}, "upload[tag_string]":[]string{"foo bar"}, "upload[rating]":[]string{"e"}},
+				FormFiles: map[string][]reqtify.FormFile{"upload[file]": []reqtify.FormFile{reqtify.FormFile{Name: "post.file", Data: strings.NewReader("file data")}}},
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
+			&UploadCallResult{Success: true, Location: sptr("url"), Status: "200 Testing", StatusCode: 200},
+			nil},
+		{nil, "upload from url", "foo bar", "e", "source", "description", new(int),
+			"testuser", "testpassword",
+			&http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"success":true,"location":"url"}`))},
+			nil,
+			reqtify.RequestImpl{URLPath: "/uploads.json", Verb: reqtify.POST,
+				BasicUser: "testuser", BasicPassword: "testpassword",
+				FormParams: url.Values{"upload[source]":[]string{"source"}, "upload[direct_url]":[]string{"upload from url"}, "upload[description]":[]string{"description"}, "upload[tag_string]":[]string{"foo bar"}, "upload[rating]":[]string{"e"}, "upload[parent_id]":[]string{"0"}},
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
+			&UploadCallResult{Success: true, Location: sptr("url"), Status: "200 Testing", StatusCode: 200},
+			nil},
+		{nil, "upload from url", "foo bar", "e", "source", "description", new(int),
+			"testuser", "testpassword",
+			nil,
+			errors.New("failure"),
+			reqtify.RequestImpl{URLPath: "/uploads.json", Verb: reqtify.POST,
+				BasicUser: "testuser", BasicPassword: "testpassword",
+				FormParams: url.Values{"upload[source]":[]string{"source"}, "upload[direct_url]":[]string{"upload from url"}, "upload[description]":[]string{"description"}, "upload[tag_string]":[]string{"foo bar"}, "upload[rating]":[]string{"e"}, "upload[parent_id]":[]string{"0"}},
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
+			&UploadCallResult{},
+			errors.New("failure")},
+		{nil, "upload from url", "foo bar", "e", "source", "description", new(int),
+			"testuser", "testpassword",
+			&http.Response{Status: "401 Testing", StatusCode: 401, Body: ioutil.NopCloser(strings.NewReader(`{"success":false,"reason":"fail"}`))},
+			nil,
+			reqtify.RequestImpl{URLPath: "/uploads.json", Verb: reqtify.POST,
+				BasicUser: "testuser", BasicPassword: "testpassword",
+				FormParams: url.Values{"upload[source]":[]string{"source"}, "upload[direct_url]":[]string{"upload from url"}, "upload[description]":[]string{"description"}, "upload[tag_string]":[]string{"foo bar"}, "upload[rating]":[]string{"e"}, "upload[parent_id]":[]string{"0"}},
+				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
+			&UploadCallResult{Success: false, Reason: sptr("fail"), Status: "401 Testing", StatusCode: 401},
+			nil},
+	}
+
+	for _, x := range tuples {
+		var status *UploadCallResult
+		var err error
+
+		wg.Add(1)
+		go func() {
+			status, err = UploadFile(x.file_data, x.upload_url, x.tags, x.rating, x.source, x.description, x.parent, x.user, x.apikey)
+			wg.Done()
+		}()
+
+		req := <- examiner.Requests
+		if !CompareRequests(req.RequestImpl, x.expectedRequest) {
+			t.Errorf("Discrepancy in request!\nActual: %+v\nExpected: %+v\n", req.RequestImpl, x.expectedRequest)
+		}
+		examiner.Responses <- mock.ResponseAndError{
+			Response: x.response,
+			Error: x.err,
+		}
+
+		wg.Wait()
+		if !reflect.DeepEqual(status, x.expectedOutput) {
+			t.Errorf("Discrepancy in status!\nActual: %+v\nExpected: %+v\n", status, x.expectedOutput)
 		}
 		if !reflect.DeepEqual(err, x.expectedError) {
 			t.Errorf("Discrepancy in error!\nActual: %+v\nExpected: %+v\n", err, x.expectedError)
