@@ -225,10 +225,17 @@ func (this *EditPrompt) Finalize(settings storage.UpdaterSettings, bot *gogram.T
 	send.ParseMode = data.ParseHTML
 	send.ReplyMarkup = nil
 	
-	// message already exists, update it
-	prompt, err := this.Ctx(bot).EditText(data.OMessageEdit{SendData: send, DisableWebPagePreview: true})
-	if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
-	this.Delete(settings)
+	var prompt *gogram.MessageCtx
+	var err error
+	if this.TelegramDialogPost.IsUnset() {
+		prompt, err = ctx.Reply(data.OMessage{SendData: send, DisableWebPagePreview: true})
+		if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
+	} else {
+		prompt, err = this.Ctx(bot).EditText(data.OMessageEdit{SendData: send, DisableWebPagePreview: true})
+		if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
+		this.Delete(settings)
+	}
+
 	return prompt
 }
 
