@@ -1299,7 +1299,7 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 			mode = postfile
 		} else if token == "--url" {
 			mode = postfileurl
-		} else if token == "--save" {
+		} else if token == "--commit" {
 			savenow = true
 		} else {
 			temp, err := strconv.Atoi(token)
