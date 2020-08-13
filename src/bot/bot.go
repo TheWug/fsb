@@ -1226,6 +1226,7 @@ func scrapePostIdFromMessage(msg *data.TMessage) (int) {
 func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 	var post int
 	var mode int
+	var savenow bool
 	var e dialogs.EditPrompt
 
 	if ctx.Msg.From == nil { return }
@@ -1298,6 +1299,8 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 			mode = postfile
 		} else if token == "--url" {
 			mode = postfileurl
+		} else if token == "--save" {
+			savenow = true
 		} else {
 			temp, err := strconv.Atoi(token)
 			if err == nil { post = temp }
@@ -1323,7 +1326,6 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 
 	e.PostId = post
 	e.OrigSources = make(map[string]int)
-	e.ResetState()
 
 	post_data, err := storage.PostByID(post, storage.UpdaterSettings{})
 	if post_data != nil {
@@ -1333,14 +1335,47 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 		}
 	}
 
-	prompt := e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx)
-	ctx.SetState(EditStateFactoryWithData(nil, this.StateBasePersistent, esp{
-		User: user,
-		ApiKey: api_key,
-		MsgId: prompt.Msg.Id,
-		ChatId: prompt.Msg.Chat.Id,
-		PostId: post,
-	}))
+	if savenow {
+		e.Prefix = ""
+		e.State = dialogs.SAVED
+		e.Finalize(storage.UpdaterSettings{}, ctx.Bot, ctx)
+		if !e.IsNoop() {
+			var rating *string
+			var parent *int
+			var description *string
+			var reason *string
+
+			if e.Rating != "" { rating = &e.Rating }
+			if e.Parent != 0 { parent = &e.Parent }
+			if e.Description != "" { description = &e.Description }
+			if e.Reason != "" { reason = &e.Reason }
+
+			update, err := api.UpdatePost(user, api_key, e.PostId, e.TagChanges, rating, parent, e.SourceChanges.Array(), description, reason)
+			if err != nil {
+				ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "An error occurred when editing the post! Try again later."}}, nil)
+				ctx.Bot.ErrorLog.Println("Error updating post: ", err.Error())
+				return
+			}
+
+			if update != nil {
+				err = storage.UpdatePost(*update, storage.UpdaterSettings{})
+				if err != nil {
+					ctx.Bot.ErrorLog.Println("Error updating internal post: ", err.Error())
+					return
+				}
+			}
+		}
+	} else {
+		e.ResetState()
+		prompt := e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx)
+		ctx.SetState(EditStateFactoryWithData(nil, this.StateBasePersistent, esp{
+			User: user,
+			ApiKey: api_key,
+			MsgId: prompt.Msg.Id,
+			ChatId: prompt.Msg.Chat.Id,
+			PostId: post,
+		}))
+	}
 }
 
 type LoginState struct {
