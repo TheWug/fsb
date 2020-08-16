@@ -335,7 +335,7 @@ func PostUpdater(input chan apitypes.TPostInfo, settings UpdaterSettings) (error
 				 post.Id, pq.Array(post.Tags()))
 		if err != nil { return err }
 		_, err = tx.Exec("INSERT INTO post_index (post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-				 post.Id, post.Change, post.Rating, post.Description, strings.Join(post.Sources, "\n"), post.Md5, post.Deleted)
+				 post.Id, post.Change, post.Rating, post.Description, strings.Join(post.Sources, "\n"), strings.ToLower(post.Md5), post.Deleted)
 		if err != nil { return err }
 	}
 
@@ -849,7 +849,7 @@ func UpdatePost(post apitypes.TPostInfo, settings UpdaterSettings) (error) {
 
 
 	query = "INSERT INTO post_index (post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted) VALUES ($1, $2, $3, $4, $5, $6, $7)"
-	_, err = tx.Exec(query, post.Id, post.Change, post.Rating, post.Description, strings.Join(post.Sources, "\n"), post.Md5, post.Deleted)
+	_, err = tx.Exec(query, post.Id, post.Change, post.Rating, post.Description, strings.Join(post.Sources, "\n"), strings.ToLower(post.Md5), post.Deleted)
 	if err != nil { return err }
 
 	query = "INSERT INTO post_tags SELECT $1 as post_id, tag_id FROM UNNEST($2::varchar[]) AS tag_name INNER JOIN tag_index USING (tag_name)"
@@ -1303,7 +1303,7 @@ func SavePromptPost(id int, x *PromptPostInfo, settings UpdaterSettings) (error)
 
 	if x != nil {
 		query = "INSERT INTO prompt_posts (post_id, post_type, post_url, sample_url, post_hash, post_width, post_height, msg_id, chat_id, msg_ts, msg_captioned, edit_list_json) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)"
-		_, err = tx.Exec(query, id, x.PostType, x.PostURL, x.SampleURL, x.PostMd5, x.PostWidth, x.PostHeight, x.MsgId, x.ChatId, x.Timestamp, x.Captioned, x.Edit)
+		_, err = tx.Exec(query, id, x.PostType, x.PostURL, x.SampleURL, strings.ToLower(x.PostMd5), x.PostWidth, x.PostHeight, x.MsgId, x.ChatId, x.Timestamp, x.Captioned, x.Edit)
 		if err != nil { return err }
 	}
 
