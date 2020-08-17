@@ -69,6 +69,10 @@ func (this EditFormatter) Warnings(b *bytes.Buffer, prompt *EditPrompt) {
 		}
 	}
 
+	if this.private_mode && !(prompt.State == SAVED || prompt.State == DISCARDED) {
+		warnings = append(warnings, "Be sure to <b>reply</b> to my messages! (<a href=\"https://core.telegram.org/bots#privacy-mode\">why?</a>)")
+	}
+
 	this.WarningsBase(b, warnings)
 }
 
@@ -97,9 +101,6 @@ func (this EditFormatter) GenerateMessage(prompt *EditPrompt) string {
 	} else {
 		b.WriteString(fmt.Sprintf("Now editing <a href=\"https://" + api.Endpoint + "/posts/%d\">Post #%d</a>\n", prompt.PostId, prompt.PostId))
 		prompt.PostStatus(&b)
-	}
-	if this.private_mode && !(prompt.State == SAVED || prompt.State == DISCARDED) {
-		b.WriteString("\nBe sure to <b>reply</b> to my messages! (<a href=\"https://core.telegram.org/bots#privacy-mode\">why?</a>)")
 	}
 	return b.String()
 }
@@ -178,6 +179,10 @@ func (this PostFormatter) Warnings(b *bytes.Buffer, prompt *PostPrompt) {
 		warnings = append(warnings, "You must specify a rating!")
 	}
 
+	if this.private_mode && !(prompt.State == SAVED || prompt.State == DISCARDED) {
+		warnings = append(warnings, "Be sure to <b>reply</b> to my messages! (<a href=\"https://core.telegram.org/bots#privacy-mode\">why?</a>)")
+	}
+
 	this.WarningsBase(b, warnings)
 }
 
@@ -227,9 +232,6 @@ func (this PostFormatter) GenerateMessage(prompt *PostPrompt) string {
 	} else {
 		b.WriteString("Now creating and editing a new post.\n")
 		prompt.PostStatus(&b)
-	}
-	if this.private_mode && !(prompt.State == SAVED || prompt.State == DISCARDED) {
-		b.WriteString("\nBe sure to <b>reply</b> to my messages! (<a href=\"https://core.telegram.org/bots#privacy-mode\">why?</a>)")
 	}
 	return b.String()
 }
