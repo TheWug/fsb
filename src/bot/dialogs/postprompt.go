@@ -8,6 +8,7 @@ import (
 	"github.com/thewug/gogram/dialog"
 
 	"encoding/json"
+	"strings"
 )
 
 const POST_PROMPT_ID data.DialogID = "postprompt"
@@ -55,3 +56,69 @@ func (this *PostPrompt) ID() data.DialogID {
 	return PostPromptID()
 }
 
+func (this *PostPrompt) ApplyReset(state string) {
+	if state == WAIT_TAGS || state == WAIT_ALL {
+		this.Tags.Reset()
+	}
+
+	if state == WAIT_SOURCE || state == WAIT_ALL {
+		this.Sources.Reset()
+		this.SeenSources = nil
+		this.SeenSourcesReverse = nil
+	}
+
+	if state == WAIT_RATING || state == WAIT_ALL {
+		this.Rating = ""
+	}
+
+	if state == WAIT_DESC || state == WAIT_ALL {
+		this.Description = ""
+	}
+
+	if state == WAIT_PARENT || state == WAIT_ALL {
+		this.Parent = PARENT_RESET
+	}
+
+	if state == WAIT_FILE || state == WAIT_ALL {
+		this.File.Clear()
+	}
+}
+
+func (this *PostPrompt) SourceButton(n int, pick bool) {
+	// buttons will never not have been seen before so just ignore (but handle gracefully) buttons which are for invalid indexes, as they shouldn't happen
+	if n < 0 || n >= len(this.SeenSourcesReverse) { return }
+	this.SourceStringLiteral(this.SeenSourcesReverse[n], pick)
+}
+
+func (this *PostPrompt) SourceStringLiteral(source string, pick bool) {
+	if pick { // make sure we've seen it if we're adding it
+		this.SeeSource(source)
+	}
+
+	if pick {
+		this.Sources.Set(source)
+	} else if !pick {
+		this.Sources.Clear(source)
+	}
+}
+
+func (this *PostPrompt) SourceStringPrefixed(source string) {
+	if strings.HasPrefix(source, "-") {
+		this.Sources.Clear(source[1:])
+	} else {
+		if strings.HasPrefix(source, "+") {
+			source = source[1:]
+		}
+
+		this.SeeSource(source)
+		this.Sources.Set(source)
+	}
+}
+
+func (this *PostPrompt) SeeSource(source string) {
+	if _, ok := this.SeenSources[source]; ok { return } // already seen
+	if this.SeenSources == nil { this.SeenSources = make(map[string]int) }
+	index := len(this.SeenSources)
+	this.SeenSources[source] = index
+	this.SeenSourcesReverse = append(this.SeenSourcesReverse, source)
+}
