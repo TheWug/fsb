@@ -130,40 +130,37 @@ type EditPromptFormatter interface {
 }
 
 func (this *EditPrompt) ApplyReset(state string) {
-	switch state {
-	case WAIT_ALL:
+	if state == WAIT_TAGS || state == WAIT_ALL {
 		this.TagChanges.Clear()
+	}
+
+	if state == WAIT_SOURCE || state == WAIT_ALL {
 		this.SourceChanges.Clear()
 		this.SeenSources = nil
 		this.SeenSourcesReverse = nil
 		for s, _ := range this.OrigSources {
 			this.SeeSource(s)
 		}
+	}
+
+	if state == WAIT_RATING || state == WAIT_ALL {
 		this.Rating = ""
+	}
+
+	if state == WAIT_DESC || state == WAIT_ALL {
 		this.Description = ""
+	}
+
+	if state == WAIT_PARENT || state == WAIT_ALL {
 		this.Parent = PARENT_RESET
+	}
+
+	if state == WAIT_REASON || state == WAIT_ALL {
 		this.Reason = ""
-		this.File = PostFile{}
-	case WAIT_TAGS:
-		this.TagChanges.Clear()
-	case WAIT_SOURCE:
-		this.SourceChanges.Clear()
-		this.SeenSources = nil
-		this.SeenSourcesReverse = nil
-		for s, _ := range this.OrigSources {
-			this.SeeSource(s)
-		}
-	case WAIT_RATING:
-		this.Rating = ""
-	case WAIT_DESC:
-		this.Description = ""
-	case WAIT_PARENT:
-		this.Parent = PARENT_RESET
-	case WAIT_REASON:
-		this.Reason = ""
-	case WAIT_FILE:
+	}
+
+	if state == WAIT_FILE || state == WAIT_ALL {
 		this.File.Clear()
-	default:
 	}
 }
 
