@@ -16,6 +16,7 @@ import (
 	"html"
 	"io"
 	"strings"
+	"time"
 )
 
 const POST_PROMPT_ID data.DialogID = "postprompt"
@@ -230,4 +231,49 @@ func (this *PostPrompt) CommitPost(user, api_key string, ctx *gogram.MessageCtx,
 	}
 
 	return status, nil
+}
+
+func (this *PostPrompt) Prompt(settings storage.UpdaterSettings, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt PostFormatter) (*gogram.MessageCtx) {
+	var send data.SendData
+	send.Text = frmt.GenerateMessage(this)
+	send.ParseMode = data.ParseHTML
+	send.ReplyMarkup = frmt.GenerateMarkup(this)
+	if this.TelegramDialogPost.IsUnset() {
+		// no existing message, send a new one
+		if ctx != nil {
+			prompt, err := ctx.Reply(data.OMessage{SendData: send})
+			if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
+			err = this.FirstSave(settings, prompt.Msg.Id, prompt.Msg.Chat.Id, time.Unix(prompt.Msg.Date, 0), this)
+			if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
+			return prompt
+		} else {
+			panic("You must pass a context to reply to for the initial post!")
+		}
+	} else {
+		// message already exists, update it
+		prompt, err := this.Ctx(bot).EditText(data.OMessageEdit{SendData: send})
+		if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
+		this.Save(settings)
+		return prompt
+	}
+}
+
+func (this *PostPrompt) Finalize(settings storage.UpdaterSettings, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt PostFormatter) (*gogram.MessageCtx) {
+	var send data.SendData
+	send.Text = frmt.GenerateMessage(this)
+	send.ParseMode = data.ParseHTML
+	send.ReplyMarkup = nil
+
+	var prompt *gogram.MessageCtx
+	var err error
+	if this.TelegramDialogPost.IsUnset() {
+		prompt, err = ctx.Reply(data.OMessage{SendData: send, DisableWebPagePreview: true})
+	} else {
+		prompt, err = this.Ctx(bot).EditText(data.OMessageEdit{SendData: send, DisableWebPagePreview: true})
+		this.Delete(settings)
+	}
+
+	if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
+
+	return prompt
 }
