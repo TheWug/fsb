@@ -288,7 +288,37 @@ func (this PostProxyFormatter) GenerateMarkup(prompt *EditPrompt) interface{} {
 	return kb
 }
 
-func (this PostFormatter) GenerateMessage(prompt *EditPrompt) string {
+func (this PostFormatter) Warnings(b *bytes.Buffer, prompt *PostPrompt) {
+	var warnings []string
+	warnings = append(warnings, "<b>WARNING! uploading is experimental right now.</b>\nDouble check your post after committing to make sure it's complete and not missing anything.")
+
+	if prompt.Sources.Len() > 10 {
+		warnings = append(warnings, "Too many sources, each post can only have 10! Remove some before committing.")
+	}
+
+	for tag, _ := range prompt.Sources.Data {
+		if len(tag) > 1024 {
+			warnings = append(warnings, "One of the sources is too long, each source can only be 1024 characters long. Shorten them before committing.")
+			break
+		}
+	}
+
+	if prompt.File.Mode == PF_UNSET {
+		warnings = append(warnings, "No file selected!")
+	}
+
+	if prompt.Tags.Len() < 6 {
+		warnings = append(warnings, "Not enough tags, each post must have at least 6! Add some more before committing.")
+	}
+
+	if len(prompt.Rating) == 0 {
+		warnings = append(warnings, "You must specify a rating!")
+	}
+
+	this.WarningsBase(b, warnings)
+}
+
+func (this PostFormatter) GenerateMessage(prompt *PostPrompt) string {
 	var b bytes.Buffer
 	b.WriteString(prompt.Prefix)
 	if b.Len() != 0 { b.WriteString("\n\n") }
@@ -341,7 +371,7 @@ func (this PostFormatter) GenerateMessage(prompt *EditPrompt) string {
 	return b.String()
 }
 
-func (this PostFormatter) GenerateMarkup(prompt *EditPrompt) interface{} {
+func (this PostFormatter) GenerateMarkup(prompt *PostPrompt) interface{} {
 	sptr := func(x string) (*string) {return &x }
 	// no buttons for a prompt which has already been finalized
 	if prompt.State == DISCARDED || prompt.State == SAVED { return nil }
@@ -370,9 +400,9 @@ func (this PostFormatter) GenerateMarkup(prompt *EditPrompt) interface{} {
 	} else if prompt.State == WAIT_SOURCE {
 		for i, source := range prompt.SeenSourcesReverse {
 			var selected bool
-			if prompt.SourceChanges.Status(source) == tags.AddsTag {
+			if prompt.Sources.Status(source) == tags.AddsTag {
 				selected = true
-			} else if prompt.SourceChanges.Status(source) == tags.RemovesTag {
+			} else if prompt.Sources.Status(source) == tags.RemovesTag {
 				selected = false
 			}
 
