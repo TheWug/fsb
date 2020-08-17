@@ -27,6 +27,12 @@ type PostProxyFormatter struct {
 	Result *api.UploadCallResult
 }
 
+type PostFormatter struct {
+	EditFormatterBase
+
+	Result *api.UploadCallResult
+}
+
 func (this *EditFormatterBase) Warnings(b *bytes.Buffer, prompt *EditPrompt) {
 	any := false
 
@@ -62,6 +68,10 @@ func NewEditFormatter(privacy_mode bool, err error) EditFormatter {
 
 func NewPostProxyFormatter(privacy_mode bool, result *api.UploadCallResult) PostProxyFormatter {
 	return PostProxyFormatter{EditFormatterBase{privacy_mode}, result}
+}
+
+func NewPostFormatter(privacy_mode bool, result *api.UploadCallResult) PostFormatter {
+	return PostFormatter{EditFormatterBase{privacy_mode}, result}
 }
 
 func (this EditFormatter) GenerateMessage(prompt *EditPrompt) string {
