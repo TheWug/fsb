@@ -123,11 +123,6 @@ type EditPrompt struct {
 	Reason string `json:"reason"`
 }
 
-type EditPromptFormatter interface {
-	GenerateMessage(*EditPrompt) string
-	GenerateMarkup(*EditPrompt) interface{}
-}
-
 func (this *EditPrompt) ApplyReset(state string) {
 	if state == WAIT_TAGS || state == WAIT_ALL {
 		this.TagChanges.Clear()
@@ -216,7 +211,7 @@ func (this *EditPrompt) ID() data.DialogID {
 	return EditPromptID()
 }
 
-func (this *EditPrompt) Prompt(settings storage.UpdaterSettings, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt EditPromptFormatter) (*gogram.MessageCtx) {
+func (this *EditPrompt) Prompt(settings storage.UpdaterSettings, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt EditFormatter) (*gogram.MessageCtx) {
 	var send data.SendData
 	send.Text = frmt.GenerateMessage(this)
 	send.ParseMode = data.ParseHTML
@@ -241,7 +236,7 @@ func (this *EditPrompt) Prompt(settings storage.UpdaterSettings, bot *gogram.Tel
 	}
 }
 
-func (this *EditPrompt) Finalize(settings storage.UpdaterSettings, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt EditPromptFormatter) (*gogram.MessageCtx) {
+func (this *EditPrompt) Finalize(settings storage.UpdaterSettings, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt EditFormatter) (*gogram.MessageCtx) {
 	var send data.SendData
 	send.Text = frmt.GenerateMessage(this)
 	send.ParseMode = data.ParseHTML
