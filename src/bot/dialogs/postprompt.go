@@ -4,6 +4,7 @@ import (
 	"api"
 	"api/tags"
 	"storage"
+	"apiextra"
 
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"
@@ -15,6 +16,8 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -277,3 +280,194 @@ func (this *PostPrompt) Finalize(settings storage.UpdaterSettings, bot *gogram.T
 
 	return prompt
 }
+
+func (this *PostPrompt) ParseArgs(ctx *gogram.MessageCtx) (bool, error) {
+	doc := ctx.Msg.Document
+	if doc == nil && ctx.Msg.ReplyToMessage != nil {
+		doc = ctx.Msg.ReplyToMessage.Document
+	}
+
+	if doc != nil {
+		name := doc.FileName
+		if name == nil { name = new(string) }
+		size := new(int64)
+		if doc.FileSize != nil { *size = int64(*doc.FileSize) }
+		this.File.SetTelegramFile(doc.Id, *name, *size)
+	}
+
+	// if we replied to a message, search it for a post id
+	if ctx.Msg.ReplyToMessage != nil {
+		this.PostId = apiextra.GetPostIDFromMessage(ctx.Msg.ReplyToMessage)
+	}
+
+	var err error
+	var mode int
+	var commitnow bool
+
+	for _, token := range ctx.Cmd.Args {
+		if mode != root {
+			if mode == posttags {
+				this.Tags.ApplyString(token)
+			} else if mode == postsource {
+				this.Sources.ApplyArray(strings.Split(token, "\n"))
+			} else if mode == postrating {
+				this.Rating, err = api.SanitizeRating(token)
+				if err != nil {
+					return false, errors.New("Please try again with a valid rating.")
+				}
+			} else if mode == postdescription {
+				this.Description = token // at some point i should make it convert telegram markup to dtext but i can't do that right now
+			} else if mode == postparent {
+				this.Parent = apiextra.GetParentPostFromText(token)
+
+				if this.Parent == apiextra.NONEXISTENT_PARENT {
+					return false, errors.New("Please try again wth a valid parent post.")
+				}
+			} else if mode == postfileurl {
+				this.File.SetUrl(token, 0)
+			}
+			mode = root
+		}
+		if token == "" {
+		} else if token == "--tags" {
+			mode = posttags
+		} else if token == "--sources" {
+			mode = postsource
+		} else if token == "--rating" {
+			mode = postrating
+		} else if token == "--description" {
+			mode = postdescription
+		} else if token == "--parent" {
+			mode = postparent
+		} else if token == "--url" {
+			mode = postfileurl
+		} else if token == "--commit" {
+			commitnow = true
+		} else {
+			this.PostId = apiextra.GetPostIDFromText(token)
+			if err != nil {
+				return false, errors.New("Please try again with a valid post id or md5.")
+			}
+		}
+	}
+
+	return commitnow, nil
+}
+
+func (this *PostPrompt) HandleCallback(ctx *gogram.CallbackCtx, settings storage.UpdaterSettings) {
+	// TODO: this code mishandles settings, it should create its own subtransaction if settings is blank, but it won't.
+	switch ctx.Cmd.Command {
+	case "/reset":
+		if len(ctx.Cmd.Args) != 1 { return }
+		this.ApplyReset(ctx.Cmd.Args[0])
+	case "/tags":
+		this.Prefix = "Enter a list of tags, seperated by spaces. You can remove tags by prefixing them with a minus (-)."
+		this.State = WAIT_TAGS
+	case "/sources":
+		if len(ctx.Cmd.Args) == 2 {
+			index, err := strconv.Atoi(ctx.Cmd.Args[0])
+			pick := ctx.Cmd.Args[1] == "true"
+			if err != nil { return }
+			this.SourceButton(index, pick)
+		}
+		this.Prefix = "Post some sources, seperated by newlines. You can remove sources by prefixing them with a minus (-)."
+		this.State = WAIT_SOURCE
+	case "/rating":
+		if len(ctx.Cmd.Args) == 1 {
+			rating, err := api.SanitizeRating(ctx.Cmd.Args[0])
+
+			if err == nil {
+				this.Rating = rating
+			}
+		}
+		this.Prefix = "Post the new rating."
+		this.State = WAIT_RATING
+	case "/description":
+		this.Prefix = `Post the new description. You can use <a href="https://" + api.Endpoint + "/help/dtext">dtext</a>.`
+		this.State = WAIT_DESC
+	case "/parent":
+		if len(ctx.Cmd.Args) == 1 {
+			parent := apiextra.GetParentPostFromText(ctx.Cmd.Args[0])
+			if parent != apiextra.NONEXISTENT_PARENT {
+				this.Parent = parent
+			}
+		}
+		this.Prefix = `Post the new parent.`
+		this.State = WAIT_PARENT
+	case "/file":
+		this.Prefix = `Upload a file.`
+		this.State = WAIT_FILE
+	case "/save":
+		this.Prefix = ""
+		this.State = SAVED
+	case "/discard":
+		ctx.AnswerAsync(data.OCallback{Notification: "\U0001F534 Edit discarded."}, nil) // finalize dialog post and discard edit
+		this.Prefix = ""
+		this.State = DISCARDED
+		ctx.SetState(nil)
+	default:
+	}
+}
+
+func (this *PostPrompt) HandleFreeform(ctx *gogram.MessageCtx) {
+	if this.State == WAIT_TAGS {
+		this.Tags.ApplyString(ctx.Msg.PlainText())
+		this.Prefix = "Got it. Continue sending more tag changes, and pick a button from below when you're done."
+	} else if this.State == WAIT_SOURCE {
+		for _, source := range strings.Split(ctx.Msg.PlainText(), "\n") {
+			this.SourceStringPrefixed(source)
+		}
+		this.Prefix = "Got it. Continue sending more source changes, and pick a button from below when you're done."
+	} else if this.State == WAIT_RATING {
+		rating, err := api.SanitizeRatingForEdit(ctx.Msg.PlainText())
+
+		if err != nil {
+			this.Prefix = "Please enter a <i>valid</i> rating. (Pick from <code>explicit</code>, <code>questionable</code>, <code>safe</code>, or <code>original</code>.)"
+		} else {
+			this.Rating = rating
+			this.ResetState()
+		}
+	} else if this.State == WAIT_DESC {
+		this.Description = ctx.Msg.PlainText() // TODO: convert telegram markup to dtext
+		this.ResetState()
+	} else if this.State == WAIT_PARENT {
+		parent := apiextra.GetParentPostFromText(ctx.Msg.PlainText())
+
+		if parent == apiextra.NONEXISTENT_PARENT {
+			this.Prefix = "Please enter a <i>valid</i> parent post. (You can either send a link to an " + api.ApiName + " post, a bare numeric ID, 'none' for no parent, or 'original' to not attempt to update the parent at all.)"
+		} else {
+			this.Parent = parent
+			this.ResetState()
+		}
+	} else if this.State == WAIT_FILE {
+		done := false
+		_, err := url.Parse(ctx.Msg.PlainText())
+		if err == nil { // it IS a URL
+			this.File.SetUrl(ctx.Msg.PlainText(), 0)
+			done = true
+		}
+
+		doc := ctx.Msg.Document
+		if doc == nil && ctx.Msg.ReplyToMessage != nil {
+			doc = ctx.Msg.ReplyToMessage.Document
+		}
+
+		if doc != nil {
+			name := doc.FileName
+			if name == nil { name = new(string) }
+			size := new(int64)
+			if doc.FileSize != nil { *size = int64(*doc.FileSize) }
+			this.File.SetTelegramFile(doc.Id, *name, *size)
+			done = true
+		}
+
+		if done {
+			this.ResetState()
+		} else {
+			this.Prefix = "Please send a new file. You can upload a new one, reply to or forward an existing one, or send a URL to upload from. (Only certain whitelisted domains can be used for URL uploads, see <a href=\"https://" + api.Endpoint + "/upload_whitelists\">" + api.ApiName + "'s upload whitelist</a>.)"
+		}
+	} else {
+		return
+	}
+}
+
