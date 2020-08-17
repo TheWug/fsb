@@ -5,6 +5,7 @@ import (
 	"api/tags"
 	"storage"
 
+	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"
 	"github.com/thewug/gogram/dialog"
 
@@ -13,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"io"
 	"strings"
 )
 
@@ -194,4 +196,38 @@ func (this *PostPrompt) IsComplete() error {
 	}
 
 	return nil
+}
+
+func (this *PostPrompt) CommitPost(user, api_key string, ctx *gogram.MessageCtx, settings storage.UpdaterSettings) (*api.UploadCallResult, error) {
+	err := this.IsComplete()
+	if err != nil {
+		return nil, err
+	}
+
+	var post_url string
+	var post_filedata io.ReadCloser
+	var parent *int
+
+	if this.Parent != 0 { parent = &this.Parent }
+
+	if this.File.Mode == PF_FROM_URL {
+		post_url = this.File.Url
+	} else {
+		file, err := ctx.Bot.Remote.GetFile(data.OGetFile{Id: this.File.FileId})
+		if err != nil || file == nil || file.FilePath == nil {
+			return nil, errors.New("Error while fetching file, try sending it again?")
+		}
+		post_filedata, err = ctx.Bot.Remote.DownloadFile(data.OFile{FilePath: *file.FilePath})
+		if err != nil || post_filedata == nil {
+			return nil, errors.New("Error while downloading file, try sending it again?")
+		}
+	}
+
+	status, err := api.UploadFile(post_filedata, post_url, this.Tags.String(), this.Rating, this.Sources.StringWithDelimiter("\n"), this.Description, parent, user, api_key)
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("Error updating post: ", err.Error())
+		return nil, errors.New("An error occurred when editing the post! Double check your info, or try again later.")
+	}
+
+	return status, nil
 }
