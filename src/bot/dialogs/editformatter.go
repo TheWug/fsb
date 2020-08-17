@@ -88,6 +88,29 @@ func NewPostFormatter(privacy_mode bool, result *api.UploadCallResult) PostForma
 	return PostFormatter{EditFormatterBase{privacy_mode}, result}
 }
 
+func (this EditFormatter) Warnings(b *bytes.Buffer, prompt *EditPrompt) {
+	var warnings []string
+	warnings = append(warnings, "<b>WARNING! editing is experimental right now.</b>\nDouble check your edits after committing to make sure you're not accidentally scrambling posts.")
+
+	var set tags.StringSet
+	for osource, _ := range prompt.OrigSources {
+		set.Set(osource)
+	}
+	set.ApplyDiff(prompt.SourceChanges)
+	if set.Len() > 10 {
+		warnings = append(warnings, "Too many sources, each post can only have 10! Remove some before committing.")
+	}
+
+	for tag, _ := range set.Data {
+		if len(tag) > 1024 {
+			warnings = append(warnings, "One of the sources is too long, each source can only be 1024 characters long. Shorten them before committing.")
+			break
+		}
+	}
+
+	this.WarningsBase(b, warnings)
+}
+
 func (this EditFormatter) GenerateMessage(prompt *EditPrompt) string {
 	var b bytes.Buffer
 	b.WriteString(prompt.Prefix)
