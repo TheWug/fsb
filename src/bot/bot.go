@@ -1358,7 +1358,7 @@ func (this *PostState) Handle(ctx *gogram.MessageCtx) {
 }
 
 func (this *PostState) Post(ctx *gogram.MessageCtx) {
-	var e dialogs.PostPrompt
+	var p dialogs.PostPrompt
 
 	if ctx.Msg.From == nil { return }
 
@@ -1371,17 +1371,17 @@ func (this *PostState) Post(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	postnow, err := e.ParseArgs(ctx)
+	postnow, err := p.ParseArgs(ctx)
 	if err != nil {
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: err.Error()}}, nil)
 		return
 	}
 
 	if postnow {
-		e.CommitPost(user, api_key, ctx, storage.UpdaterSettings{})
+		p.CommitPost(user, api_key, ctx, storage.UpdaterSettings{})
 	} else {
-		e.ResetState()
-		prompt := e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+		p.ResetState()
+		prompt := p.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
 		ctx.SetState(PostStateFactoryWithData(nil, this.StateBasePersistent, psp{
 			User: user,
 			ApiKey: api_key,
