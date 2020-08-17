@@ -41,35 +41,6 @@ func (this EditFormatterBase) WarningsBase(b *bytes.Buffer, warnings []string) {
 	b.WriteRune('\n')
 }
 
-func (this *EditFormatterBase) Warnings(b *bytes.Buffer, prompt *EditPrompt) {
-	any := false
-
-	any = true
-	b.WriteString("<b>WARNING! editing is experimental right now.</b>\nDouble check your edits after committing to make sure you're not accidentally scrambling posts.\n")
-
-	var tagset tags.TagSet
-	for osource, _ := range prompt.OrigSources {
-		tagset.Set(osource)
-	}
-	tagset.ApplyDiff(tags.TagDiff{StringDiff: prompt.SourceChanges})
-	if tagset.Len() > 10 {
-		b.WriteString("Too many sources, each post can only have 10! Remove some before committing.\n")
-		any = true
-	}
-
-	for tag, _ := range tagset.Data {
-		if len(tag) > 1024 {
-			b.WriteString("One of the sources is too long, each source can only be 1024 characters long. Shorten them before committing.\n")
-			any = true
-			break
-		}
-	}
-
-	if any {
-		b.WriteString("\n")
-	}
-}
-
 func NewEditFormatter(privacy_mode bool, err error) EditFormatter {
 	return EditFormatter{EditFormatterBase{privacy_mode}, err}
 }
