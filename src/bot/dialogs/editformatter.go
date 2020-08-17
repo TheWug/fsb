@@ -33,6 +33,20 @@ type PostFormatter struct {
 	Result *api.UploadCallResult
 }
 
+func (this EditFormatterBase) WarningsBase(b *bytes.Buffer, warnings []string) {
+	if len(warnings) == 0 { return }
+
+	warning_emoji := "\u26A0" // ⚠️
+	for _, w := range warnings {
+		b.WriteString(warning_emoji)
+		b.WriteRune(' ')
+		b.WriteString(w)
+		b.WriteRune('\n')
+	}
+
+	b.WriteRune('\n')
+}
+
 func (this *EditFormatterBase) Warnings(b *bytes.Buffer, prompt *EditPrompt) {
 	any := false
 
