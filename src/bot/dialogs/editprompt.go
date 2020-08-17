@@ -372,7 +372,7 @@ func (this *EditPrompt) Warnings(b *bytes.Buffer) {
 
 	var tagset tags.TagSet
 	for osource, _ := range this.OrigSources {
-		tagset.SetTag(osource)
+		tagset.Set(osource)
 	}
 	tagset.ApplyDiff(tags.TagDiff{StringDiff: this.SourceChanges})
 	if tagset.Len() > 10 {
@@ -380,7 +380,7 @@ func (this *EditPrompt) Warnings(b *bytes.Buffer) {
 		any = true
 	}
 
-	for tag, _ := range tagset.Tags {
+	for tag, _ := range tagset.Data {
 		if len(tag) > 1024 {
 			b.WriteString("One of the sources is too long, each source can only be 1024 characters long. Shorten them before committing.\n")
 			any = true

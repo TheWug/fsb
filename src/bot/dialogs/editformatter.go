@@ -35,7 +35,7 @@ func (this *EditFormatterBase) Warnings(b *bytes.Buffer, prompt *EditPrompt) {
 
 	var tagset tags.TagSet
 	for osource, _ := range prompt.OrigSources {
-		tagset.SetTag(osource)
+		tagset.Set(osource)
 	}
 	tagset.ApplyDiff(tags.TagDiff{StringDiff: prompt.SourceChanges})
 	if tagset.Len() > 10 {
@@ -43,7 +43,7 @@ func (this *EditFormatterBase) Warnings(b *bytes.Buffer, prompt *EditPrompt) {
 		any = true
 	}
 
-	for tag, _ := range tagset.Tags {
+	for tag, _ := range tagset.Data {
 		if len(tag) > 1024 {
 			b.WriteString("One of the sources is too long, each source can only be 1024 characters long. Shorten them before committing.\n")
 			any = true
@@ -125,9 +125,9 @@ func (this EditFormatter) GenerateMarkup(prompt *EditPrompt) interface{} {
 	} else if prompt.State == WAIT_SOURCE {
 		for i, source := range prompt.SeenSourcesReverse {
 			var selected bool
-			if prompt.SourceChanges.TagStatus(source) == tags.AddsTag {
+			if prompt.SourceChanges.Status(source) == tags.AddsTag {
 				selected = true
-			} else if prompt.SourceChanges.TagStatus(source) == tags.RemovesTag {
+			} else if prompt.SourceChanges.Status(source) == tags.RemovesTag {
 				selected = false
 			} else if _, ok := prompt.OrigSources[source]; ok {
 				selected = true
@@ -225,12 +225,10 @@ func (this PostFormatter) GenerateMarkup(prompt *EditPrompt) interface{} {
 	} else if prompt.State == WAIT_SOURCE {
 		for i, source := range prompt.SeenSourcesReverse {
 			var selected bool
-			if prompt.SourceChanges.TagStatus(source) == tags.AddsTag {
+			if prompt.SourceChanges.Status(source) == tags.AddsTag {
 				selected = true
-			} else if prompt.SourceChanges.TagStatus(source) == tags.RemovesTag {
+			} else if prompt.SourceChanges.Status(source) == tags.RemovesTag {
 				selected = false
-			} else if _, ok := prompt.OrigSources[source]; ok {
-				selected = true
 			}
 
 			prefixes := map[bool]string{true:"\U0001F7E9 ", false:"\U0001F7E5 "}

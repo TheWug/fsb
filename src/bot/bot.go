@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"html"
 	"io/ioutil"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -141,7 +142,7 @@ func (this *WizardRule) ParseFromString(line string) (error) {
 
 func (this *WizardRule) PrereqsSatisfied(tags *tags.TagSet) (bool) {
 	for _, tag := range this.prereqs {
-		if _, ok := tags.Tags[tag]; !ok {
+		if _, ok := tags.Data[tag]; !ok {
 			return false
 		}
 	}
@@ -173,8 +174,8 @@ func TagWizardMarkupHelper(tag string) (bool, bool, bool, string) {
 func (this *WizardRule) DoImplicit(tags *tags.TagSet) {
 	for _, o := range this.options {
 		_, set, unset, tag := TagWizardMarkupHelper(o)
-		if set { tags.SetTag(tag) }
-		if unset { tags.ClearTag(tag) }
+		if set { tags.Set(tag) }
+		if unset { tags.Clear(tag) }
 	}
 }
 
@@ -182,13 +183,13 @@ func strPtr(a string) (*string) {
 	return &a
 }
 
-func (this *WizardRule) GetButtons(tags *tags.TagSet) ([]data.TInlineKeyboardButton) {
+func (this *WizardRule) GetButtons(t *tags.TagSet) ([]data.TInlineKeyboardButton) {
 	var out []data.TInlineKeyboardButton
 	for _, o := range this.options {
 		hide, _, _, tag := TagWizardMarkupHelper(o)
 		if !hide {
 			var decor string
-			if tags.IsSet(tag) {
+			if t.Status(tag) == tags.AddsTag {
 				decor = "\u2705" // green box checkmark
 			} else {
 				decor = "\u26d4" // red circle strikethru
@@ -254,34 +255,22 @@ func (this *TagWizard) SelectRule() (bool) {
 	return false
 }
 
+var whitespace *regexp.Regexp = regexp.MustCompile(`\s+`)
+
 func (this *TagWizard) MergeTagsFromString(tagstr string) {
-	var tags []string
-	for _, t := range strings.Split(tagstr, " ") {
-		for _, tt := range strings.Split(t, "\n") {
-			if tt == "" { continue }
-			tags = append(tags, tt)
-		}
-	}
-	this.MergeTags(tags)
+	this.tags.ApplyArray(whitespace.Split(tagstr, -1))
 }
 
 func (this *TagWizard) ToggleTagsFromString(tagstr string) {
-	var tags []string
-	for _, t := range strings.Split(tagstr, " ") {
-		for _, tt := range strings.Split(t, "\n") {
-			if tt == "" { continue }
-			tags = append(tags, tt)
-		}
-	}
-	this.ToggleTags(tags)
+	this.tags.ToggleArray(whitespace.Split(tagstr, -1))
 }
 
 func (this *TagWizard) MergeTags(tags []string) {
-	this.tags.MergeTags(tags)
+	this.tags.ApplyArray(tags)
 }
 
 func (this *TagWizard) ToggleTags(tags []string) {
-	this.tags.ToggleTags(tags)
+	this.tags.ToggleArray(tags)
 }
 
 func (this *TagWizard) Abort() {
@@ -310,7 +299,7 @@ func (this *TagWizard) TagString() (string) {
 	if this.tags == nil { return "" }
 
 	builder := bytes.NewBuffer(nil)
-	for k, _ := range this.tags.Tags {
+	for k, _ := range this.tags.Data {
 		t := strings.ToLower(k)
 		if strings.HasPrefix(t, "rating:") { continue }
 		if strings.HasPrefix(t, "meta:") { continue }
@@ -322,11 +311,11 @@ func (this *TagWizard) TagString() (string) {
 }
 
 func (this *TagWizard) SetTag(tag string) {
-	this.tags.SetTag(tag)
+	this.tags.Set(tag)
 }
 
 func (this *TagWizard) ClearTag(tag string) {
-	this.tags.ClearTag(tag)
+	this.tags.Clear(tag)
 }
 
 func (this *TagWizard) SendWizard(chat_id int64) {

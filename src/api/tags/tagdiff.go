@@ -42,6 +42,14 @@ func (this TagDiff) Union(other TagDiff) TagDiff {
 	return TagDiff{StringDiff: this.StringDiff.Union(other.StringDiff)}
 }
 
+func (this TagDiff) AddedSet() TagSet {
+	return TagSet{StringSet{Data: this.AddList}}
+}
+
+func (this TagDiff) RemovedSet() TagSet {
+	return TagSet{StringSet{Data: this.RemoveList}}
+}
+
 func (this TagDiffArray) Flatten() TagDiff {
 	var n TagDiff
 	for _, other := range this {

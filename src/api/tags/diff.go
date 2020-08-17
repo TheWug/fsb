@@ -9,7 +9,7 @@ import (
 
 type DiffMembership int
 const AddsTag DiffMembership = 1
-const ResetsTag DiffMembership = 0
+const NotPresent DiffMembership = 0
 const RemovesTag DiffMembership = -1
 
 type StringDiff struct {
@@ -23,14 +23,14 @@ func (this *StringDiff) Clear() {
 	*this = StringDiff{}
 }
 
-func (this *StringDiff) TagStatus(tag string) DiffMembership {
+func (this *StringDiff) Status(tag string) DiffMembership {
 	if _, ok := this.AddList[tag]; ok {
 		return AddsTag
 	} else if _, ok := this.RemoveList[tag]; ok {
 		return RemovesTag
 	}
 
-	return ResetsTag
+	return NotPresent
 }
 
 func base_add_remove(x, y *map[string]bool, tag string) {
@@ -168,6 +168,14 @@ func (this StringDiff) Union(other StringDiff) StringDiff {
 	for a, v := range other.AddList { if v { n.Add(a) } }
 	for r, v := range other.RemoveList { if v { n.Remove(r) } }
 	return n
+}
+
+func (this StringDiff) AddedSet() StringSet {
+	return StringSet{Data: this.AddList}
+}
+
+func (this StringDiff) RemovedSet() StringSet {
+	return StringSet{Data: this.RemoveList}
 }
 
 func (this StringDiff) Equal(other StringDiff) bool {

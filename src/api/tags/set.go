@@ -52,7 +52,7 @@ func (this *StringSet) Status(tag string) (DiffMembership) {
 	case true:
 		return AddsTag
 	default:
-		return ResetsTag
+		return NotPresent
 	}
 }
 
@@ -78,7 +78,7 @@ func (this *StringSet) ToggleArray(tags []string) {
 
 		if prefix == "-" {
 			this.Clear(tag)
-		} else if prefix == "+" || this.Status(tag) == ResetsTag {
+		} else if prefix == "+" || this.Status(tag) == NotPresent {
 			this.Set(tag)
 		} else {
 			this.Clear(tag)
@@ -96,7 +96,7 @@ func (this *StringSet) ToggleStringWithDelimiter(tags, delim string) {
 
 		if prefix == "-" {
 			this.Clear(tag)
-		} else if prefix == "+" || this.Status(tag) == ResetsTag {
+		} else if prefix == "+" || this.Status(tag) == NotPresent {
 			this.Set(tag)
 		} else {
 			this.Clear(tag)
