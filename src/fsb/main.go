@@ -71,6 +71,7 @@ func main() {
 	janitor := bot.JanitorState{StateBase: gogram.StateBase{StateMachine: machine}}
 	votes := bot.VoteState{StateBase: gogram.StateBase{StateMachine: machine}}
 	autofix := bot.AutofixState{StateBase: gogram.StateBase{StateMachine: machine}, Behavior: &behavior}
+	tagrules := bot.TagRuleState{StateBase: gogram.StateBase{StateMachine: machine}}
 	post := bot.PostState{StateBasePersistent: persist.Register(p, machine, "post", bot.PostStateFactory)}
 	edit := bot.EditState{StateBasePersistent: persist.Register(p, machine, "edit", bot.EditStateFactory)}
 
@@ -96,6 +97,7 @@ func main() {
 	machine.AddCommand("/af-dismiss", &autofix)
 	machine.AddCommand("/af-toggle", &autofix)
 	machine.AddCommand("/edit", &edit)
+	machine.AddCommand("/settagrules", &tagrules)
 
 	thebot.SetMessageCallback(machine)
 	thebot.SetStateMachine(machine)

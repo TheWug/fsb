@@ -35,7 +35,7 @@ func LoadPostPrompt(settings storage.UpdaterSettings, msg_id data.MsgID, chat_id
 	if found == nil { return nil, nil }
 	if found.DialogId != PostPromptID() { return nil, dialog.ErrDialogTypeMismatch }
 
-	tagrules, err := storage.GetUserTagRules(settings, user_id, "main")
+	tagrules, err := storage.GetUserTagRules(settings, user_id, "upload")
 	if err != nil { return nil, err }
 
 	var pp PostPrompt

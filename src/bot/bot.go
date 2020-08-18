@@ -857,17 +857,26 @@ func (this *TagRuleState) Handle(ctx *gogram.MessageCtx) {
 			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while reading %s, try sending it again?", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
 			return
 		}
+
+		if len(b) > 102400 {
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("%s is too large (100kB max), edit and try again.", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
+			return
+		}
 		this.tagwizardrules = string(b)
 	}
-	if ctx.Cmd.Argstr != "" {
+
+	ctx.Cmd.Argstr = strings.ToLower(ctx.Cmd.Argstr)
+	if ctx.Cmd.Argstr == "edit" || ctx.Cmd.Argstr == "upload" {
 		this.tagrulename = ctx.Cmd.Argstr
-	} else {
-		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Send some new tag rules in a text file."}}, nil)
-		return
 	}
 
-	if this.tagwizardrules != "" {
-		if this.tagrulename == "" { this.tagrulename = "main" }
+	if this.tagwizardrules == "" {
+		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Send some new tag rules in a text file."}}, nil)
+	} else if this.tagrulename != "edit" && this.tagrulename != "upload" {
+		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "How do you want to use these? You can choose 'edit' or 'upload'."}}, nil)
+	}
+
+	if this.tagwizardrules != "" && this.tagrulename != "" {
 		this.tagwizardrules = strings.Replace(this.tagwizardrules, "\r", "", -1) // pesky windows carriage returns
 		storage.WriteUserTagRules(storage.UpdaterSettings{}, ctx.Msg.From.Id, this.tagrulename, this.tagwizardrules)
 		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Set new tag rules."}}, nil)
@@ -915,7 +924,7 @@ func (this *PostState) HandleCallback(ctx *gogram.CallbackCtx) {
 	settings := storage.UpdaterSettings{Transaction: txbox}
 	defer settings.Transaction.Finalize(true)
 
-	p, err := dialogs.LoadPostPrompt(settings, this.data.MsgId, this.data.ChatId, ctx.Cb.From.Id, "main")
+	p, err := dialogs.LoadPostPrompt(settings, this.data.MsgId, this.data.ChatId, ctx.Cb.From.Id, "upload")
 	if err != nil {
 		ctx.Bot.ErrorLog.Println("Error loading edit prompt: ", err.Error())
 		return
