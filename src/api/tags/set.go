@@ -56,6 +56,15 @@ func (this *StringSet) Status(tag string) (DiffMembership) {
 	}
 }
 
+func (this StringSet) Clone() (StringSet) {
+	newdata := make(map[string]bool)
+	for k, v := range this.Data {
+		newdata[k] = v
+	}
+	this.Data = newdata
+	return this
+}
+
 // applies each tag in an array.
 // accepts tags prefixed with -.
 func (this *StringSet) ApplyArray(tags []string) {

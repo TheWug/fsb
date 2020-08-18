@@ -27,6 +27,10 @@ func (this TagSet) String() (string) {
 	return this.StringWithDelimiter(tagDelimiter)
 }
 
+func (this TagSet) Clone() (TagSet) {
+	return TagSet{this.StringSet.Clone()}
+}
+
 // attempts to find a "rating:*" tag and interpret it, returning a rating string if it does and returning nothing if there isn't one.
 func (this *TagSet) Rating() (string) {
 	var s, q, e bool
