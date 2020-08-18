@@ -258,7 +258,7 @@ func (this *PostPrompt) Prompt(settings storage.UpdaterSettings, bot *gogram.Tel
 	if this.TelegramDialogPost.IsUnset() {
 		// no existing message, send a new one
 		if ctx != nil {
-			prompt, err := ctx.Reply(data.OMessage{SendData: send})
+			prompt, err := ctx.Reply(data.OMessage{SendData: send, DisableWebPagePreview: true})
 			if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
 			err = this.FirstSave(settings, prompt.Msg.Id, prompt.Msg.Chat.Id, time.Unix(prompt.Msg.Date, 0), this)
 			if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
@@ -268,7 +268,7 @@ func (this *PostPrompt) Prompt(settings storage.UpdaterSettings, bot *gogram.Tel
 		}
 	} else {
 		// message already exists, update it
-		prompt, err := this.Ctx(bot).EditText(data.OMessageEdit{SendData: send})
+		prompt, err := this.Ctx(bot).EditText(data.OMessageEdit{SendData: send, DisableWebPagePreview: true})
 		if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
 		this.Save(settings)
 		return prompt
