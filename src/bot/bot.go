@@ -1061,7 +1061,6 @@ func (this *PostState) Cancel(ctx *gogram.MessageCtx) {
 	if err != nil { ctx.Bot.ErrorLog.Println(err.Error()) }
 	if p != nil {
 		p.State = dialogs.DISCARDED
-		p.Prefix = ""
 		p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, nil))
 	}
 	ctx.SetState(nil)

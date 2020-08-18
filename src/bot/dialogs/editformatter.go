@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"fmt"
 	"html"
+	"strings"
 )
 
 type EditFormatterBase struct {
@@ -195,21 +196,14 @@ func (this PostFormatter) Warnings(b *bytes.Buffer, prompt *PostPrompt) {
 
 func (this PostFormatter) GenerateMessage(prompt *PostPrompt) string {
 	var b bytes.Buffer
-	b.WriteString(prompt.Prefix)
-	if b.Len() != 0 { b.WriteString("\n\n") }
-
-	if prompt.State != DISCARDED {
-		this.Warnings(&b, prompt)
-	}
 
 	if prompt.State == SAVED {
 		if this.Result == nil {
 			prompt.State = WAIT_MODE
-			b.WriteString("<b>Failed to post file, no explanation available. Sorry about that.</b>\n")
-			prompt.PostStatus(&b)
+			b.WriteString("<b>Failed to post file, no explanation available. Sorry about that.</b>\nYou can continue editing and try again.\n\n")
 		} else {
 			if this.Result.Success {
-				b.WriteString("You have successfully uploaded <i>")
+				b.WriteString("Successfully uploaded <i>")
 				b.WriteString(html.EscapeString(prompt.File.FileName))
 				b.WriteString("</i>")
 				if this.Result != nil && this.Result.Location != nil {
@@ -217,8 +211,7 @@ func (this PostFormatter) GenerateMessage(prompt *PostPrompt) string {
 					b.WriteString(api.LocationToURLWithRating(*this.Result.Location, prompt.Rating))
 					b.WriteString("\">click here to open it</a>")
 				}
-				b.WriteString(".\n")
-				prompt.PostStatus(&b)
+				b.WriteString(".\n\n")
 			} else {
 				prompt.State = WAIT_MODE
 				b.WriteString("<b>Error uploading <i>")
@@ -232,16 +225,32 @@ func (this PostFormatter) GenerateMessage(prompt *PostPrompt) string {
 				} else {
 					b.WriteString("No explanation available.")
 				}
-				b.WriteString("</b>\nYou can continue to edit your upload and try again, or you can discard it.\n")
-				prompt.PostStatus(&b)
+				b.WriteString("</b>\nYou can continue to edit your upload and try again, or you can discard it.\n\n")
 			}
 		}
+		prompt.PostStatus(&b)
+		b.WriteRune('\n')
+
+		this.Warnings(&b, prompt)
 	} else if prompt.State == DISCARDED {
 		b.WriteString("New post discarded.")
 	} else {
-		b.WriteString("Now creating and editing a new post.\n")
+		b.WriteString("Preparing to post a new file.\nCurrently editing: <code>")
+		b.WriteString(GetNameOfState(prompt.State))
+		b.WriteString("</code>\n\n")
+
+		prompt_string := strings.TrimSpace(prompt.Status)
+		b.WriteString(prompt_string)
+		if len(prompt_string) > 0 {
+			b.WriteString("\n\n")
+		}
+
 		prompt.PostStatus(&b)
+		b.WriteRune('\n')
+
+		this.Warnings(&b, prompt)
 	}
+
 	return b.String()
 }
 
