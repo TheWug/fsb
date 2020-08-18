@@ -113,26 +113,29 @@ func (this EditFormatter) GenerateMarkup(prompt *EditPrompt) interface{} {
 	if prompt.State == DISCARDED || prompt.State == SAVED { return nil }
 
 	var kb data.TInlineKeyboard
-	kb.Buttons = make([][]data.TInlineKeyboardButton, 4)
-	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "Tags", Data: sptr("/tags")})
-	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "Rating", Data: sptr("/rating")})
-	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "Parent", Data: sptr("/parent")})
-	kb.Buttons[1] = append(kb.Buttons[1], data.TInlineKeyboardButton{Text: "Sources", Data: sptr("/sources")})
-	kb.Buttons[1] = append(kb.Buttons[1], data.TInlineKeyboardButton{Text: "Description", Data: sptr("/description")})
-	kb.Buttons[1] = append(kb.Buttons[1], data.TInlineKeyboardButton{Text: "Edit Reason", Data: sptr("/reason")})
+	kb.AddRow()
+	kb.AddButton(data.TInlineKeyboardButton{Text: "Tags", Data: sptr("/tags")})
+	kb.AddButton(data.TInlineKeyboardButton{Text: "Rating", Data: sptr("/rating")})
+	kb.AddButton(data.TInlineKeyboardButton{Text: "Parent", Data: sptr("/parent")})
+	kb.AddRow()
+	kb.AddButton(data.TInlineKeyboardButton{Text: "Sources", Data: sptr("/sources")})
+	kb.AddButton(data.TInlineKeyboardButton{Text: "Description", Data: sptr("/description")})
+	kb.AddButton(data.TInlineKeyboardButton{Text: "Edit Reason", Data: sptr("/reason")})
+	kb.AddRow()
 	if prompt.State != WAIT_MODE {
-		kb.Buttons[2] = append(kb.Buttons[2], data.TInlineKeyboardButton{Text: fmt.Sprintf("\u21A9\uFE0F Reset %s", GetNameOfState(prompt.State)), Data: sptr(fmt.Sprintf("/reset %s", prompt.State))})
+		kb.AddButton(data.TInlineKeyboardButton{Text: fmt.Sprintf("\u21A9\uFE0F Reset %s", GetNameOfState(prompt.State)), Data: sptr(fmt.Sprintf("/reset %s", prompt.State))})
 	}
-	kb.Buttons[2] = append(kb.Buttons[2], data.TInlineKeyboardButton{Text: fmt.Sprintf("\u2622\uFE0F Reset %s", GetNameOfState(WAIT_ALL)), Data: sptr(fmt.Sprintf("/reset %s", WAIT_ALL))})
-	kb.Buttons[3] = append(kb.Buttons[3], data.TInlineKeyboardButton{Text: "\U0001F7E2 Save", Data: sptr("/save")})
-	kb.Buttons[3] = append(kb.Buttons[3], data.TInlineKeyboardButton{Text: "\U0001F534 Discard", Data: sptr("/discard")})
+	kb.AddButton(data.TInlineKeyboardButton{Text: fmt.Sprintf("\u2622\uFE0F Reset %s", GetNameOfState(WAIT_ALL)), Data: sptr(fmt.Sprintf("/reset %s", WAIT_ALL))})
+	kb.AddRow()
+	kb.AddButton(data.TInlineKeyboardButton{Text: "\U0001F7E2 Save", Data: sptr("/save")})
+	kb.AddButton(data.TInlineKeyboardButton{Text: "\U0001F534 Discard", Data: sptr("/discard")})
 
-	var extra_buttons [][]data.TInlineKeyboardButton
+	var extra_buttons data.TInlineKeyboard
 	if prompt.State == WAIT_RATING {
-		extra_buttons = append(extra_buttons, nil)
-		extra_buttons[0] = append(extra_buttons[0], data.TInlineKeyboardButton{Text: "\U0001F7E9 Safe", Data: sptr("/rating s")})
-		extra_buttons[0] = append(extra_buttons[0], data.TInlineKeyboardButton{Text: "\U0001F7E8 Questionable", Data: sptr("/rating q")})
-		extra_buttons[0] = append(extra_buttons[0], data.TInlineKeyboardButton{Text: "\U0001F7E5 Explicit", Data: sptr("/rating e")})
+		extra_buttons.AddRow()
+		extra_buttons.AddButton(data.TInlineKeyboardButton{Text: "\U0001F7E9 Safe", Data: sptr("/rating s")})
+		extra_buttons.AddButton(data.TInlineKeyboardButton{Text: "\U0001F7E8 Questionable", Data: sptr("/rating q")})
+		extra_buttons.AddButton(data.TInlineKeyboardButton{Text: "\U0001F7E5 Explicit", Data: sptr("/rating e")})
 	} else if prompt.State == WAIT_SOURCE {
 		for i, source := range prompt.SeenSourcesReverse {
 			var selected bool
@@ -145,12 +148,14 @@ func (this EditFormatter) GenerateMarkup(prompt *EditPrompt) interface{} {
 			}
 
 			prefixes := map[bool]string{true:"\U0001F7E9 ", false:"\U0001F7E5 "}
-			extra_buttons = append(extra_buttons, append([]data.TInlineKeyboardButton(nil), data.TInlineKeyboardButton{Text: prefixes[selected] + source, Data: sptr(fmt.Sprintf("/sources %d %t", i, !selected))}))
+			extra_buttons.AddRow()
+			extra_buttons.AddButton(data.TInlineKeyboardButton{Text: prefixes[selected] + source, Data: sptr(fmt.Sprintf("/sources %d %t", i, !selected))})
 		}
 	} else if prompt.State == WAIT_PARENT {
-		extra_buttons = append(extra_buttons, append([]data.TInlineKeyboardButton(nil), data.TInlineKeyboardButton{Text: "Delete parent", Data: sptr("/parent none")}))
+		extra_buttons.AddRow()
+		extra_buttons.AddButton(data.TInlineKeyboardButton{Text: "Delete parent", Data: sptr("/parent none")})
 	}
-	kb.Buttons = append(extra_buttons, kb.Buttons...)
+	kb.Buttons = append(extra_buttons.Buttons, kb.Buttons...)
 	return kb
 }
 
@@ -246,26 +251,31 @@ func (this PostFormatter) GenerateMarkup(prompt *PostPrompt) interface{} {
 	if prompt.State == DISCARDED || prompt.State == SAVED { return nil }
 
 	var kb data.TInlineKeyboard
-	kb.Buttons = make([][]data.TInlineKeyboardButton, 4)
-	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "Tags", Data: sptr("/tags")})
-	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "Rating", Data: sptr("/rating")})
-	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "Parent", Data: sptr("/parent")})
-	kb.Buttons[1] = append(kb.Buttons[1], data.TInlineKeyboardButton{Text: "File", Data: sptr("/file")})
-	kb.Buttons[1] = append(kb.Buttons[1], data.TInlineKeyboardButton{Text: "Sources", Data: sptr("/sources")})
-	kb.Buttons[1] = append(kb.Buttons[1], data.TInlineKeyboardButton{Text: "Description", Data: sptr("/description")})
+	kb.AddRow()
+	kb.AddButton(data.TInlineKeyboardButton{Text: "Tags", Data: sptr("/tags")})
+	kb.AddButton(data.TInlineKeyboardButton{Text: "Rating", Data: sptr("/rating")})
+	kb.AddButton(data.TInlineKeyboardButton{Text: "Parent", Data: sptr("/parent")})
+	kb.AddRow()
+	kb.AddButton(data.TInlineKeyboardButton{Text: "File", Data: sptr("/file")})
+	kb.AddButton(data.TInlineKeyboardButton{Text: "Sources", Data: sptr("/sources")})
+	kb.AddButton(data.TInlineKeyboardButton{Text: "Description", Data: sptr("/description")})
+	kb.AddRow()
 	if prompt.State != WAIT_MODE {
-		kb.Buttons[2] = append(kb.Buttons[2], data.TInlineKeyboardButton{Text: fmt.Sprintf("\u21A9\uFE0F Reset %s", GetNameOfState(prompt.State)), Data: sptr(fmt.Sprintf("/reset %s", prompt.State))})
+		kb.AddButton(data.TInlineKeyboardButton{Text: fmt.Sprintf("\u21A9\uFE0F Reset %s", GetNameOfState(prompt.State)), Data: sptr(fmt.Sprintf("/reset %s", prompt.State))})
 	}
-	kb.Buttons[2] = append(kb.Buttons[2], data.TInlineKeyboardButton{Text: fmt.Sprintf("\u2622\uFE0F Reset %s", GetNameOfState(WAIT_ALL)), Data: sptr(fmt.Sprintf("/reset %s", WAIT_ALL))})
-	kb.Buttons[3] = append(kb.Buttons[3], data.TInlineKeyboardButton{Text: "\U0001F7E2 Upload", Data: sptr("/save")})
-	kb.Buttons[3] = append(kb.Buttons[3], data.TInlineKeyboardButton{Text: "\U0001F534 Discard", Data: sptr("/discard")})
+	kb.AddButton(data.TInlineKeyboardButton{Text: fmt.Sprintf("\u2622\uFE0F Reset %s", GetNameOfState(WAIT_ALL)), Data: sptr(fmt.Sprintf("/reset %s", WAIT_ALL))})
+	kb.AddRow()
+	kb.AddButton(data.TInlineKeyboardButton{Text: "\U0001F7E2 Upload", Data: sptr("/save")})
+	kb.AddButton(data.TInlineKeyboardButton{Text: "\U0001F534 Discard", Data: sptr("/discard")})
 
-	var extra_buttons [][]data.TInlineKeyboardButton
-	if prompt.State == WAIT_RATING {
-		extra_buttons = append(extra_buttons, nil)
-		extra_buttons[0] = append(extra_buttons[0], data.TInlineKeyboardButton{Text: "\U0001F7E9 Safe", Data: sptr("/rating s")})
-		extra_buttons[0] = append(extra_buttons[0], data.TInlineKeyboardButton{Text: "\U0001F7E8 Questionable", Data: sptr("/rating q")})
-		extra_buttons[0] = append(extra_buttons[0], data.TInlineKeyboardButton{Text: "\U0001F7E5 Explicit", Data: sptr("/rating e")})
+	var extra_buttons data.TInlineKeyboard
+	if prompt.State == WAIT_TAGS {
+		extra_buttons = prompt.TagWizard.Buttons()
+	} else if prompt.State == WAIT_RATING {
+		extra_buttons.AddRow()
+		extra_buttons.AddButton(data.TInlineKeyboardButton{Text: "\U0001F7E9 Safe", Data: sptr("/rating s")})
+		extra_buttons.AddButton(data.TInlineKeyboardButton{Text: "\U0001F7E8 Questionable", Data: sptr("/rating q")})
+		extra_buttons.AddButton(data.TInlineKeyboardButton{Text: "\U0001F7E5 Explicit", Data: sptr("/rating e")})
 	} else if prompt.State == WAIT_SOURCE {
 		for i, source := range prompt.SeenSourcesReverse {
 			var selected bool
@@ -276,11 +286,13 @@ func (this PostFormatter) GenerateMarkup(prompt *PostPrompt) interface{} {
 			}
 
 			prefixes := map[bool]string{true:"\U0001F7E9 ", false:"\U0001F7E5 "}
-			extra_buttons = append(extra_buttons, append([]data.TInlineKeyboardButton(nil), data.TInlineKeyboardButton{Text: prefixes[selected] + source, Data: sptr(fmt.Sprintf("/sources %d %t", i, !selected))}))
+			extra_buttons.AddRow()
+			extra_buttons.AddButton(data.TInlineKeyboardButton{Text: prefixes[selected] + source, Data: sptr(fmt.Sprintf("/sources %d %t", i, !selected))})
 		}
 	} else if prompt.State == WAIT_PARENT {
-		extra_buttons = append(extra_buttons, append([]data.TInlineKeyboardButton(nil), data.TInlineKeyboardButton{Text: "Delete parent", Data: sptr("/parent none")}))
+		extra_buttons.AddRow()
+		extra_buttons.AddButton(data.TInlineKeyboardButton{Text: "Delete parent", Data: sptr("/parent none")})
 	}
-	kb.Buttons = append(extra_buttons, kb.Buttons...)
+	kb.Buttons = append(extra_buttons.Buttons, kb.Buttons...)
 	return kb
 }
