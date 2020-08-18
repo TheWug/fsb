@@ -75,7 +75,7 @@ func (this *PostPrompt) ID() data.DialogID {
 func (this *PostPrompt) ApplyReset(state string) {
 	if state == WAIT_TAGS || state == WAIT_ALL {
 		this.TagWizard.Reset()
-		this.Status = this.TagWizard.Prompt()
+		this.Status = html.EscapeString(this.TagWizard.Prompt())
 	}
 
 	if state == WAIT_SOURCE || state == WAIT_ALL {
@@ -375,7 +375,7 @@ func (this *PostPrompt) HandleCallback(ctx *gogram.CallbackCtx, settings storage
 		if len(ctx.Cmd.Args) != 1 { return }
 		this.ApplyReset(ctx.Cmd.Args[0])
 	case "/tags":
-		this.Status = this.TagWizard.Prompt()
+		this.Status = html.EscapeString(this.TagWizard.Prompt())
 		this.State = WAIT_TAGS
 	case "/sources":
 		if len(ctx.Cmd.Args) == 2 {
@@ -421,7 +421,7 @@ func (this *PostPrompt) HandleCallback(ctx *gogram.CallbackCtx, settings storage
 		ctx.SetState(nil)
 	case wizard.CMD_NEXT, wizard.CMD_RESTART, wizard.CMD_DONE, wizard.CMD_TAGS:
 		this.TagWizard.ButtonPressed(ctx.Cb.Data)
-		this.Status = this.TagWizard.Prompt()
+		this.Status = html.EscapeString(this.TagWizard.Prompt())
 	default:
 	}
 }
