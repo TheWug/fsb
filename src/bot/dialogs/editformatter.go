@@ -81,7 +81,9 @@ func (this EditFormatter) GenerateMessage(prompt *EditPrompt) string {
 	b.WriteString(prompt.Prefix)
 	if b.Len() != 0 { b.WriteString("\n\n") }
 
-	this.Warnings(&b, prompt)
+	if prompt.State != DISCARDED {
+		this.Warnings(&b, prompt)
+	}
 
 	if prompt.State == SAVED {
 		if (prompt.IsNoop()) {
@@ -191,7 +193,9 @@ func (this PostFormatter) GenerateMessage(prompt *PostPrompt) string {
 	b.WriteString(prompt.Prefix)
 	if b.Len() != 0 { b.WriteString("\n\n") }
 
-	this.Warnings(&b, prompt)
+	if prompt.State != DISCARDED {
+		this.Warnings(&b, prompt)
+	}
 
 	if prompt.State == SAVED {
 		if this.Result == nil {
