@@ -208,13 +208,13 @@ func (this *WizardRule) Buttons(t *tags.TagSet, w *TagWizard) ([]data.TInlineKey
 		if !hide {
 			var decor string
 			if t.Status(tag) == tags.AddsTag {
-				decor = "\u2705" // green box checkmark
+				decor = "\U0001F7E9" // green square
 			} else {
-				decor = "\u26d4" // red circle strikethru
+				decor = "\U0001F7E5" // red square
 			}
 			tag_display := tag
 			if strings.HasPrefix(strings.ToLower(tag), "meta:") { tag_display = strings.Replace(tag_display[5:], "_", " ", -1) }
-			btn := data.TInlineKeyboardButton{Text: decor + " " + tag_display + " " + decor, Data: strPtr(CMD_TAGS_SPACE + w.UID(tag))}
+			btn := data.TInlineKeyboardButton{Text: decor + " " + tag_display, Data: strPtr(CMD_TAGS_SPACE + w.UID(tag))}
 			out = append(out, btn)
 		}
 	}
