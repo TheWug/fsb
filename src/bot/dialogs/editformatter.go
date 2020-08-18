@@ -187,7 +187,7 @@ func (this PostFormatter) Warnings(b *bytes.Buffer, prompt *PostPrompt) {
 	}
 
 	if this.private_mode && !(prompt.State == SAVED || prompt.State == DISCARDED) {
-		warnings = append(warnings, "Be sure to <b>reply</b> to my messages! (<a href=\"https://core.telegram.org/bots#privacy-mode\">why?</a>)")
+		warnings = append(warnings, "Be sure to <b>reply</b> to my messages in groups! (<a href=\"https://core.telegram.org/bots#privacy-mode\">why?</a>)")
 	}
 
 	this.WarningsBase(b, warnings)
