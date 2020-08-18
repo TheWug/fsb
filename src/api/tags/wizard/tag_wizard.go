@@ -140,7 +140,7 @@ func (this *WizardRule) ParseFromString(line string) (error) {
 				if i == 2 && x == "desc" { this.sortdirection = sort_desc }
 			}
 		} else if !found_dot && strings.HasPrefix(l, "prompt:") {
-			this.prompt = l[7:]
+			this.prompt = t[7:]
 		} else if !found_dot && l == "." {
 			found_dot = true
 		} else if !found_dot {
