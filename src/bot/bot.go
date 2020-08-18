@@ -595,12 +595,53 @@ func EditStateFactoryWithData(jstr []byte, sbp persist.StateBasePersistent, data
 }
 
 func (this *EditState) Handle(ctx *gogram.MessageCtx) {
+	if ctx.Cmd.Command == "/cancel" {
+		// always react to cancel command
+		this.Cancel(ctx)
+		if ctx.Msg.Chat.Id != this.data.ChatId {
+			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Command cancelled."}}, nil)
+		}
+		return
+	} else if ctx.Cmd.Command == "" && ctx.Msg.Chat.Id != this.data.ChatId {
+		// completely ignore non-commands sent to other chats
+		return
+	} else if ctx.Cmd.Command != "" && ctx.Msg.Chat.Id != this.data.ChatId && this.data.ChatId != 0 {
+		// warn users who try to use commands in another chat while this command is active already
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "A command is already in progress somewhere else. To cancel it, use /cancel."}}, nil)
+		return
+	} else if ctx.Msg.Chat.Type == data.Private {
+		// if it's a PM, always process it.
+	} else if ctx.Msg.Chat.Type == data.Channel {
+		// if it's a channel, never process it
+		return
+	} else if ctx.Cmd.Command != "" {
+		// if it's a command, always process it
+	} else if ctx.Cmd.Command == "" && ctx.Msg.ReplyToMessage == nil || ctx.Msg.ReplyToMessage.From.Id != ctx.Bot.Remote.GetMe().Id {
+		// if it's not a command AND not a reply to a message sent by the bot, ignore it completely
+		return
+	}
+
+	del := func() {
+		if ctx.Msg.Document != nil && ctx.Msg.ForwardDate == nil {
+			// keep the post around if it's a new, non-forwarded file upload
+		} else {
+			// otherwise, toss it.
+			ctx.DeleteAsync(nil)
+		}
+	}
+
+	
 	if ctx.Cmd.Command == "/edit" && ctx.GetState() == nil {
 		this.Edit(ctx)
-	} else if ctx.Cmd.Command == "/cancel" {
-		this.Cancel(ctx)
+	} else if ctx.Cmd.Command == "/reply" {
+		newctx := gogram.NewMessageCtx(ctx.Msg.ReplyToMessage, false, ctx.Bot)
+		if newctx != nil {
+			this.Freeform(newctx)
+		}
+		del()
 	} else {
 		this.Freeform(ctx)
+		del()
 	}
 }
 
@@ -658,7 +699,6 @@ func (this *EditState) Freeform(ctx *gogram.MessageCtx) {
 	p.HandleFreeform(ctx)
 
 	p.Prompt(settings, ctx.Bot, nil, dialogs.NewEditFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
-	ctx.DeleteAsync(nil)
 	settings.Transaction.MarkForCommit()
 }
 
