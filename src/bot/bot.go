@@ -60,67 +60,6 @@ type PostFile struct {
 	url string
 }
 
-type UserState struct {
-	my_id		data.UserID
-
-	postmode	int
-	postfile	PostFile
-	postrating	string
-	posttagwiz	bool
-	postwizard	TagWizard
-	postsource      string
-	postdescription string
-	postparent      int
-	postready	bool
-	postdone	bool
-	postreviewed	bool
-
-}
-
-func (this *UserState) SetTagRulesByName(name string) {
-	if name == "" { name = "main" }
-	rules, _ := storage.GetUserTagRules(storage.UpdaterSettings{}, this.my_id, name)
-	this.postwizard.SetNewRulesFromString(rules)
-}
-
-func (this *UserState) WriteUserTagRules(tagrules, name string) {
-	storage.WriteUserTagRules(storage.UpdaterSettings{}, this.my_id, name, tagrules)
-}
-
-func (this *UserState) Reset() {
-	*this = UserState{my_id: this.my_id, postwizard: this.postwizard}
-	this.postwizard.Reset()
-}
-
-func NewUserState(ctx *gogram.MessageCtx) (*UserState) {
-	u := UserState{my_id: ctx.Msg.From.Id}
-	u.postwizard = *NewTagWizard(ctx)
-	rules, err := storage.GetUserTagRules(storage.UpdaterSettings{}, ctx.Msg.From.Id, "main")
-	if err != nil { ctx.Bot.ErrorLog.Println(err.Error()) }
-	if err == nil { u.postwizard.SetNewRulesFromString(rules) }
-	return &u
-}
-
-var states_by_user map[data.UserID]*UserState
-
-func GetUserState(ctx *gogram.MessageCtx) (*UserState) {
-	if states_by_user == nil {
-		states_by_user = make(map[data.UserID]*UserState)
-	}
-
-	if ctx.Msg.From == nil {
-		return nil
-	}
-
-	state := states_by_user[ctx.Msg.From.Id]
-	if state == nil {
-		state = NewUserState(ctx)
-		states_by_user[ctx.Msg.From.Id] = state
-	}
-
-	return state
-}
-
 func ShowHelp(topic string) (string) {
 	// this works by filtering the full help document by the provided substring
 	// against the first token in the line, as a sort of poor man's help topic selector.
