@@ -307,7 +307,7 @@ func (this *EditPrompt) PostStatus(b *bytes.Buffer) {
 		b.WriteString(")\n")
 	} else if this.File.Mode == PF_FROM_URL {
 		b.WriteString("File: <a href=\"")
-		b.WriteString(this.File.Url)
+		b.WriteString(html.EscapeString(this.File.Url))
 		b.WriteString("\">")
 		b.WriteString(html.EscapeString(this.File.FileName))
 		b.WriteString("</a> (")
