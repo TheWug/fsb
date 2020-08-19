@@ -77,6 +77,7 @@ func main() {
 	edit := bot.EditState{StateBasePersistent: persist.Register(p, machine, "edit", bot.EditStateFactory)}
 
 	machine.AddCommand("/help", &help)
+	machine.AddCommand("/start", &help)
 	machine.AddCommand("/login", &login)
 	machine.AddCommand("/logout", &login)
 	machine.AddCommand("/post", &post)
