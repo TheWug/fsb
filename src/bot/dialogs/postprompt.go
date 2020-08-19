@@ -341,8 +341,6 @@ func (this *PostPrompt) ParseArgs(ctx *gogram.MessageCtx) (bool, error) {
 				this.File.SetUrl(token, 0)
 			}
 			mode = root
-		}
-		if token == "" {
 		} else if token == "--tags" {
 			mode = posttags
 		} else if token == "--sources" {

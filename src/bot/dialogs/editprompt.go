@@ -453,8 +453,6 @@ func (this *EditPrompt) ParseArgs(ctx *gogram.MessageCtx) (bool, error) {
 				this.Reason = token
 			}
 			mode = root
-		}
-		if token == "" {
 		} else if token == "--tags" {
 			mode = posttags
 		} else if token == "--sources" {
