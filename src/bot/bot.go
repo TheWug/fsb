@@ -239,9 +239,10 @@ example. meta:Kinky_stuff . pet_play food_fetish vore</pre>
 .faq. <code>*</code> Your ` + api.ApiName + ` API key is NOT your password. To find it, go to your <a href="https://` + api.Endpoint + `/users/home">Account Settings</a> and click "Manage API Access".
 .faq. <code>*</code> To report a bug, see <code>/help contact.</code>
 contact. 
-contact. <b>Contacting the author</b>
-contact. You may be contacted by the bot author for more information.
-contact. <code>/operator [what's wrong] -</code> Flag something for review.
+contact. <b>Contacting the maintainers</b>
+contact. <code>/operator (message for maintainers)</code>
+contact. 
+contact. When you use this command, your message will be forwarded to the bot maintainers' chat. You must use it via a private chat with the bot. If you abuse this command, we will laugh at the silly things you say, and forward them to all of your friends.
 birds. What <b>are</b> birds?
 birds. We just don't know.`
 
@@ -392,6 +393,19 @@ type lookup_votes struct {
 type lookup_faves struct {
 	user data.UserID
 	date time.Time
+}
+
+type OperatorState struct {
+	gogram.StateBase
+
+	Behavior *botbehavior.Behavior
+}
+
+func (this *OperatorState) Handle(ctx *gogram.MessageCtx) {
+	if ctx.Msg.Chat.Type == data.Private {
+		ctx.Forward(data.OForward{SendData: data.SendData{TargetData: data.TargetData{ChatId: this.Behavior.MySettings.Home}}})
+		ctx.Reply(data.OMessage{SendData: data.SendData{Text: "Your message has been forwarded to the janitor's chat.  You may be contacted for more information, if possible."}})
+	}
 }
 
 type VoteState struct {
