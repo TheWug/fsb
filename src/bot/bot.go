@@ -665,18 +665,18 @@ func (this *EditState) HandleCallback(ctx *gogram.CallbackCtx) {
 	if p.State == dialogs.SAVED {
 		_, err := p.CommitEdit(this.data.User, this.data.ApiKey, gogram.NewMessageCtx(ctx.Cb.Message, false, ctx.Bot), settings)
 		if err == nil {
-			p.Finalize(settings, ctx.Bot, nil, dialogs.NewEditFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+			p.Finalize(settings, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
 			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F7E2 Edit submitted."}, nil)
 			ctx.SetState(nil)
 		} else {
 			ctx.AnswerAsync(data.OCallback{Notification: fmt.Sprintf("\U0001F534 %s", err.Error())}, nil)
-			p.Prompt(settings, ctx.Bot, nil, dialogs.NewEditFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, err))
+			p.Prompt(settings, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Cb.Message.Chat.Type != data.Private, err))
 			p.State = dialogs.WAIT_MODE
 		}
 	} else if p.State == dialogs.DISCARDED {
-		p.Finalize(settings, ctx.Bot, nil, dialogs.NewEditFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+		p.Finalize(settings, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
 	} else {
-		p.Prompt(settings, ctx.Bot, nil, dialogs.NewEditFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+		p.Prompt(settings, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
 	}
 	settings.Transaction.MarkForCommit()
 }
@@ -698,7 +698,7 @@ func (this *EditState) Freeform(ctx *gogram.MessageCtx) {
 
 	p.HandleFreeform(ctx)
 
-	p.Prompt(settings, ctx.Bot, nil, dialogs.NewEditFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+	p.Prompt(settings, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, nil))
 	settings.Transaction.MarkForCommit()
 }
 
@@ -715,7 +715,7 @@ func (this *EditState) Cancel(ctx *gogram.MessageCtx) {
 	if err != nil { ctx.Bot.ErrorLog.Println(err.Error()) }
 	if p != nil {
 		p.State = dialogs.DISCARDED
-		p.Finalize(settings, ctx.Bot, nil, dialogs.NewEditFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+		p.Finalize(settings, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, nil))
 	}
 	ctx.SetState(nil)
 	settings.Transaction.MarkForCommit()
@@ -760,7 +760,7 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 		e.CommitEdit(user, api_key, ctx, storage.UpdaterSettings{})
 	} else {
 		e.ResetState()
-		prompt := e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewEditFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+		prompt := e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, nil))
 		ctx.SetState(EditStateFactoryWithData(nil, this.StateBasePersistent, esp{
 			User: user,
 			ApiKey: api_key,
