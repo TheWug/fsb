@@ -756,17 +756,27 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 		}
 	}
 
-	if savenow {
-		e.CommitEdit(user, api_key, ctx, storage.UpdaterSettings{})
-	} else {
-		e.ResetState()
-		prompt := e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, nil))
+	savestate := func(prompt *gogram.MessageCtx) {
 		ctx.SetState(EditStateFactoryWithData(nil, this.StateBasePersistent, esp{
 			User: user,
 			ApiKey: api_key,
 			MsgId: prompt.Msg.Id,
 			ChatId: prompt.Msg.Chat.Id,
 		}))
+	}
+
+	if savenow {
+		_, err := e.CommitEdit(user, api_key, ctx, storage.UpdaterSettings{})
+		if err == nil {
+			e.State = dialogs.SAVED
+			e.Finalize(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, nil))
+		} else {
+			e.State = dialogs.SAVED
+			savestate(e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, err)))
+		}
+	} else {
+		e.ResetState()
+		savestate(e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, nil)))
 	}
 }
 
@@ -1066,24 +1076,43 @@ func (this *PostState) Post(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	if postnow {
-		p.CommitPost(user, api_key, ctx, storage.UpdaterSettings{})
-	} else {
-		tagrules, err := storage.GetUserTagRules(storage.UpdaterSettings{}, ctx.Msg.From.Id, "main")
-		if err != nil {
-			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Couldn't load your tag rules for some reason."}}, nil)
-			return
-		}
+	tagrules, err := storage.GetUserTagRules(storage.UpdaterSettings{}, ctx.Msg.From.Id, "main")
+	if err != nil {
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Couldn't load your tag rules for some reason."}}, nil)
+		return
+	}
 
+	savestate := func(prompt *gogram.MessageCtx) {
 		p.TagWizard.SetNewRulesFromString(tagrules)
-		p.ResetState()
-		prompt := p.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, nil))
 		ctx.SetState(PostStateFactoryWithData(nil, this.StateBasePersistent, psp{
 			User: user,
 			ApiKey: api_key,
 			MsgId: prompt.Msg.Id,
 			ChatId: prompt.Msg.Chat.Id,
 		}))
+	}
+
+	if postnow {
+		if err := p.IsComplete(); err != nil {
+			p.Status = "Your post isn't ready for upload yet, please fix it and then try to upload it again."
+			savestate(p.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, nil)))
+		} else {
+			upload_result, err := p.CommitPost(user, api_key, ctx, storage.UpdaterSettings{})
+			if err == nil && upload_result != nil && upload_result.Success {
+				p.State = dialogs.SAVED
+				p.Finalize(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, upload_result))
+			} else if err != nil {
+				p.State = dialogs.SAVED
+				savestate(p.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, nil)))
+			} else if upload_result != nil && !upload_result.Success {
+				if upload_result.Reason == nil { upload_result.Reason = new(string) }
+				p.State = dialogs.SAVED
+				savestate(p.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, upload_result)))
+			}
+		}
+	} else {
+		p.ResetState()
+		savestate(p.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, nil)))
 	}
 }
 
