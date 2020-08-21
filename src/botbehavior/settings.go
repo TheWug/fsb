@@ -37,8 +37,9 @@ type Settings struct {
 	SearchUser   string `json:"search_user"`
 	SearchAPIKey string `json:"search_apikey"`
 
-	NoResultsPhotoID data.FileID `json:"no_results_photo_id"`
-	ErrorPhotoID     data.FileID `json:"error_photo_id"`
+	NoResultsPhotoID   data.FileID `json:"no_results_photo_id"`
+	BlacklistedPhotoID data.FileID `json:"blacklisted_photo_id"`
+	ErrorPhotoID       data.FileID `json:"error_photo_id"`
 
 	SourceMap        json.RawMessage `json:"source_map"`
 

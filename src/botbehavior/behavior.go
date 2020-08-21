@@ -40,10 +40,11 @@ func ShowHelp() {
 	fmt.Println("  max_artists      - max number of artists an inline result can include.")
 	fmt.Println("  max_chars        - max number of characters an inline result can include.")
 	fmt.Println("  max_sources      - max number of sources an inline result can include.")
-	fmt.Println("  owner               - numeric telegram user ID of bot operator.")
-	fmt.Println("  home                - numeric telegram chat ID of bot's service chat.")
-	fmt.Println("  no_results_photo_id - base64 telegram photo ID of 'no results' placeholder photo.")
-	fmt.Println("  error_photo_id      - base64 telegram photo ID of 'error' placeholder photo.")
+	fmt.Println("  owner - numeric telegram user ID of bot operator.")
+	fmt.Println("  home  - numeric telegram chat ID of bot's service chat.")
+	fmt.Println("  no_results_photo_id  - base64 telegram photo ID of 'no results' placeholder photo.")
+	fmt.Println("  blacklisted_photo_id - base64 telegram photo ID of 'all results blacklisted' placeholder photo.")
+	fmt.Println("  error_photo_id       - base64 telegram photo ID of 'error' placeholder photo.")
 	fmt.Println("  source_map   - a json array of match rules which control how to format sources.")
 	fmt.Println("                 rules have the following keys:")
 	fmt.Println("                   hostname, subdomain_of, path_prefix - strings, or arrays of strings")
@@ -522,6 +523,19 @@ func (this *Behavior) GetNoResultsPlaceholder(query string) *data.TInlineQueryRe
 		PhotoId: this.MySettings.NoResultsPhotoID,
 		InputMessageContent: &data.TInputMessageTextContent{
 			MessageText: fmt.Sprintf("There are no results on " + api.ApiName + " for <code>%s</code> :(", html.EscapeString(query)),
+			ParseMode: data.ParseHTML,
+		},
+	}
+}
+
+func (this *Behavior) GetBlacklistedPlaceholder(query string) *data.TInlineQueryResultCachedPhoto {
+	if this.MySettings.NoResultsPhotoID == "" { return nil }
+	return &data.TInlineQueryResultCachedPhoto{
+		Type: "photo",
+		Id: "blacklisted-results",
+		PhotoId: this.MySettings.BlacklistedPhotoID,
+		InputMessageContent: &data.TInputMessageTextContent{
+			MessageText: fmt.Sprintf("There are results on " + api.ApiName + " for <code>%s</code>, but my blacklist filtered them all!", html.EscapeString(query)),
 			ParseMode: data.ParseHTML,
 		},
 	}
