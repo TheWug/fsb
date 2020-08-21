@@ -67,6 +67,7 @@ func main() {
 	p := persist.InitStatePersistence(storage.Db_pool, "state_persistence")
 
 	help := bot.HelpState{StateBase: gogram.StateBase{StateMachine: machine}}
+	settingscmd := bot.SettingsState{StateBase: gogram.StateBase{StateMachine: machine}}
 	login := bot.LoginState{StateBase: gogram.StateBase{StateMachine: machine}}
 	janitor := bot.JanitorState{StateBase: gogram.StateBase{StateMachine: machine}}
 	votes := bot.VoteState{StateBase: gogram.StateBase{StateMachine: machine}}
@@ -79,6 +80,8 @@ func main() {
 
 	machine.AddCommand("/help", &help)
 	machine.AddCommand("/start", &help)
+	machine.AddCommand("/settings", &settingscmd)
+	machine.AddCommand("/delete_my_data_and_forget_me", &settingscmd)
 	machine.AddCommand("/login", &login)
 	machine.AddCommand("/logout", &login)
 	machine.AddCommand("/sync", &login)
