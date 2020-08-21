@@ -80,6 +80,7 @@ func main() {
 	machine.AddCommand("/start", &help)
 	machine.AddCommand("/login", &login)
 	machine.AddCommand("/logout", &login)
+	machine.AddCommand("/sync", &login)
 	machine.AddCommand("/post", &post)
 	machine.AddCommand("/indextags", &janitor)
 	machine.AddCommand("/indextagaliases", &janitor)

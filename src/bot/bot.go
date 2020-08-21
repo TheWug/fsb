@@ -831,7 +831,7 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You are now logged out."}}, nil)
 		ctx.SetState(nil)
 		return
-	} else {
+	} else if ctx.Cmd.Command == "/login" || ctx.Cmd.Command == "" {
 		if ctx.GetState() == nil {
 			this = &LoginState{}
 			ctx.SetState(this)
@@ -881,6 +881,35 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 			}
 		}
 		return
+	} else if ctx.Cmd.Command == "/sync" {
+		creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+		if err == storage.ErrNoLogin {
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "You have not connected your " + api.ApiName + " account."}}, nil)
+			return
+		} else if err != nil {
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "An error occurred! Try again later."}}, nil)
+			ctx.Bot.ErrorLog.Println("An error occurred looking up user credentials: ", err.Error())
+			return
+		}
+		user, success, err := api.TestLogin(creds.User, creds.ApiKey)
+		if err != nil {
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "An error occurred while communicating with " + api.ApiName + "! Try again later."}}, nil)
+			ctx.Bot.ErrorLog.Println("An error occurred testing " + api.ApiName + " login: ", err.Error())
+			return
+		} else if !success {
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Your API key is invalid or has expired, please update it."}}, nil)
+			return
+		}
+		creds.Blacklist = user.Blacklist
+		creds.BlacklistFetched = time.Now()
+		err = storage.WriteUserCreds(storage.UpdaterSettings{}, creds)
+		if err != nil {
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "An error occurred while saving your settings! Try again later."}}, nil)
+			ctx.Bot.ErrorLog.Println("An error occurred saving user creds: ", err.Error())
+			return
+		}
+
+		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Successfully resync'd your " + api.ApiName + " account settings."}}, nil)
 	}
 }
 
