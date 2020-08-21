@@ -1,9 +1,12 @@
 package types
 
 import (
+	"api/tags"
+
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -250,6 +253,105 @@ func (this *TPostInfo) Tags() ([]string) {
 	tags = append(tags, this.Lore...)
 	tags = append(tags, this.Meta...)
 	return tags
+}
+
+func (this *TPostInfo) TagSet() (tags.TagSet) {
+	var t tags.TagSet
+	t.ApplyArray(this.General)
+	t.ApplyArray(this.Species)
+	t.ApplyArray(this.Character)
+	t.ApplyArray(this.Copyright)
+	t.ApplyArray(this.Artist)
+	t.ApplyArray(this.Invalid)
+	t.ApplyArray(this.Lore)
+	t.ApplyArray(this.Meta)
+	return t
+}
+
+func matchIntRange(tag string, against int) bool {
+	if strings.HasPrefix(tag, ">=") {
+		i, err := strconv.Atoi(tag[2:])
+		return err == nil && i >= against
+	}
+	if strings.HasPrefix(tag, "<=") {
+		i, err := strconv.Atoi(tag[2:])
+		return err == nil && i <= against
+	}
+	if strings.HasPrefix(tag, ">") {
+		i, err := strconv.Atoi(tag[1:])
+		return err == nil && i > against
+	}
+	if strings.HasPrefix(tag, "<") {
+		i, err := strconv.Atoi(tag[1:])
+		return err == nil && i < against
+	}
+	if strings.Contains(tag, "..") {
+		ids := strings.Split(tag, "..")
+		bottom, err1 := strconv.Atoi(ids[0])
+		top, err2 := strconv.Atoi(ids[1])
+		return err1 == nil && err2 == nil && against >= bottom && against <= top
+	} else {
+		i, err := strconv.Atoi(tag)
+		return err == nil && i == against
+	}
+	return false
+}
+
+func matchesTag(post *TPostInfo, t *tags.TagSet, tag string) bool {
+	tag_noprefix := strings.TrimPrefix(tag, "-")
+	tag, positive_match := tag_noprefix, tag == tag_noprefix
+	matches := false
+
+	if trimmed := strings.TrimPrefix(tag, "rating:"); trimmed != tag {
+		if strings.HasPrefix(trimmed, "s") {
+			matches = strings.HasPrefix(post.Rating, "s")
+		} else if strings.HasPrefix(trimmed, "q") {
+			matches = strings.HasPrefix(post.Rating, "q")
+		} else if strings.HasPrefix(trimmed, "e") {
+			matches = strings.HasPrefix(post.Rating, "e")
+		} else {
+			matches = false
+		}
+	} else if trimmed := strings.TrimPrefix(tag, "id:"); trimmed != tag {
+		matches = matchIntRange(trimmed, post.Id)
+	} else if trimmed := strings.TrimPrefix(tag, "score:"); trimmed != tag {
+		matches = matchIntRange(trimmed, post.Score)
+	} else if trimmed := strings.TrimPrefix(tag, "favcount:"); trimmed != tag {
+		matches = matchIntRange(trimmed, post.Fav_count)
+	} else {
+		matches = t.Status(tag) == tags.AddsTag
+	}
+
+	return matches == positive_match
+}
+
+func matchesBlacklistLine(post *TPostInfo, tags *tags.TagSet, line string) bool {
+	no_or_tags := true
+	cumulative_or_tags := false
+	cumulative_and_tags := true
+
+	for _, tag := range strings.Split(line, " ") {
+		if tag == "" {
+			continue
+		} else if strings.HasPrefix(tag, "~") {
+			no_or_tags = false
+			cumulative_or_tags = cumulative_or_tags || matchesTag(post, tags, tag[1:])
+		} else {
+			cumulative_and_tags = cumulative_and_tags && matchesTag(post, tags, tag)
+		}
+	}
+
+	return (no_or_tags || cumulative_or_tags) && cumulative_and_tags
+}
+
+func (this *TPostInfo) MatchesBlacklist(blacklist string) (bool) {
+	tags := this.TagSet()
+	var lines []string
+	if len(blacklist) != 0 { lines = strings.Split(blacklist, "\n") }
+	for _, line := range lines {
+		if matchesBlacklistLine(this, &tags, line) { return true }
+	}
+	return false
 }
 
 type TUserInfoArray []TUserInfo
