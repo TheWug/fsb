@@ -78,6 +78,18 @@ func GetUserCreds(settings UpdaterSettings, id tgtypes.UserID) (UserCreds, error
 	return creds, err
 }
 
+func DeleteUserCreds(settings UpdaterSettings, id tgtypes.UserID) (error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
+
+	query := "DELETE FROM remote_user_credentials WHERE telegram_id = $1"
+	_, err := tx.Exec(query, id)
+
+	settings.Transaction.commit = mine && (err == nil)
+	return err
+}
+
 func WriteUserTagRules(settings UpdaterSettings, id tgtypes.UserID, name, rules string) (error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
@@ -104,6 +116,17 @@ func GetUserTagRules(settings UpdaterSettings, id tgtypes.UserID, name string) (
 
 	settings.Transaction.commit = mine
 	return rules, err
+}
+
+func DeleteUserTagRules(settings UpdaterSettings, id tgtypes.UserID) (error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
+
+	_, err := tx.Exec("DELETE FROM user_tagrules WHERE telegram_id = $1", id)
+
+	settings.Transaction.commit = mine && (err == nil)
+	return err
 }
 
 func PrefixedTagToTypedTag(name string) (string, int) {
