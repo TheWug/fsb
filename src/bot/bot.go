@@ -64,36 +64,33 @@ func ShowHelp(topic string) (string) {
 	// against the first token in the line, as a sort of poor man's help topic selector.
 	// the 
 	help :=
-`.public.example.wizard.post.edit.advanced.faq.login.contact. Hello! I'm the <b>` + api.ApiName + ` Telegram Bot</b>!
-.public.example.wizard.post.edit.advanced.faq.login.contact. 
-.public.example.wizard.post.edit.advanced.faq.login.contact.  Content on ` + api.ApiName + ` may be unsuitable for kids.
-.public.example.wizard.post.edit.advanced.faq.login.contact.  <b>You must be 18 or older to use this bot.</b>
-.public. 
-.public. This bot's commands and help messages should be used via PM.
-.advanced. 
-.advanced. <b>General Usage</b>
-.advanced. I work like @gif! Simply type my name, followed by search terms.
-.advanced. <code>@fsb frosted_butts</code>
-.advanced. All tags which are supported on the site work here!
-.advanced. 
-.advanced. Posts via me will have upvote, downvote, and favorite buttons. Connect your ` + api.ApiName + ` account to be able to vote on and favorite posts, without ever leaving telegram.
-login.advanced.janitor. 
-login.advanced.janitor. <b>Using Your ` + api.ApiName + ` Account</b>
-login.advanced.janitor. Some of my features require you to connect your ` + api.ApiName + ` account.
-login.advanced.janitor. <code>/login [user] [apikey] -</code> connect to your ` + api.ApiName + ` account.
-login.advanced.janitor. <code>/logout                -</code> disconnect your account.
-.advanced. 
-.advanced. <b>Posting</b>
-.advanced. Upload or edit posts. You must connect your ` + api.ApiName + ` account.
-.advanced. <code>/post        ... -</code> posts a new file.
-.advanced. <code>/edit        ... -</code> edits an existing post.
-.advanced. <code>/settagrules ... -</code> updates your tag rules.
-.advanced. 
-.advanced. <b>Voting</b>
-.advanced. Upvote, downvote, and favorite. You must connect your ` + api.ApiName + ` account.  Reply to any message containing an ` + api.ApiName + ` URL, or specify a URL or post ID in the command.
-.advanced. <code>/upvote      ... -</code> vote a post up.
-.advanced. <code>/downvote    ... -</code> vote a post down.
-.advanced. <code>/favorite    ... -</code> favorite a post.
+`.public.janitor. Hello! I'm the <b>` + api.ApiName + ` Telegram Bot</b>!
+.public.janitor. 
+.public.janitor. Content on ` + api.ApiName + ` may be unsuitable for kids.
+.public.janitor. <b>You must be 18 or older to use this bot.</b>
+. 
+. To view a detailed explanation of my features and functions, please <a href="https://telegra.ph/Knottybot-Usage-Guide-08-20">check out this post</a>.
+. 
+. <b>Short story:</b>
+. <code>* </code>Search inline for ` + api.ApiName + ` posts
+. <code>* </code>Connect your ` + api.ApiName + ` account
+. <code>* </code>Vote on and favorite posts
+. <code>* </code>Upload new posts
+. <code>* </code>Edit existing posts
+. <code>* </code>All without leaving Telegram!
+. 
+. <b>Important Info and FAQ</b>
+. <code>* </code>Adjust your rating filter and blacklist from your search settings.
+. <code>* </code>Before posting to ` + api.ApiName + `, please make sure you read the site's rules.
+. <code>* </code>Your account standing is your own responsibility.
+. <code>* </code>Your ` + api.ApiName + ` API key is NOT your password. To find it, go to your <a href="https://` + api.Endpoint + `/users/home">Account Settings</a> and click "Manage API Access".
+. <code>* </code>To report a bug, see <code>/help report.</code>
+security.abuse.report. <b>Reporting abuse, bugs, or other issues</b>
+security.abuse.report. Use the following command to send a message to the janitor's chat. If your issue is private or security related, please send a report asking to be contacted back.
+security.abuse.report. 
+security.abuse.report. <code>/operator [message for janitors]</code>
+public. 
+public. This bot's commands and help messages should be used via PM.
 janitor. 
 janitor. <b>Janitor Commands</b>
 janitor. For a full description of any command, use <code>/help [command]</code>.
@@ -134,7 +131,7 @@ syncposts. <code> --full         -</code> discard local database and sync from s
 syncposts. <code> --aliases      -</code> sync tag aliases as well
 syncposts. <code> --recount      -</code> tally post tag counts afterwards
 syncposts. You do not normally need to use this command. Commands which push changes to ` + api.ApiName + ` should apply them locally as well, and an incremental sync is performed by the bot's internal maintenance routine every five minutes (with an alias sync and a tag recount happening every 60 minutes).
-najitor.indextags. <code>/indextags</code>
+janitor.indextags. <code>/indextags</code>
 indextags. This command syncs new changes on ` + api.ApiName + ` to the local tag database.
 indextags. <i>Control</i> options:
 indextags. <code> (no arguments) -</code> perform an incremental sync of tags
@@ -168,108 +165,6 @@ janitor.resyncdeleted. <code>/resyncdeleted</code>
 resyncdeleted. <s>This command is disabled.</s> You should not need to use it. It enumerates all deleted posts from ` + api.ApiName + ` and updates the local database's deleted status. It exists because at one point, that information was not stored, but it affects certain parts of the API (namely, ordinary users can no longer edit deleted posts) and it needed to be re-imported. It takes no options. If you need to use it again, you should clear the deleted status of all posts manually from the database console first.
 janitor.resynclist. <code>/resynclist</code>
 resynclist. Use this command captioned on an uploaded file, containing whitespace delimited post ids (and comments beginning with #). The bot will perform a local DB sync on each post listed in the file.
-post. 
-post. <b>Post Command</b>
-post. Posting a file to ` + api.ApiName + ` requires gathering some information. This command pulls everything together, and then does an upload. You must connect to your ` + api.ApiName + ` account to use this.
-post. <code>/post [OPTIONS]</code>
-post. <code>/post (reply to file) [OPTIONS]</code>
-post. <code>/post (file caption) [OPTIONS]</code> 
-post. To upload a file for the post, reply to it, or use the command in the caption as you upload it.
-edit. 
-edit. <b>Edit Command</b>
-edit. Editing a post on ` + api.ApiName + ` requires gathering some information. This command pulls everything together, then does an update. You must connect to your ` + api.ApiName + ` account to use this.
-edit. <code>/edit [OPTIONS] (reply to message with ` + api.ApiName + ` post URL)</code>
-edit. <code>/edit ID-OR-MD5 [OPTIONS] </code>
-edit. <code>/edit SITE-URL  [OPTIONS]</code>
-edit.
-edit. You must, somehow, specify the post you want to edit. The command will fail if you don't.
-post.edit.
-post.edit. OPTIONS can be any of the following:
-post.edit. <code>--tags        T -</code> space delimited list of tags
-post.edit. <code>--sources     S -</code> newline delimited list of sources
-post.edit. <code>--rating      R -</code> one of safe, questionable, explicit
-post.edit. <code>--description D -</code> post description (<a href="https://` + api.Endpoint + `/help/dtext">dtext help</a>)
-post.edit. <code>--parent      P -</code> parent post id, or "none"
-edit. <code>--reason      R -</code> edit reason, shown in edit history
-post. <code>--url         U -</code> replace post from url
-post.edit. <code>--commit        -</code> save changes immediately
-post.edit.
-post. I will respond with a button interface that lets you configure your upload, with the following buttons:
-edit. I will respond with a button interface that lets you configure your edit, with the following buttons:
-post.edit. <code>Tags   </code> See <code>/help wizard</code> for more info.
-post.edit. <code>Rating </code> Use the buttons to choose the rating.
-post.edit. <code>Parent </code> Send a post ID, MD5 hash, URL, or "none".
-post. <code>File   </code> Upload a file, or send a URL.
-post.edit. <code>Sources</code> Send sources, each on its own line.
-post.edit. <code>Description</code> Send a description, including dtext.
-edit. <code>Reason </code> Send your plain text edit reason.
-post.edit. <code>Reset  </code> Resets the current section to blank.
-post.edit. <code>Reset Everything</code> Resets all sections.
-post. <code>Upload </code> Uploads the new post.
-edit. <code>Save   </code> Saves your edit.
-post.edit. <code>Discard</code> Discards the post.
-post.edit. Certain sections add some of their own buttons.
-post.edit. 
-post.edit. When using this command in a group, you must reply to the command dialog when filling in information. If you don't, your messages will be ignored.
-post.edit. 
-post.edit. The following sub-commands are available:
-post.edit. <code>/cancel -</code> discard your change.
-post.edit. <code>/reply  -</code> reply to another message with this to have it processed.
-post.edit. You do not need to reply to the command dialog when using them.
-.wizard. 
-.wizard. <b>The tagging wizard</b>
-.wizard. The tagging wizard is probably my most powerful feature. With this, you can specify your own suggestions for tagging posts, and the wizard will guide you through them, one at a time.
-. To read more about the tag wizard, use <code>/help wizard</code>.
-wizard. 
-wizard. The syntax for a tag rule is as follows:
-wizard. <code>[prereq ...] [control ...] . [option ...]</code>
-wizard. <code>option  -</code> tags to display. can be toggled on and off.
-wizard. <code>prereq  -</code> tags which must be present to show this rule.
-wizard. <code>control -</code> special tags which affect behavior.
-wizard. 
-wizard. The following control options exist:
-wizard. <code>sort:{no|alpha}:{asc|desc} -</code>
-wizard. Automatically sort options (default = alpha, asc)
-wizard. <code>prompt:"Message ..."       -</code>
-wizard. A helpful message describing this rule.
-wizard-dev. <code>auto:{no|add|remove|replace} -</code> Automatically apply all options here.
-wizard. 
-wizard. You can prepend the following to an option, with the following effects:
-wizard. <code>meta:   -</code> display-only tag. useful for categorizing.
-wizard. <code>rating: -</code> sets the post rating.
-wizard. <code>x:      -</code> automatically set this option.
-wizard. <code>o:      -</code> automatically clear this option.
-wizard. <code>h:      -</code> hide this option from the list.
-wizard. You can use more than one, like <code>xh:meta:foobar</code>.
-wizard.tagrules. 
-wizard.tagrules. <b>Set Tag Rules command</b>
-wizard.tagrules. Your tag rules control the tagging wizard. They are extremely customizable and allow anyone to set up their own semi-guided process for tagging posts, replacing minutes of tedious typing out tags from memory with quick tapping of suggestions.
-wizard.tagrules. <code>/settagrules (reply to file) [SCOPE]</code>
-wizard.tagrules. <code>/settagrules [SCOPE]</code>
-wizard.tagrules. 
-wizard.tagrules. This command expects to be given a plain text file containing up to 100kB of tag rules. You should either use it as a caption on a file upload, or reply to an existing file with it.
-wizard.tagrules. <code>SCOPE</code> is either "upload" or "edit". You can set different rules for each.
-wizard.tagrules. 
-wizard.tagrules. Currently, ONLY UPLOADS support using the tagging wizard, so the "edit" scope has no effect.
-wizard.tagrules. 
-wizard.tagrules. To see a tag rule example, use <code>/help example</code>.
-example. 
-example. <b>Tag Rule Example</b>
-example. <pre>prompt:"Overview:" . meta:SFW meta:NSFW meta:Kinky_stuff
-example. meta:SFW . fur scales background hx:rating:s
-example. meta:NSFW . sex penis pussy penetration hx:rating:e
-example. meta:Kinky_stuff . pet_play food_fetish vore</pre>
-.faq. 
-.faq. <b>Important Info and FAQ</b>
-.faq. <code>*</code> Before posting to ` + api.ApiName + `, please make sure you read the site's rules.
-.faq. <code>*</code> Your account standing is your own responsibility.
-.faq. <code>*</code> Your ` + api.ApiName + ` API key is NOT your password. To find it, go to your <a href="https://` + api.Endpoint + `/users/home">Account Settings</a> and click "Manage API Access".
-.faq. <code>*</code> To report a bug, see <code>/help contact.</code>
-contact. 
-contact. <b>Contacting the maintainers</b>
-contact. <code>/operator (message for maintainers)</code>
-contact. 
-contact. When you use this command, your message will be forwarded to the bot maintainers' chat. You must use it via a private chat with the bot. If you abuse this command, we will laugh at the silly things you say, and forward them to all of your friends.
 birds. What <b>are</b> birds?
 birds. We just don't know.`
 
