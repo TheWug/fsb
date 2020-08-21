@@ -450,6 +450,8 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Query.From.Id)
 	if err == storage.ErrNoLogin {
 		creds = this.MySettings.DefaultSearchCredentials()
+	} else if err != nil {
+		ctx.Bot.ErrorLog.Println("Error reading credentials: ", err.Error())
 	}
 
 	settings, _ := storage.GetUserSettings(storage.UpdaterSettings{}, ctx.Query.From.Id)
