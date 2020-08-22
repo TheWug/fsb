@@ -752,7 +752,7 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 					})
 					ctx.SetState(nil)
 				} else if err != nil {
-					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("An error occurred when testing if you were logged in! (%s)", html.EscapeString(err.Error())), ParseMode: data.ParseHTML}}, nil)
+					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("An error occurred when testing if you were logged in! (%s)", err.Error())}}, nil)
 					ctx.SetState(nil)
 				} else if !success {
 					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Login failed! (api key invalid?)\n\nLet's try again. Please send your " + api.Endpoint + " username."}}, nil)
