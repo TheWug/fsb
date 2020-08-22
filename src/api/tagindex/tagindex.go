@@ -1560,9 +1560,9 @@ func Blits(ctx *gogram.MessageCtx) {
 		} else if t.Type == types.TCMeta {
 			tagtype = "META   "
 		}
-		newstr := fmt.Sprintf("%5d (%s) %s\n", t.Count, tagtype, t.Name)
+		newstr := fmt.Sprintf("%5d (%s) %s\n", t.Count, tagtype, html.EscapeString(t.Name))
 		if len(newstr) + buf.Len() > 4096 - 12 { break }
-		buf.WriteString(html.EscapeString(newstr))
+		buf.WriteString(newstr)
 	}
 	ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "<pre>" + buf.String() + "</pre>", ParseMode: data.ParseHTML}}, nil)
 	ctrl.Transaction.MarkForCommit()
