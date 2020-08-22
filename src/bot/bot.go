@@ -845,27 +845,27 @@ func (this *TagRuleState) Handle(ctx *gogram.MessageCtx) {
 			return
 		}
 		if !strings.HasSuffix(*doc.FileName, ".txt") {
-			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("%s isn't a plain text file.", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("<i>%s</i> isn't a plain text file.", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
 			return
 		}
 		file, err := ctx.Bot.Remote.GetFile(data.OGetFile{Id: doc.Id})
 		if err != nil || file == nil || file.FilePath == nil {
-			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while fetching %s, try sending it again?", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while fetching <i>%s</i>, try sending it again?", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
 			return
 		}
 		file_data, err := ctx.Bot.Remote.DownloadFile(data.OFile{FilePath: *file.FilePath})
 		if err != nil || file_data == nil {
-			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while downloading %s, try sending it again?", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while downloading <i>%s</i>, try sending it again?", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
 			return
 		}
 		b, err := ioutil.ReadAll(file_data)
 		if err != nil || b == nil {
-			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while reading %s, try sending it again?", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while reading <i>%s</i>, try sending it again?", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
 			return
 		}
 
 		if len(b) > 102400 {
-			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("%s is too large (100kB max), edit and try again.", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("<i>%s</i> is too large (100kB max), edit and try again.", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
 			return
 		}
 		this.tagwizardrules = string(b)
