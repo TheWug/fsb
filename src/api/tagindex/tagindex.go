@@ -139,6 +139,7 @@ type ProgMessage struct {
 }
 
 func (this *ProgMessage) Respin(previous, notice, status string) string {
+	if this == nil { return "" }
 	lenprev, lenline := len(previous), len(status)
 	spacer_1, spacer_2 := ternary(lenprev > 0, "\n", ""), ternary(lenline > 0, " ", "")
 	return previous + spacer_1 + notice + spacer_2 + status
@@ -201,6 +202,7 @@ func (this *ProgMessage) update() {
 }
 
 func (this *ProgMessage) Push(text string) (error) {
+	if this == nil { return nil }
 	if this.err != nil {
 		return this.err
 	} else if !this.running {
@@ -219,6 +221,7 @@ func (this *ProgMessage) Push(text string) (error) {
 }
 
 func (this *ProgMessage) AppendNotice(text string) (error) {
+	if this == nil { return nil }
 	if len(this.previous) > 0 {
 		this.previous = this.previous + "\n" + this.notice
 	} else {
@@ -231,18 +234,21 @@ func (this *ProgMessage) AppendNotice(text string) (error) {
 }
 
 func (this *ProgMessage) ReplaceNotice(text string) (error) {
+	if this == nil { return nil }
 	this.notice = text
 	this.active = this.Respin(this.previous, this.notice, this.status)
 	return this.Push(this.active)
 }
 
 func (this *ProgMessage) SetStatus(text string) (error) {
+	if this == nil { return nil }
 	this.status = text
 	this.active = this.Respin(this.previous, this.notice, this.status)
 	return this.Push(this.active)
 }
 
 func (this *ProgMessage) SetMessage(text string) (error) {
+	if this == nil { return nil }
 	this.active = text
 	this.previous = ""
 	this.status = ""
@@ -251,10 +257,12 @@ func (this *ProgMessage) SetMessage(text string) (error) {
 }
 
 func (this *ProgMessage) Active() string {
+	if this == nil { return "" }
 	return this.active
 }
 
 func (this *ProgMessage) Close() {
+	if this == nil { return }
 	if this.running {
 		close(this.text_updates)
 		this.running = false
@@ -285,7 +293,7 @@ func (this UserError) Error() string {
 }
 
 func ResyncListCommand(ctx *gogram.MessageCtx) {
-	err := ResyncList(ctx, storage.UpdaterSettings{}, nil, nil)
+	err := ResyncList(ctx, storage.UpdaterSettings{}, nil)
 	if err == storage.ErrNoLogin {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
@@ -298,7 +306,7 @@ func ResyncListCommand(ctx *gogram.MessageCtx) {
 	}
 }
 
-func ResyncList(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+func ResyncList(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
 	creds, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return err }
 
@@ -323,29 +331,18 @@ func ResyncList(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, s
 
 	defer file_data.Close()
 
-	if msg == nil || sfx == nil {
-		msg, sfx = ProgressMessage(ctx, "", "")
-		defer close(msg)
-		defer close(sfx)
+	if progress == nil {
+		progress, _ = ProgressMessage2(data.OMessage{SendData: data.SendData{ReplyToId: &ctx.Msg.Id, ParseMode: data.ParseHTML}, DisableWebPagePreview: true},
+	                                       "", 3 * time.Second, ctx.Bot)
+		defer progress.Close()
 	}
 
-	return ResyncListInternal(creds.User, creds.ApiKey, settings, file_data, msg, sfx)
+	return ResyncListInternal(creds.User, creds.ApiKey, settings, file_data, progress)
 }
 
 
-func ResyncListInternal(user, api_key string, settings storage.UpdaterSettings, file_data io.Reader, msg, sfx chan string) (error) {
-	message := func(x string) {
-		if msg != nil {
-			msg <- x
-		}
-	}
-	suffix := func(x string) {
-		if sfx != nil {
-			sfx <- x
-		}
-	}
-
-	message("Updating posts from list...")
+func ResyncListInternal(user, api_key string, settings storage.UpdaterSettings, file_data io.Reader, progress *ProgMessage) (error) {
+	progress.AppendNotice("Updating posts from list...")
 
 	idpipe := make(chan string)
 	go func() {
@@ -414,7 +411,7 @@ func ResyncListInternal(user, api_key string, settings storage.UpdaterSettings, 
 	close(fixed_posts)
 	wg.Wait()
 
-	suffix("done.")
+	progress.SetStatus("done.")
 	return nil
 }
 
@@ -426,7 +423,7 @@ func SyncTagsCommand(ctx *gogram.MessageCtx) {
 		}
 	}
 
-	err := SyncTags(ctx, storage.UpdaterSettings{Full: full}, nil, nil)
+	err := SyncTags(ctx, storage.UpdaterSettings{Full: full}, nil)
 	if err == storage.ErrNoLogin {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
@@ -435,38 +432,27 @@ func SyncTagsCommand(ctx *gogram.MessageCtx) {
 	}
 }
 
-func SyncTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+func SyncTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
 	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return err }
 
-	if msg == nil || sfx == nil {
-		msg, sfx = ProgressMessage(ctx, "", "")
-		defer close(msg)
-		defer close(sfx)
+	if progress == nil {
+		progress, _ = ProgressMessage2(data.OMessage{SendData: data.SendData{ReplyToId: &ctx.Msg.Id, ParseMode: data.ParseHTML}, DisableWebPagePreview: true},
+	                                       "", 3 * time.Second, ctx.Bot)
+		defer progress.Close()
 	}
 
-	return SyncTagsInternal(creds.User, creds.ApiKey, settings, msg, sfx)
+	return SyncTagsInternal(creds.User, creds.ApiKey, settings, progress)
 }
 
 
-func SyncTagsInternal(user, api_key string, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
-	message := func(x string) {
-		if msg != nil {
-			msg <- x
-		}
-	}
-	suffix := func(x string) {
-		if sfx != nil {
-			sfx <- x
-		}
-	}
-
+func SyncTagsInternal(user, api_key string, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
 	m := "Syncing tag database..."
 	if settings.Full {
 		m = "Full syncing tag database..."
 	}
 
-	message(m)
+	progress.AppendNotice(m)
 
 	if settings.Full {
 		storage.ClearTagIndex(settings)
@@ -517,10 +503,10 @@ func SyncTagsInternal(user, api_key string, settings storage.UpdaterSettings, ms
 	close(fixed_tags)
 	wg.Wait()
 
-	message("Resolving phantom tags...")
+	progress.AppendNotice("Resolving phantom tags...")
 	storage.ResolvePhantomTags(settings)
 
-	suffix(" done.")
+	progress.SetStatus("done.")
 	return nil
 }
 
@@ -535,11 +521,7 @@ func RecountTagsCommand(ctx *gogram.MessageCtx) {
 		}
 	}
 
-	msg, sfx := ProgressMessage(ctx, "", "")
-	defer close(msg)
-	defer close(sfx)
-
-	err := RecountTags(ctx, storage.UpdaterSettings{}, msg, sfx, real_counts, alias_counts)
+	err := RecountTags(ctx, storage.UpdaterSettings{}, nil, real_counts, alias_counts)
 	if err == storage.ErrNoLogin {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
@@ -548,73 +530,60 @@ func RecountTagsCommand(ctx *gogram.MessageCtx) {
 	}
 }
 
-func RecountTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string, real_counts, alias_counts bool) (error) {
+func RecountTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress *ProgMessage, real_counts, alias_counts bool) (error) {
 	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
 	if err != nil { return err }
 	if !creds.Janitor { return errors.New("You need to be a janitor to use this command.") }
 
-	if msg == nil || sfx == nil {
-		msg, sfx = ProgressMessage(ctx, "", "")
-		defer close(msg)
-		defer close(sfx)
+	if progress == nil {
+		progress, _ = ProgressMessage2(data.OMessage{SendData: data.SendData{ReplyToId: &ctx.Msg.Id, ParseMode: data.ParseHTML}, DisableWebPagePreview: true},
+	                                       "", 3 * time.Second, ctx.Bot)
+		defer progress.Close()
 	}
 
 	if real_counts {
-		err = RecountTagsInternal(settings, msg, sfx)
+		err = RecountTagsInternal(settings, progress)
 		if err != nil { return err }
 	}
 
 	if alias_counts {
-		err = CalculateAliasedCountsInternal(settings, msg, sfx)
+		err = CalculateAliasedCountsInternal(settings, progress)
 		if err != nil { return err }
 	}
 
 	return nil
 }
 
-func RecountTagsInternal(settings storage.UpdaterSettings, msg, sfx chan string) (error) {
-	message := func(x string) {
-		if msg != nil {
-			msg <- x
-		}
-	}
-	suffix := func(x string) {
-		if sfx != nil {
-			sfx <- x
-		}
-	}
+func RecountTagsInternal(settings storage.UpdaterSettings, progress *ProgMessage) (error) {
+	progress.AppendNotice("Recounting tags...")
 
-	message("Recounting tags...")
+	var err error
+	sfx := make(chan string)
+	go func() {
+		err = storage.CountTags(settings, sfx)
+		if err != nil {
+			progress.SetStatus(fmt.Sprintf("(error: %s)", html.EscapeString(err.Error())))
+		} else {
+			progress.SetStatus("done.")
+		}
+		close(sfx)
+	}()
 
-	err := storage.CountTags(settings, sfx)
-	if err != nil {
-		suffix(fmt.Sprintf(" (error: %s)", html.EscapeString(err.Error())))
-	} else {
-		suffix(" done.")
+	for str := range sfx {
+		progress.SetStatus(str)
 	}
 
 	return err
 }
 
-func CalculateAliasedCountsInternal(settings storage.UpdaterSettings, msg, sfx chan string) (error) {
-	message := func(x string) {
-		if msg != nil {
-			msg <- x
-		}
-	}
-	suffix := func(x string) {
-		if sfx != nil {
-			sfx <- x
-		}
-	}
-
-	message("Mapping counts between aliased tags...")
+func CalculateAliasedCountsInternal(settings storage.UpdaterSettings, progress *ProgMessage) (error) {
+	progress.AppendNotice("Mapping counts between aliased tags...")
 
 	err := storage.RecalculateAliasedCounts(settings)
 	if err != nil {
-		suffix(fmt.Sprintf(" (error: %s)", html.EscapeString(err.Error())))
+		progress.SetStatus(fmt.Sprintf("(error: %s)", html.EscapeString(err.Error())))
 	} else {
-		suffix(" done.")
+		progress.SetStatus("done.")
 	}
 
 	return err
@@ -670,12 +639,12 @@ func SyncPostsCommand(ctx *gogram.MessageCtx) {
 	settings.Transaction, err = storage.NewTxBox()
 	if err != nil { log.Println(err.Error(), "newtxbox") }
 
-	err = SyncPosts(ctx, settings, aliases, recount, nil, nil)
+	err = SyncPosts(ctx, settings, aliases, recount, nil)
 	if err == storage.ErrNoLogin {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
 	} else if err != nil {
-		ctx.Bot.Log.Println("Error occurred syncing psts: %s", err.Error())
+		ctx.Bot.ErrorLog.Println("Error occurred syncing posts: %s", err.Error())
 		return
 	}
 
@@ -683,37 +652,27 @@ func SyncPostsCommand(ctx *gogram.MessageCtx) {
 	settings.Transaction.Finalize(true)
 }
 
-func SyncPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, aliases_too, recount_too bool, msg, sfx chan string) (error) {
+func SyncPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, aliases_too, recount_too bool, progress *ProgMessage) (error) {
 	creds, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return err }
 
-	if msg == nil || sfx == nil {
-		msg, sfx = ProgressMessage(ctx, "", "")
-		defer close(msg)
-		defer close(sfx)
+	if progress == nil {
+		progress, _ = ProgressMessage2(data.OMessage{SendData: data.SendData{ReplyToId: &ctx.Msg.Id, ParseMode: data.ParseHTML}, DisableWebPagePreview: true},
+	                                       "", 3 * time.Second, ctx.Bot)
+		defer progress.Close()
 	}
 
-	return SyncPostsInternal(creds.User, creds.ApiKey, settings, aliases_too, recount_too, msg, sfx, nil)
+	return SyncPostsInternal(creds.User, creds.ApiKey, settings, aliases_too, recount_too, progress, nil)
 }
 
-func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSettings, msg, sfx chan string, post_updates chan []types.TPostInfo) (error) {
-	message := func(x string) {
-		if msg != nil {
-			msg <- x
-		}
-	}
-	suffix := func(x string) {
-		if sfx != nil {
-			sfx <- x
-		}
-	}
+func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSettings, progress *ProgMessage, post_updates chan []types.TPostInfo) (error) {
 	update := func(p []types.TPostInfo) {
 		if post_updates != nil {
 			post_updates <- p
 		}
 	}
 
-	message("Syncing posts... ")
+	progress.AppendNotice("Syncing posts... ")
 
 	if settings.Full {
 		err := storage.ClearPosts(settings)
@@ -771,46 +730,46 @@ func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSetting
 	close(fixed_posts)
 	wg.Wait()
 
-	suffix(" done.")
+	progress.SetStatus(" done.")
 	return nil
 }
 
-func SyncPostsInternal(user, api_key string, settings storage.UpdaterSettings, aliases_too, recount_too bool, msg, sfx chan string, post_updates chan []types.TPostInfo) (error) {
-	message := func(x string) {
-		if msg != nil {
-			msg <- x
-		}
-	}
-	suffix := func(x string) {
-		if sfx != nil {
-			sfx <- x
-		}
-	}
+func SyncPostsInternal(user, api_key string, settings storage.UpdaterSettings, aliases_too, recount_too bool, progress *ProgMessage, post_updates chan []types.TPostInfo) (error) {
+	progress.AppendNotice("Syncing activity... ")
 
-	message("Syncing activity... ")
-
-	if err := SyncOnlyPostsInternal(user, api_key, settings, msg, sfx, post_updates); err != nil { return err }
-	if err := SyncTagsInternal(user, api_key, settings, msg, sfx); err != nil { return err }
+	if err := SyncOnlyPostsInternal(user, api_key, settings, progress, post_updates); err != nil { return err }
+	if err := SyncTagsInternal(user, api_key, settings, progress); err != nil { return err }
 
 	if aliases_too {
-		if err := SyncAliasesInternal(user, api_key, settings, msg, sfx); err != nil { return err }
+		if err := SyncAliasesInternal(user, api_key, settings, progress); err != nil { return err }
 	}
 
-	message("Resolving post tags...")
+	progress.AppendNotice("Resolving post tags...")
 
-	if err := storage.ImportPostTagsFromNameToID(settings, sfx); err != nil { return err }
+	var err error
+	sfx := make(chan string)
+	go func() {
+		err = storage.ImportPostTagsFromNameToID(settings, sfx)
+		close(sfx)
+	}()
+
+	for str := range sfx {
+		progress.SetStatus(str)
+	}
+
+	if err != nil { return err }
 
 	if recount_too {
-		if err := RecountTagsInternal(settings, msg, sfx); err != nil { return err }
-		if err := CalculateAliasedCountsInternal(settings, msg, sfx); err != nil { return err }
+		if err := RecountTagsInternal(settings, progress); err != nil { return err }
+		if err := CalculateAliasedCountsInternal(settings, progress); err != nil { return err }
 	}
-	suffix(" done.")
+	progress.SetStatus("done.")
 
 	return nil
 }
 
 func SyncAliasesCommand(ctx *gogram.MessageCtx) {
-	err := SyncAliases(ctx, storage.UpdaterSettings{}, nil, nil)
+	err := SyncAliases(ctx, storage.UpdaterSettings{}, nil)
 	if err == storage.ErrNoLogin {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
@@ -819,32 +778,21 @@ func SyncAliasesCommand(ctx *gogram.MessageCtx) {
 	}
 }
 
-func SyncAliases(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+func SyncAliases(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
 	creds, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return err }
 
-	if msg == nil || sfx == nil {
-		msg, sfx = ProgressMessage(ctx, "", "")
-		defer close(msg)
-		defer close(sfx)
+	if progress == nil {
+		progress, _ = ProgressMessage2(data.OMessage{SendData: data.SendData{ReplyToId: &ctx.Msg.Id, ParseMode: data.ParseHTML}, DisableWebPagePreview: true},
+	                                       "", 3 * time.Second, ctx.Bot)
+		defer progress.Close()
 	}
 
-	return SyncAliasesInternal(creds.User, creds.ApiKey, settings, msg, sfx)
+	return SyncAliasesInternal(creds.User, creds.ApiKey, settings, progress)
 }
 
-func SyncAliasesInternal(user, api_key string, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
-	message := func(x string) {
-		if msg != nil {
-			msg <- x
-		}
-	}
-	suffix := func(x string) {
-		if sfx != nil {
-			sfx <- x
-		}
-	}
-
-	message("Syncing alias list...")
+func SyncAliasesInternal(user, api_key string, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
+	progress.AppendNotice("Syncing alias list...")
 
 	storage.ClearAliasIndex(settings)
 
@@ -886,7 +834,7 @@ func SyncAliasesInternal(user, api_key string, settings storage.UpdaterSettings,
 	close(fixed_aliases)
 	wg.Wait()
 
-	suffix("done.")
+	progress.SetStatus("done.")
 	return nil
 }
 
@@ -1346,7 +1294,7 @@ func RefetchDeletedPostsCommand(ctx *gogram.MessageCtx) {
 	settings.Transaction, err = storage.NewTxBox()
 	if err != nil { log.Println(err.Error(), "newtxbox") }
 
-	err = RefetchDeletedPosts(ctx, settings, nil, nil)
+	err = RefetchDeletedPosts(ctx, settings, nil)
 	if err == storage.ErrNoLogin {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
@@ -1359,32 +1307,21 @@ func RefetchDeletedPostsCommand(ctx *gogram.MessageCtx) {
 	settings.Transaction.Finalize(true)
 }
 
-func RefetchDeletedPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+func RefetchDeletedPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
 	creds, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return err }
 
-	if msg == nil || sfx == nil {
-		msg, sfx = ProgressMessage(ctx, "", "")
-		defer close(msg)
-		defer close(sfx)
+	if progress == nil {
+		progress, _ = ProgressMessage2(data.OMessage{SendData: data.SendData{ReplyToId: &ctx.Msg.Id, ParseMode: data.ParseHTML}, DisableWebPagePreview: true},
+	                                       "", 3 * time.Second, ctx.Bot)
+		defer progress.Close()
 	}
 
-	return RefetchDeletedPostsInternal(creds.User, creds.ApiKey, settings, msg, sfx)
+	return RefetchDeletedPostsInternal(creds.User, creds.ApiKey, settings, progress)
 }
 
-func RefetchDeletedPostsInternal(user, api_key string, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
-	message := func(x string) {
-		if msg != nil {
-			msg <- x
-		}
-	}
-	suffix := func(x string) {
-		if sfx != nil {
-			sfx <- x
-		}
-	}
-
-	message("Syncing deleted posts... ")
+func RefetchDeletedPostsInternal(user, api_key string, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
+	progress.AppendNotice("Syncing deleted posts...")
 
 	fixed_posts := make(chan []int)
 
@@ -1426,13 +1363,13 @@ func RefetchDeletedPostsInternal(user, api_key string, settings storage.UpdaterS
 		}
 		fixed_posts <- post_ids
 
-		suffix(fmt.Sprintf("%.1f%%", float32(latest_id) * 100.0 / float32(highest_id)))
+		progress.SetStatus(fmt.Sprintf("%.1f%%", float32(latest_id) * 100.0 / float32(highest_id)))
 	}
 
 	close(fixed_posts)
 	wg.Wait()
 
-	suffix(" done.")
+	progress.SetStatus("done.")
 	return nil
 }
 
@@ -1698,13 +1635,16 @@ func Concatenations(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	msg, sfx := ProgressMessage(ctx, "", "")
+	progress, _ := ProgressMessage2(data.OMessage{SendData: data.SendData{ReplyToId: &ctx.Msg.Id, ParseMode: data.ParseHTML}, DisableWebPagePreview: true},
+                                       "", 3 * time.Second, ctx.Bot)
+	defer progress.Close()
+
 	var message bytes.Buffer
 	for _, i := range ignore_list {
 		storage.SetCatsException(cats[i].tag.Name, ctrl)
-		msg <- fmt.Sprintf("Adding %d to ignore list: <code>%s</code>\n", i, cats[i].tag.Name)
+		progress.AppendNotice(fmt.Sprintf("Adding %d to ignore list: <code>%s</code>\n", i, html.EscapeString(cats[i].tag.Name)))
 	}
-	msg <- "\nUpdating posts which need fixing... "
+	progress.AppendNotice("\nUpdating posts which need fixing...")
 
 	updated := 1
 	for _, i := range fix_list {
@@ -1712,7 +1652,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 		cats[i].tag = *t
 		posts, err := storage.LocalTagSearch(cats[i].tag, storage.EnumerateControl{Transaction: txbox})
 		if err != nil {
-			sfx <- fmt.Sprintf(" (error: %s)", err.Error())
+			progress.SetStatus(fmt.Sprintf(" (error: %s)", html.EscapeString(err.Error())))
 			return
 		}
 
@@ -1725,23 +1665,23 @@ func Concatenations(ctx *gogram.MessageCtx) {
 			newp, err := api.UpdatePost(creds.User, creds.ApiKey, p.Id, diff, nil, nil, nil, nil, &reason)
 			err = nil
 			if err != nil {
-				sfx <- fmt.Sprintf(" (error: %s)", err.Error())
+				progress.SetStatus(fmt.Sprintf(" (error: %s)", html.EscapeString(err.Error())))
 				return
 			}
 
 			if newp != nil {
 				err = storage.UpdatePost(*newp, storage.UpdaterSettings{Transaction: txbox})
 				if err != nil {
-					sfx <- fmt.Sprintf(" (error: %s)", err.Error())
+					progress.SetStatus(fmt.Sprintf(" (error: %s)", html.EscapeString(err.Error())))
 					return
 				}
 			}
 
-			sfx <- fmt.Sprintf(" (%d/%d %d: <code>%s</code> -> <code>%s</code>, <code>%s</code>)", updated, -1, p.Id, cats[i].tag.Name, cats[i].subtag1.Name, cats[i].subtag2.Name)
+			progress.SetStatus(fmt.Sprintf(" (%d/%d %d: <code>%s</code> -> <code>%s</code>, <code>%s</code>)", updated, -1, p.Id, html.EscapeString(cats[i].tag.Name), html.EscapeString(cats[i].subtag1.Name), html.EscapeString(cats[i].subtag2.Name)))
 
 			updated++
 		}
-		sfx <- " done."
+		progress.SetStatus("done.")
 		message.WriteString(fmt.Sprintf("Fixing %d: <code>%s</code> -> <code>%s, %s</code>\n", i, html.EscapeString(cats[i].tag.Name), html.EscapeString(cats[i].subtag1.Name), html.EscapeString(cats[i].subtag2.Name)))
 	}
 

@@ -113,7 +113,7 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 			}()
 
 			go func() {
-				tagindex.SyncPostsInternal(this.MySettings.SearchUser, this.MySettings.SearchAPIKey, settings, extra_expensive, extra_expensive, nil, nil, update_chan)
+				tagindex.SyncPostsInternal(this.MySettings.SearchUser, this.MySettings.SearchAPIKey, settings, extra_expensive, extra_expensive, nil, update_chan)
 				close(update_chan)
 				wg.Done()
 				if err != nil { bot.ErrorLog.Println("SyncPostsInternal in maintenance routine:", err.Error()) }
