@@ -127,8 +127,7 @@ type ProgMessage struct {
 
 	// public shared fields. These must be initialized before anything calls.
 	UpdateInterval time.Duration
-	MessageCallback func(string, data.MessageParseMode) (*data.TMessage, error)
-	ParseMode data.MessageParseMode
+	InitialMessage data.OMessage
 	Bot *gogram.TelegramBot
 
 	// public shared fields which are initialized after the first push.
@@ -175,7 +174,8 @@ func (this *ProgMessage) run() {
 func (this *ProgMessage) update() {
 	if this.target != this.actual {
 		if this.Ctx == nil {
-			msg, err := this.MessageCallback(this.target, this.ParseMode)
+			this.InitialMessage.Text = this.target
+			msg, err := this.Bot.Remote.SendMessage(this.InitialMessage)
 			this.Ctx = gogram.NewMessageCtx(msg, false, this.Bot)
 			if this.Ctx == nil {
 				this.err = err
@@ -189,7 +189,7 @@ func (this *ProgMessage) update() {
 			this.Ctx.EditTextAsync(data.OMessageEdit{
 				SendData: data.SendData{
 					Text: this.target,
-					ParseMode: this.ParseMode,
+					ParseMode: this.InitialMessage.ParseMode,
 				},
 			}, nil)
 			this.actual = this.target
@@ -261,15 +261,13 @@ func (this *ProgMessage) Close() {
 	}
 }
 
-func ProgressMessage2(message_factory func(string, data.MessageParseMode) (*data.TMessage, error),
+func ProgressMessage2(initial_message data.OMessage,
 		      initial_text string,
-		      pm data.MessageParseMode,
 		      interval time.Duration,
 		      bot *gogram.TelegramBot) (*ProgMessage, error) {
 	x := ProgMessage{
 		UpdateInterval: interval,
-		MessageCallback: message_factory,
-		ParseMode: pm,
+		InitialMessage: initial_message,
 		Bot: bot,
 	}
 
@@ -1107,10 +1105,8 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	progress, err := ProgressMessage2(func(t string, m data.MessageParseMode) (*data.TMessage, error) {
-		nctx, err := ctx.Reply(data.OMessage{SendData: data.SendData{Text: t, ParseMode: m}, DisableWebPagePreview: true})
-		return nctx.Msg, err
-	}, "Checking for typos...", data.ParseHTML, 3 * time.Second, ctx.Bot)
+	progress, err := ProgressMessage2(data.OMessage{SendData: data.SendData{ReplyToId: &ctx.Msg.Id, ParseMode: data.ParseHTML}, DisableWebPagePreview: true},
+	                                  "Checking for typos...", 3 * time.Second, ctx.Bot)
 	if err != nil {
 		ctx.Bot.ErrorLog.Println("ProgressMessage2() failed:", err.Error())
 		return
