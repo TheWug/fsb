@@ -590,7 +590,7 @@ func RecountTagsInternal(settings storage.UpdaterSettings, msg, sfx chan string)
 
 	err := storage.CountTags(settings, sfx)
 	if err != nil {
-		suffix(fmt.Sprintf(" (error: %s)", err.Error()))
+		suffix(fmt.Sprintf(" (error: %s)", html.EscapeString(err.Error())))
 	} else {
 		suffix(" done.")
 	}
@@ -614,7 +614,7 @@ func CalculateAliasedCountsInternal(settings storage.UpdaterSettings, msg, sfx c
 
 	err := storage.RecalculateAliasedCounts(settings)
 	if err != nil {
-		suffix(fmt.Sprintf(" (error: %s)", err.Error()))
+		suffix(fmt.Sprintf(" (error: %s)", html.EscapeString(err.Error())))
 	} else {
 		suffix(" done.")
 	}
@@ -1479,7 +1479,7 @@ func Blits(ctx *gogram.MessageCtx) {
 	if mode == MODE_LIST {
 		allblits, err := storage.GetMarkedAndUnmarkedBlits(ctrl)
 		if err != nil {
-			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Whoops! " + err.Error(), ParseMode: data.ParseHTML}}, nil)
+			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Whoops! " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
 			return
 		}
 
@@ -1523,7 +1523,7 @@ func Blits(ctx *gogram.MessageCtx) {
 	allknownblits := make(map[int]bool)
 	allblits, err := storage.GetMarkedAndUnmarkedBlits(ctrl)
 	if err != nil {
-		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Whoops! " + err.Error(), ParseMode: data.ParseHTML}}, nil)
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Whoops! " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
 		return
 	}
 
@@ -1645,11 +1645,11 @@ func Concatenations(ctx *gogram.MessageCtx) {
 		var message bytes.Buffer
 		for _, tag := range manual_ignore {
 			storage.SetCatsException(tag, ctrl)
-			message.WriteString(fmt.Sprintf("Adding to ignore list: <code>%s</code>\n", tag))
+			message.WriteString(fmt.Sprintf("Adding to ignore list: <code>%s</code>\n", html.EscapeString(tag)))
 		}
 		for _, tag := range manual_unignore {
 			storage.ClearCatsException(tag, ctrl)
-			message.WriteString(fmt.Sprintf("Removing from ignore list: <code>%s</code>\n", tag))
+			message.WriteString(fmt.Sprintf("Removing from ignore list: <code>%s</code>\n", html.EscapeString(tag)))
 		}
 
 		if manual_ignore != nil || manual_unignore != nil {
@@ -1695,7 +1695,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 		}
 
 		for i, t := range cats {
-			message.WriteString(fmt.Sprintf("%d: <code>%s</code> + <code>%s</code> (%d)\n", i, t.subtag1.Name, t.subtag2.Name, t.tag.Count))
+			message.WriteString(fmt.Sprintf("%d: <code>%s</code> + <code>%s</code> (%d)\n", i, html.EscapeString(t.subtag1.Name), html.EscapeString(t.subtag2.Name), t.tag.Count))
 		}
 
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: message.String(), ParseMode: data.ParseHTML}}, nil)
@@ -1746,7 +1746,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 			updated++
 		}
 		sfx <- " done."
-		message.WriteString(fmt.Sprintf("Fixing %d: <code>%s</code> -> <code>%s, %s</code>\n", i, cats[i].tag.Name, cats[i].subtag1.Name, cats[i].subtag2.Name))
+		message.WriteString(fmt.Sprintf("Fixing %d: <code>%s</code> -> <code>%s, %s</code>\n", i, html.EscapeString(cats[i].tag.Name), html.EscapeString(cats[i].subtag1.Name), html.EscapeString(cats[i].subtag2.Name)))
 	}
 
 	ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: message.String(), ParseMode: data.ParseHTML}}, nil)
