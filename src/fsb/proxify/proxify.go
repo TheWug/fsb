@@ -203,7 +203,22 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 		}
 		if debugmode { GenerateDebugText(&foo, result) }
 		return foo
-	} else if result.File_ext == "webm" || result.File_ext == "swf" {
+	} else if result.File_ext == "webm" {
+		foo := data.TInlineQueryResultPhoto{
+			Type:        "photo",
+			Id:          salt + result.Md5,
+			PhotoUrl:    result.Sample_url,
+			ThumbUrl:    result.Preview_url,
+			PhotoWidth:  &width,
+			PhotoHeight: &height,
+			ParseMode:   data.ParseHTML,
+			Caption:     &caption,
+			ReplyMarkup: replymarkup,
+		}
+
+		if debugmode { GenerateDebugText(&foo, result) }
+		return foo
+	} else if result.File_ext == "swf" {
 		// not handled yet, so do nothing
 		log.Printf("[Wug     ] Not handling result ID %d (it's an incompatible animation)\n", result.Id)
 		return nil
