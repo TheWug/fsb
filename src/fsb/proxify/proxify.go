@@ -159,6 +159,17 @@ func GenerateCaption(result types.TPostInfo, force_safe bool, query string, sett
 func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, query string, debugmode bool, settings CaptionSettings) (interface{}) {
 	salt := "x_"
 
+	s2p := func(s string) *string { return &s }
+	replymarkup := &data.TInlineKeyboard{
+		Buttons: [][]data.TInlineKeyboardButton{
+			[]data.TInlineKeyboardButton{
+				data.TInlineKeyboardButton{Text: fmt.Sprintf("\U0001F44D %d", result.Upvotes), Data: s2p(fmt.Sprintf("/upvote %d", result.Id))},
+				data.TInlineKeyboardButton{Text: fmt.Sprintf("\U0001F44E %d", result.Downvotes), Data: s2p(fmt.Sprintf("/downvote %d", result.Id))},
+				data.TInlineKeyboardButton{Text: fmt.Sprintf("\u2764\uFE0F %d", result.Fav_count), Data: s2p(fmt.Sprintf("/favorite %d", result.Id))},
+			},
+		},
+	}
+
 	width := result.Width
 	height := result.Height
 
@@ -174,6 +185,7 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 			GifHeight:   &height,
 			ParseMode:   data.ParseHTML,
 			Caption:     &caption,
+			ReplyMarkup: replymarkup,
 		}
 		if debugmode { GenerateDebugText(&foo, result) }
 		return foo
@@ -201,20 +213,10 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 			PhotoHeight: &height,
 			ParseMode:   data.ParseHTML,
 			Caption:     &caption,
+			ReplyMarkup: replymarkup,
 		}
 
 		if debugmode { GenerateDebugText(&foo, result) }
-
-		s2p := func(s string) *string { return &s }
-		foo.ReplyMarkup = &data.TInlineKeyboard{
-			Buttons: [][]data.TInlineKeyboardButton{
-				[]data.TInlineKeyboardButton{
-					data.TInlineKeyboardButton{Text: fmt.Sprintf("\U0001F44D %d", result.Upvotes), Data: s2p(fmt.Sprintf("/upvote %d", result.Id))},
-					data.TInlineKeyboardButton{Text: fmt.Sprintf("\U0001F44E %d", result.Downvotes), Data: s2p(fmt.Sprintf("/downvote %d", result.Id))},
-					data.TInlineKeyboardButton{Text: fmt.Sprintf("\u2764\uFE0F %d", result.Fav_count), Data: s2p(fmt.Sprintf("/favorite %d", result.Id))},
-				},
-			},
-		}
 		return foo
 	}
 	return nil
