@@ -117,9 +117,23 @@ func GenerateCaption(result types.TPostInfo, force_safe bool, query string, sett
 	post_url := fmt.Sprintf("https://%s/posts/%d", domain(force_safe), result.Id)
 	image_url := MaybeSafeify(result.File_url, force_safe)
 
+	display_type := ""
+	switch result.File_ext {
+	case "jpg", "jpeg", "png":
+		display_type = "Image"
+	case "webm":
+		display_type = "WEBM Animation"
+	case "gif":
+		display_type = "GIF Animation"
+	case "swf":
+		display_type = "Flash Animation"
+	default:
+		display_type = "Image"
+	}
+
 	var caption []string
 	// add the post and image links
-	caption = append(caption, fmt.Sprintf(`View <a href="%s">Post</a>, <a href="%s">Image</a>`, post_url, image_url))
+	caption = append(caption, fmt.Sprintf(`View <a href="%s">Post</a>, <a href="%s">%s</a>`, post_url, image_url, display_type))
 
 	// add the artist links
 	if len(result.Artist) == 0 {
