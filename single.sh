@@ -8,6 +8,7 @@ then
 fi
 
 ffmpeg	-i - \
+	-y \
 	-f mp4 \
 	-vcodec libx264 \
 	$audio \
@@ -15,7 +16,9 @@ ffmpeg	-i - \
 	-preset veryfast \
 	-tune zerolatency \
 	-crf 25 \
+	-fs 9.75M \
+	-protocol_whitelist -all,file \
 	-threads 3 \
 	-movflags faststart \
-	-vf "scale=w='400*iw/trunc(max(800,max(iw,ih))/2)':h='400*ih/trunc(max(800,max(iw,ih))/2)':flags=fast_bilinear" \
+	-vf "scale=w='2*trunc(800*iw/(2*max(800,max(iw,ih))))':h='2*trunc(800*ih/(2*max(800,max(iw,ih))))':flags=fast_bilinear" \
 	"$filename"
