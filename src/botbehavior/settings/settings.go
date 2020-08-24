@@ -1,7 +1,6 @@
-package botbehavior
+package settings
 
 import (
-	"fsb/proxify"
 	"storage"
 
 	"github.com/thewug/gogram"
@@ -18,6 +17,12 @@ const MAX_RESULTS_PER_PAGE = 50
 const MAX_ARTISTS = 10
 const MAX_CHARS = 10
 const MAX_SOURCES = 10
+
+type CaptionSettings struct {
+	MaxArtists int `json:"max_artists"`
+	MaxChars   int `json:"max_chars"`
+	MaxSources int `json:"max_sources"`
+}
 
 type Settings struct {
 	gogram.InitSettings
@@ -42,9 +47,13 @@ type Settings struct {
 	BlacklistedPhotoID data.FileID `json:"blacklisted_photo_id"`
 	ErrorPhotoID       data.FileID `json:"error_photo_id"`
 
+	MediaConvertDirectory string      `json:"media_convert_directory"`
+	Webm2Mp4ConvertScript string      `json:"webm2mp4_convert_script"`
+	MediaStoreChannel     data.ChatID `json:"media_store_channel"`
+
 	SourceMap        json.RawMessage `json:"source_map"`
 
-	proxify.CaptionSettings
+	CaptionSettings
 }
 
 func (s Settings) GetSourceMap() json.RawMessage {

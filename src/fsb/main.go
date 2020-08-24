@@ -3,6 +3,7 @@ package main
 import (
 	"bot"
 	"botbehavior"
+	"botbehavior/settings"
 	"storage"
 
 	"github.com/thewug/gogram"
@@ -34,7 +35,7 @@ func main() {
 
 	var thebot gogram.TelegramBot
 	machine := gogram.NewMessageStateMachine()
-	var settings botbehavior.Settings
+	var settings settings.Settings
 	var behavior botbehavior.Behavior
 	behavior.ForwardTo = machine
 

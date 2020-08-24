@@ -1,6 +1,7 @@
 package proxify
 
 import (
+	"botbehavior/settings"
 	"api/types"
 
 	"github.com/thewug/gogram/data"
@@ -25,14 +26,8 @@ func ContainsSafeRatingTag(tags string) (bool) {
 	return false
 }
 
-type CaptionSettings struct {
-	MaxArtists int `json:"max_artists"`
-	MaxChars   int `json:"max_chars"`
-	MaxSources int `json:"max_sources"`
-}
-
-// takes an api URL and transforms the domain to filtered api.
-// building a filtered api URL from scratch is more efficient than using this,
+// takes an api URL and transforms the domain to the filtered api endpoint.
+// building a filtered endpoint URL from scratch is more efficient than using this,
 // so this should be used primarily for URLs retrieved from the API,
 // not ones assembled locally.
 
@@ -63,7 +58,7 @@ func sourceLine(url, display string) string {
 	return fmt.Sprintf(`<a href="%s">%s</a>`, url, display)
 }
 
-func sourcesList(sources []string, settings CaptionSettings) []string {
+func sourcesList(sources []string, settings settings.CaptionSettings) []string {
 	sort.Slice(sources, func(i, j int) bool {
 		return len(sources[i]) < len(sources[j])
 	})
@@ -113,7 +108,7 @@ func sourcesList(sources []string, settings CaptionSettings) []string {
 	return append(all_sources, "Sources: " + strings.Join(output_source_list, ", "))
 }
 
-func GenerateCaption(result types.TPostInfo, force_safe bool, query string, settings CaptionSettings) string {
+func GenerateCaption(result types.TPostInfo, force_safe bool, query string, settings settings.CaptionSettings) string {
 	post_url := fmt.Sprintf("https://%s/posts/%d", domain(force_safe), result.Id)
 	image_url := MaybeSafeify(result.File_url, force_safe)
 
@@ -165,12 +160,13 @@ func GenerateCaption(result types.TPostInfo, force_safe bool, query string, sett
 		caption = append(caption, fmt.Sprintf(`(search: %s)`, html.EscapeString(query)))
 	}
 
-	return strings.Join(caption, "\n")
+	output := strings.Join(caption, "\n")
+	return &output
 }
 
 // https://api/artists/show_or_new?name=dizzyvixen
 
-func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, query string, debugmode bool, settings CaptionSettings) (interface{}) {
+func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, query string, debugmode bool, settings settings.CaptionSettings) (interface{}) {
 	salt := "x_"
 
 	s2p := func(s string) *string { return &s }
