@@ -108,7 +108,7 @@ func sourcesList(sources []string, settings settings.CaptionSettings) []string {
 	return append(all_sources, "Sources: " + strings.Join(output_source_list, ", "))
 }
 
-func GenerateCaption(result types.TPostInfo, force_safe bool, query string, settings settings.CaptionSettings) string {
+func GenerateCaption(result types.TPostInfo, force_safe bool, query string, settings settings.CaptionSettings) *string {
 	post_url := fmt.Sprintf("https://%s/posts/%d", domain(force_safe), result.Id)
 	image_url := MaybeSafeify(result.File_url, force_safe)
 
@@ -183,8 +183,6 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 	width := result.Width
 	height := result.Height
 
-	caption := GenerateCaption(result, force_safe, query, settings)
-
 	if result.File_ext == "gif" {
 		foo := data.TInlineQueryResultGif{
 			Type:        "gif",
@@ -194,7 +192,7 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 			GifWidth:    &width,
 			GifHeight:   &height,
 			ParseMode:   data.ParseHTML,
-			Caption:     &caption,
+			Caption:     GenerateCaption(result, force_safe, query, settings),
 			ReplyMarkup: replymarkup,
 		}
 		if debugmode { GenerateDebugText(&foo, result) }
@@ -208,7 +206,7 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 			PhotoWidth:  &width,
 			PhotoHeight: &height,
 			ParseMode:   data.ParseHTML,
-			Caption:     &caption,
+			Caption:     GenerateCaption(result, force_safe, query, settings),
 			ReplyMarkup: replymarkup,
 		}
 
@@ -237,7 +235,7 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 			PhotoWidth:  &width,
 			PhotoHeight: &height,
 			ParseMode:   data.ParseHTML,
-			Caption:     &caption,
+			Caption:     GenerateCaption(result, force_safe, query, settings),
 			ReplyMarkup: replymarkup,
 		}
 
