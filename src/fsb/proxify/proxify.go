@@ -167,8 +167,6 @@ func GenerateCaption(result types.TPostInfo, force_safe bool, query string, sett
 // https://api/artists/show_or_new?name=dizzyvixen
 
 func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, query string, debugmode bool, settings settings.CaptionSettings) (interface{}) {
-	salt := "x_"
-
 	s2p := func(s string) *string { return &s }
 	replymarkup := &data.TInlineKeyboard{
 		Buttons: [][]data.TInlineKeyboardButton{
@@ -186,7 +184,7 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 	if result.File_ext == "gif" {
 		foo := data.TInlineQueryResultGif{
 			Type:        "gif",
-			Id:          salt + result.Md5,
+			Id:          result.Md5,
 			GifUrl:      result.File_url,
 			ThumbUrl:    result.Preview_url,
 			GifWidth:    &width,
@@ -200,7 +198,7 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 	} else if result.File_ext == "webm" {
 		foo := data.TInlineQueryResultPhoto{
 			Type:        "photo",
-			Id:          salt + result.Md5,
+			Id:          result.Md5,
 			PhotoUrl:    result.Sample_url,
 			ThumbUrl:    result.Preview_url,
 			PhotoWidth:  &width,
@@ -229,7 +227,7 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 
 		foo := data.TInlineQueryResultPhoto{
 			Type:        "photo",
-			Id:          salt + result.Md5,
+			Id:          result.Md5,
 			PhotoUrl:    file_url,
 			ThumbUrl:    result.Preview_url,
 			PhotoWidth:  &width,
