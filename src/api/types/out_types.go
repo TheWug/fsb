@@ -75,6 +75,10 @@ func DeletedPostsAfterId(id int) (string) {
 	return fmt.Sprintf("status:deleted order:id_asc id:>%d", id)
 }
 
+func SinglePostByMd5(md5 string) (string) {
+	return fmt.Sprintf("status:any md5:%s", md5)
+}
+
 func (this PageSelector) String() string {
 	if this.After != nil {
 		return fmt.Sprintf("a%d", *this.After)
