@@ -2,8 +2,12 @@ package proxify
 
 import (
 	"botbehavior/settings"
+	"api"
 	"api/types"
+	"fsb/proxify/webm"
+	"storage"
 
+	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"
 
 	"fmt"
@@ -269,5 +273,54 @@ func GenerateDebugText(iqr interface{}, result types.TPostInfo) {
 	case *data.TInlineQueryResultGif:
 		imt.MessageText = fmt.Sprintf("`ID:    `%d\n`MD5:   `%s\n`Size:  `%dx%d\n`Full:  `%s\n`Thumb: `%s\n", result.Id, result.Md5, *v.GifWidth, *v.GifHeight, v.GifUrl, v.ThumbUrl)
 		v.InputMessageContent = &imt
+	case *data.TInlineQueryResultCachedAnimation:
+		imt.MessageText = fmt.Sprintf("`ID:    `%d\n`MD5:   `%s\n`Size:  `??? (cached)\n`ID:  `%s\n", result.Id, result.Md5, v.AnimationId)
+		v.InputMessageContent = &imt
 	}
+}
+
+func HandleWebmConversionRequest(ctx *gogram.InlineResultCtx, creds storage.UserCreds) {
+	md5 := strings.Split(ctx.Result.ResultId, "_")[0]
+
+	posts, err := api.ListPosts(creds.User, creds.ApiKey, types.ListPostOptions{SearchQuery: types.SinglePostByMd5(md5)})
+
+	if len(posts) != 1 {
+		ctx.Bot.ErrorLog.Println("Got wrong number of posts for single post lookup?")
+		return
+	} else if err != nil {
+		ctx.Bot.ErrorLog.Println("Error looking up post by MD5 during webm conversion prep:", err.Error())
+		return
+	}
+
+	post := posts[0]
+	file_id := webm.GetMp4ForWebm(&post)
+
+	if ctx.Result.InlineMessageId == nil || file_id == nil { return }
+
+	UpdateWebmPostWithConvertedFile(ctx, &post, *file_id)
+}
+
+func UpdateWebmPostWithConvertedFile(ctx *gogram.InlineResultCtx, post *types.TPostInfo, file_id data.FileID) {
+	s2p := func(s string) *string { return &s }
+	edit := data.OMediaEdit{
+		SourceData: data.SourceData{
+			SourceInlineId: *ctx.Result.InlineMessageId,
+		},
+		Media: data.TInputMediaAnimation{
+			ParseMode: data.ParseHTML,
+			Caption: *GenerateCaption(*post, false, ctx.Result.Query, settings.CaptionSettings{3,3,3}, false),
+			Media: file_id,
+		},
+		ReplyMarkup: &data.TInlineKeyboard{
+			Buttons: [][]data.TInlineKeyboardButton{
+				[]data.TInlineKeyboardButton{
+					data.TInlineKeyboardButton{Text: fmt.Sprintf("\U0001F44D %d", post.Upvotes), Data: s2p(fmt.Sprintf("/upvote %d", post.Id))},
+					data.TInlineKeyboardButton{Text: fmt.Sprintf("\U0001F44E %d", post.Downvotes), Data: s2p(fmt.Sprintf("/downvote %d", post.Id))},
+					data.TInlineKeyboardButton{Text: fmt.Sprintf("\u2764\uFE0F %d", post.Fav_count), Data: s2p(fmt.Sprintf("/favorite %d", post.Id))},
+				},
+			},
+		},
+	}
+
+	ctx.Bot.Remote.EditMessageMediaAsync(edit, nil)
 }
