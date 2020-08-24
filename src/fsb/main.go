@@ -4,6 +4,7 @@ import (
 	"bot"
 	"botbehavior"
 	"botbehavior/settings"
+	"fsb/proxify/webm"
 	"storage"
 
 	"github.com/thewug/gogram"
@@ -119,6 +120,8 @@ func main() {
 
 	err := p.LoadAllStates(machine)
 	if err != nil { thebot.ErrorLog.Println(err.Error()) }
+
+	webm.ConfigureWebmToTelegramMp4Converter(&thebot, &settings)
 
 	thebot.MainLoop()
 	os.Exit(0)

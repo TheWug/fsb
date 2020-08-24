@@ -203,16 +203,30 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 		if debugmode { GenerateDebugText(&foo, result) }
 		return foo
 	} else if result.File_ext == "webm" {
-		foo := data.TInlineQueryResultPhoto{
-			Type:        "photo",
-			Id:          result.Md5,
-			PhotoUrl:    result.Sample_url,
-			ThumbUrl:    result.Preview_url,
-			PhotoWidth:  &width,
-			PhotoHeight: &height,
-			ParseMode:   data.ParseHTML,
-			Caption:     GenerateCaption(result, force_safe, query, settings, false),
-			ReplyMarkup: replymarkup,
+		var foo interface{}
+		file_id := webm.CheckMp4ForWebm(&result)
+
+		if file_id != nil {
+			foo = data.TInlineQueryResultCachedAnimation{
+				Type:        "mpeg4_gif",
+				Id:          result.Md5,
+				AnimationId:*file_id,
+				ParseMode:   data.ParseHTML,
+				Caption:     GenerateCaption(result, force_safe, query, settings, false),
+				ReplyMarkup: replymarkup,
+			}
+		} else {
+			foo = data.TInlineQueryResultPhoto{
+				Type:        "photo",
+				Id:          result.Md5 + "_cvt",
+				PhotoUrl:    result.Sample_url,
+				ThumbUrl:    result.Preview_url,
+				PhotoWidth:  &width,
+				PhotoHeight: &height,
+				ParseMode:   data.ParseHTML,
+				Caption:     GenerateCaption(result, force_safe, query, settings, true),
+				ReplyMarkup: replymarkup,
+			}
 		}
 
 		if debugmode { GenerateDebugText(&foo, result) }

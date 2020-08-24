@@ -579,4 +579,10 @@ func (this *Behavior) GetBlacklistedPlaceholder(query string) *data.TInlineQuery
 
 func (this *Behavior) ProcessInlineQueryResult(ctx *gogram.InlineResultCtx) {
 	ctx.Bot.Log.Printf("[behavior] Inline selection: %s (by %d %s)\n", ctx.Result.ResultId, ctx.Result.From.Id, ctx.Result.From.UsernameString())
+
+	if !strings.HasSuffix(ctx.Result.ResultId, "_cvt") {
+		return
+	}
+
+	go proxify.HandleWebmConversionRequest(ctx, this.MySettings.DefaultSearchCredentials())
 }
