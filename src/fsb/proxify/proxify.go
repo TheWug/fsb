@@ -108,7 +108,7 @@ func sourcesList(sources []string, settings settings.CaptionSettings) []string {
 	return append(all_sources, "Sources: " + strings.Join(output_source_list, ", "))
 }
 
-func GenerateCaption(result types.TPostInfo, force_safe bool, query string, settings settings.CaptionSettings) *string {
+func GenerateCaption(result types.TPostInfo, force_safe bool, query string, settings settings.CaptionSettings, convert_notice bool) *string {
 	post_url := fmt.Sprintf("https://%s/posts/%d", domain(force_safe), result.Id)
 	image_url := MaybeSafeify(result.File_url, force_safe)
 
@@ -129,6 +129,9 @@ func GenerateCaption(result types.TPostInfo, force_safe bool, query string, sett
 	var caption []string
 	// add the post and image links
 	caption = append(caption, fmt.Sprintf(`View <a href="%s">Post</a>, <a href="%s">%s</a>`, post_url, image_url, display_type))
+	if convert_notice {
+		caption = append(caption, "(Converting: webm \u27a1 gif)")
+	}
 
 	// add the artist links
 	if len(result.Artist) == 0 {
@@ -190,7 +193,7 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 			GifWidth:    &width,
 			GifHeight:   &height,
 			ParseMode:   data.ParseHTML,
-			Caption:     GenerateCaption(result, force_safe, query, settings),
+			Caption:     GenerateCaption(result, force_safe, query, settings, false),
 			ReplyMarkup: replymarkup,
 		}
 		if debugmode { GenerateDebugText(&foo, result) }
@@ -204,7 +207,7 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 			PhotoWidth:  &width,
 			PhotoHeight: &height,
 			ParseMode:   data.ParseHTML,
-			Caption:     GenerateCaption(result, force_safe, query, settings),
+			Caption:     GenerateCaption(result, force_safe, query, settings, false),
 			ReplyMarkup: replymarkup,
 		}
 
@@ -233,7 +236,7 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 			PhotoWidth:  &width,
 			PhotoHeight: &height,
 			ParseMode:   data.ParseHTML,
-			Caption:     GenerateCaption(result, force_safe, query, settings),
+			Caption:     GenerateCaption(result, force_safe, query, settings, false),
 			ReplyMarkup: replymarkup,
 		}
 
