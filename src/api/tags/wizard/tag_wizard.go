@@ -69,6 +69,7 @@ const (
 )
 
 var wizard_rule_done WizardRule = WizardRule{id: -1, prompt: "You've finished the tag wizard."}
+var wizard_rule_norules WizardRule = WizardRule{id: -2, prompt: "You haven't set any tag rules!  Enter some tags manually."}
 
 const (
 	CMD_NEXT    = "/w-next"
@@ -245,6 +246,7 @@ func (this *WizardRuleset) Visit(id int) {
 }
 
 func (this *WizardRuleset) Rule(id int) *WizardRule {
+	if len(this.interactive_rules) == 0 { return &wizard_rule_norules }
 	if id == -1 { return &wizard_rule_done }
 	if id >= len(this.interactive_rules) { return nil }
 	return &this.interactive_rules[id]
@@ -397,9 +399,11 @@ func (this *TagWizard) ClearTag(tag string) {
 
 func (this *TagWizard) Buttons() data.TInlineKeyboard {
 	var kbd data.TInlineKeyboard
-	if this.Current() == &wizard_rule_done {
+	if this.Current() == &wizard_rule_norules {
+		// do nothing, this stand-in rule has no buttons.
+	} else if this.Current() == &wizard_rule_done {
 		kbd.AddButton(data.TInlineKeyboardButton{Text: "\U0001f501 Start Over", Data: &wizard_cmd_restart})
-	} else { 
+	} else {
 		kbd.AddButton(data.TInlineKeyboardButton{Text: "\u27a1 Next", Data: &wizard_cmd_next})
 		kbd.AddButton(data.TInlineKeyboardButton{Text: "\U0001f501 Start Over", Data: &wizard_cmd_restart})
 		for _, b := range this.Current().Buttons(&this.tags, this) {
