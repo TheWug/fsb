@@ -240,7 +240,7 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 		// and the limits seem to kick in long before the posted limits on the bot api say they should.
 		// here is a shitty heuristic which will hopefilly be good enough to at least make most of them display SOMETHING.
 		file_url := result.File_url
-		if width * height > 13000000 { // images larger than 13MP will use the sample image instead of the full res
+		if width * height > 10000000 { // images larger than 10MP will use the sample image instead of the full res
 			file_url = result.Sample_url
 			width = result.Sample_width
 			height = result.Sample_height
