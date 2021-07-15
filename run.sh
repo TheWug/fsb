@@ -3,7 +3,7 @@
 # http://stackoverflow.com/questions/59895/can-a-bash-script-tell-which-directory-it-is-stored-in
 cd "$( dirname "${BASH_SOURCE[0]}" )"
 
-if GOPATH=$(pwd) go install fsb;
+if GOROOT= GOPATH=$(pwd) /usr/bin/go install fsb;
 then
 	true;
 else
