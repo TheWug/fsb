@@ -906,6 +906,68 @@ type BlitData struct {
 	Valid bool
 }
 
+func name_of(tag_type apitypes.TagCategory) string {
+	switch tag_type {
+	case apitypes.TCGeneral:
+		return "[GENERAL]"
+	case apitypes.TCSpecies:
+		return "[SPECIES]"
+	case apitypes.TCArtist:
+		return "[ARTIST]"
+	case apitypes.TCCopyright:
+		return "[CPYRIGT]"
+	case apitypes.TCCharacter:
+		return "[CHRACTR]"
+	case apitypes.TCLore:
+		return "[LORE]"
+	case apitypes.TCMeta:
+		return "[META]"
+	case apitypes.TCInvalid:
+		return "[INVALID]"
+	default:
+		return "[UNKNOWN]"
+	}
+}
+
+func (b BlitData) String() string {
+	return fmt.Sprintf("%8d %9s %s", b.Count, name_of(b.Type), b.Name)
+}
+
+func GetBlits(yes, no, wild bool, ctrl EnumerateControl) ([]BlitData, []BlitData, []BlitData, error) {
+	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
+	defer ctrl.Transaction.Finalize(mine)
+	if ctrl.Transaction.err != nil { return nil, nil, nil, ctrl.Transaction.err }
+
+	var blit BlitData
+	var out_yes, out_no, out_wild []BlitData
+
+	query := "SELECT is_blit, tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM tag_index LEFT JOIN blit_tag_registry USING (tag_id) WHERE (LENGTH(tag_name) <= 2 OR is_blit IS NOT NULL) AND (($1 AND is_blit IS NULL) OR ($2 AND is_blit IS TRUE) OR ($3 AND is_blit IS FALSE)) ORDER BY is_blit, tag_count DESC"
+	rows, err := tx.Query(query, wild, yes, no)
+	if err != nil { return nil, nil, nil, err }
+	defer rows.Close()
+
+	for rows.Next() {
+		var status *bool
+		err = rows.Scan(&status, &blit.Id, &blit.Name, &blit.Count, &blit.Type, &blit.Locked)
+
+		if err != nil { return nil, nil, nil, err }
+
+		if status == nil {
+			blit.Valid = false
+			out_wild = append(out_wild, blit)
+		} else if *status == true {
+			blit.Valid = true
+			out_yes = append(out_yes, blit)
+		} else {
+			blit.Valid = false
+			out_no = append(out_no, blit)
+		}
+	}
+
+	ctrl.Transaction.commit = mine
+	return out_yes, out_no, out_wild, nil
+}
+
 func GetMarkedAndUnmarkedBlits(ctrl EnumerateControl) ([]BlitData, error) {
 	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
 	defer ctrl.Transaction.Finalize(mine)
