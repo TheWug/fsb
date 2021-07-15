@@ -1306,6 +1306,16 @@ func (ls *ListSettings) Apply(other ListSettings) {
 	}
 }
 
+// a good blit is any tag for which the chance of it appearing
+// randomly as a prefix or suffix in another tag greatly outweighs
+// the likelihood of someone wanting to use it legitimately.
+// possible examples:
+// ing:  a niche species name, but also an extremely common word suffix, so it's a blit.
+// head: an invalid tag, but a common suffix, so it's a blit.
+// up:   an invalid tag, but a short, common sequence, so it's a blit.
+// m:    a single letter likely to appear at the beginning or end of many words, but also an alias for male (one of the most common tags on the site), so it's not a blit.
+// m4:   a sparsely used weapon tag, but a fairly unlikely suffix for anything else, so it's not a blit.
+
 func Blits(ctx *gogram.MessageCtx) {
 	txbox, err := storage.NewTxBox()
 	if err != nil {
