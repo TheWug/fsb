@@ -17,9 +17,9 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1336,7 +1336,7 @@ func Blits(ctx *gogram.MessageCtx) {
 
 	mode := MODE_LIST
 	include, exclude, to_delete := make(map[string]bool), make(map[string]bool), make(map[string]bool)
-	
+
 	list_settings := ListSettings{wild: true}
 
 	for _, token := range ctx.Cmd.Args {
@@ -1365,94 +1365,64 @@ func Blits(ctx *gogram.MessageCtx) {
 	}
 
 	if mode == MODE_LIST {
-		allblits, err := storage.GetMarkedAndUnmarkedBlits(ctrl)
+		yesblits, noblits, wildblits, err := storage.GetBlits(list_settings.yes, list_settings.no, list_settings.wild, ctrl)
 		if err != nil {
 			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Whoops! " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
 			return
 		}
 
 		var buf bytes.Buffer
-		last_valid := true
 
-		buf.WriteString("<b>Blit List</b>\n<pre>")
-		for _, b := range allblits {
-			if last_valid != b.Valid {
-				buf.WriteString("</pre>\n\n<b>Ignore List</b>\n<pre>")
-			}
-			last_valid = b.Valid
-			if len(b.Name) + 1 + buf.Len() > 4095 + 36 - 24 { break } // 4095 max, 36 chars of HTML tag, 24 characters of string literal
-			buf.WriteString(html.EscapeString(b.Name))
-			buf.WriteRune(' ')
+		buf.WriteString("== Blit List ==\n")
+		for _, b := range yesblits {
+			buf.WriteString(fmt.Sprintf("%v\n", b))
 		}
-		if last_valid != false {
-			buf.WriteString("</pre>\n\n<b>Non-Blit List</b>\n")
-		} else {
-			buf.WriteString("</pre>")
+		buf.WriteString("\n== Marked Non-Blit List ==\n")
+		for _, b := range noblits {
+			buf.WriteString(fmt.Sprintf("%v\n", b))
+		}
+		buf.WriteString("\n== Wild Blit List ==\n")
+		for _, b := range wildblits {
+			buf.WriteString(fmt.Sprintf("%v\n", b))
 		}
 
-		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: buf.String(), ParseMode: data.ParseHTML}}, nil)
+		ctx.Bot.Remote.SendDocumentAsync(data.ODocument{SendData: data.SendData{Text: "Blit List", ReplyToId: &ctx.Msg.Id, TargetData: data.TargetData{ChatId: ctx.Msg.Chat.Id}}, MediaData: data.MediaData{File: ioutil.NopCloser(&buf), FileName: "blitlist.txt"}}, nil)
 		return
 	}
 
-	tags, _ := storage.EnumerateAllTags(ctrl)
-	var intermediate, blits types.TTagInfoArray
-	for _, t := range tags {
-		if utf8.RuneCountInString(t.Name) <= 2 {
-			intermediate = append(intermediate, t)
-		}
-
-		if include[t.Name] {
-			storage.MarkBlit(t.Id, true, ctrl)
-		} else if exclude[t.Name] {
-			storage.MarkBlit(t.Id, false, ctrl)
+	var bad_tags []string
+	for tag, _ := range include {
+		err := storage.MarkBlitByName(tag, true, ctrl)
+		if err == storage.ErrNoTag {
+			bad_tags = append(bad_tags, tag)
+		} else if err != nil {
+			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Whoops! " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
+			return
 		}
 	}
-
-	allknownblits := make(map[int]bool)
-	allblits, err := storage.GetMarkedAndUnmarkedBlits(ctrl)
-	if err != nil {
-		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Whoops! " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
-		return
-	}
-
-	for _, b := range allblits {
-		allknownblits[b.Id] = true
-	}
-
-	for _, b := range intermediate {
-		if !allknownblits[b.Id] { blits = append(blits, b) }
-	}
-
-	sort.Slice(blits, func(i, j int) (bool) {
-		return blits[i].Count > blits[j].Count
-	})
-
-	var buf bytes.Buffer
-	for _, t := range blits {
-		if t.Count <= 0 { continue }
-		tagtype := "UNKNOWN"
-		if t.Type == types.TCGeneral {
-			tagtype = "GENERAL"
-		} else if t.Type == types.TCSpecies {
-			tagtype = "SPECIES"
-		} else if t.Type == types.TCArtist {
-			tagtype = "ARTIST "
-		} else if t.Type == types.TCCopyright {
-			tagtype = "CPYRIGT"
-		} else if t.Type == types.TCCharacter {
-			tagtype = "CHARCTR"
-		} else if t.Type == types.TCInvalid {
-			tagtype = "INVALID"
-		} else if t.Type == types.TCLore {
-			tagtype = "LORE   "
-		} else if t.Type == types.TCMeta {
-			tagtype = "META   "
+	for tag, _ := range exclude {
+		err := storage.MarkBlitByName(tag, false, ctrl)
+		if err == storage.ErrNoTag {
+			bad_tags = append(bad_tags, tag)
+		} else if err != nil {
+			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Whoops! " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
+			return
 		}
-		newstr := fmt.Sprintf("%5d (%s) %s\n", t.Count, tagtype, html.EscapeString(t.Name))
-		if len(newstr) + buf.Len() > 4096 - 12 { break }
-		buf.WriteString(newstr)
 	}
-	ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "<pre>" + buf.String() + "</pre>", ParseMode: data.ParseHTML}}, nil)
+	for tag, _ := range to_delete {
+		err := storage.DeleteBlitByName(tag, ctrl)
+		if err != nil {
+			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Whoops! " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
+			return
+		}
+	}
+
+	if bad_tags == nil {
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "All blit changes completed successfully.", ParseMode: data.ParseHTML}}, nil)
+	} else {
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("The following blits failed to update properly (perhaps they correspond to tags which do not exist?)\n%s", strings.Join(bad_tags, " ")), ParseMode: data.ParseHTML}}, nil)
+	}
+
 	ctrl.Transaction.MarkForCommit()
 }
 
