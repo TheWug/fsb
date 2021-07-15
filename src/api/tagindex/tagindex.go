@@ -1385,7 +1385,7 @@ func Blits(ctx *gogram.MessageCtx) {
 			buf.WriteRune(' ')
 		}
 		if last_valid != false {
-			buf.WriteString("</pre>\n\n<b>Ignore List</b>\n")
+			buf.WriteString("</pre>\n\n<b>Non-Blit List</b>\n")
 		} else {
 			buf.WriteString("</pre>")
 		}
