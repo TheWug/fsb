@@ -95,23 +95,29 @@ janitor.
 janitor. <b>Janitor Commands</b>
 janitor. For a full description of any command, use <code>/help [command]</code>.
 janitor.cats. <code>/cats</code>
-cats. A <i>CAT</i> is a tag which is two other tags concatenated together. These tags are typos, and are added to posts by accident (if it isn't an accident, it's not a <i>CAT</i>). This command helps search for <i>CAT</i>s, resolve them to their correct tags, and automatically apply them to posts.
-cats. <i>Listing</i> options:
-cats. <i>CAT</i>s are not shown if they are already listed in the database. <i>BLIT</i>s are also not elligible to be part of <i>CAT</i>s.
-cats. <code> (no arguments)    -</code> list a few random possible <i>CAT</i>s
-cats. <code> --all,     -a     -</code> include known and <i>BLIT CAT</i>s
-cats. <code> --inspect, -i TAG -</code> List all possible <i>CAT</i>s including <code>TAG</code>
-cats. <code> --ratio,   -r N   -</code> <i>CAT</i>s must be <code>N</code> times rarer than base tags
-cats. <i>Selection</i> options:
-cats. <code> --entry,  -e N     -</code> reply to listing to select <i>CAT</i> N
-cats. <code> --select, -s T1 T2 -</code> manually specify <i>CAT</i> formed by <code>T1</code> + <code>T2</code>
-cats. <i>Editing</i> options:
-cats. These options all apply to any previous selection options, since the last edit option was specified. They "forget" the list of specified cats when they are used. <code>--fix</code> can be paired with any of the other options, otherwise they are all mutually exclusive.
-cats. <code> --ignore,  -I -</code> not a cat, no corrective action or listings
-cats. <code> --notify,  -N -</code> matching posts will prompt for corrective action
-cats. <code> --autofix, -X -</code> matching posts will be automatically corrected
-cats. <code> --delete,  -D -</code> remove this entry from the database
-cats. <code> --fix,     -x -</code> fix matching posts right now
+cats. A <i>CAT</i> is a malformed tag formed from two valid tags accidentally concatenated together. These tags are typos, and are added to posts by accident (if it isn't an accident, it's not a <i>CAT</i>). This command helps search for <i>CAT</i>s, resolve them to their correct tags, and automatically apply them to posts.
+cats. <b>General Listing options:</b>
+cats. <code> --list-wild, -w -</code> show only unconfirmed <i>CAT</i>s
+cats. <code> --list-yes,  -y -</code> show only confirmed <i>CAT</i>s
+cats. <code> --list-no,   -n -</code> show only excluded <i>CAT</i>s
+cats. <code> --list,      -l -</code> shorthand for -y and -n
+cats. <code> (no arguments)  -</code> same as -w
+cats. <b>Directed Listing options:</b>
+cats. <code> --inspect,    -i T -</code> List all possible <i>CAT</i>s including tag <code>T</code>
+cats. <code> --prefix,     -p   -</code> sed with -i, <code>T</code> must be a prefix
+cats. <code> --suffix,     -s   -</code> Used with -i, <code>T</code> must be a suffix
+cats. <code> --ratio,      -r N -</code> <i>CAT</i>s must be <code>N</code> times rarer than base tags
+cats. <code> --with-blits, -w   -</code> include wild <i>CAT</i>s which include <i>BLIT</i>s
+cats. <b>Selection options:</b>
+cats. <code> --entry,  -e N     -</code> reply to listing to select <i>CAT</i> <code>N</code>
+cats. <code> --select, -s T1 T2 -</code> manually specify <i>CAT</i> formed by <code>T1 + T2</code>
+cats. <b>Editing options:</b>
+cats. <code> --exclude, -E -</code> exclude selected (indicating a valid tag)
+cats. <code> --prompt,  -P -</code> confirm selected, prompt to fix new posts
+cats. <code> --autofix, -F -</code> confirm selected, automatically fix new posts
+cats. <code> --delete,  -D -</code> remove selected from the database
+cats. <code> --fix,     -f -</code> fix posts matching selected <i>CAT</i>s right now
+cats. <code>                </code> (can be combined with any other editing option)
 janitor.blits. <code>/blits</code>
 blits. A <i>BLIT</i> is a tag that is not automatically eligible to be part of a <i>CAT</i>. A tag should be marked as a <i>BLIT</i> if it is both:
 blits. <code> -</code> unlikely to ever be used in a valid way on a post
