@@ -121,8 +121,8 @@ blits. <code> --list-no,  -n -</code> list known non-<i>BLIT</i>s
 blits. <code> --list,     -l -</code> shorthand for -y and -n
 blits. <code> (no arguments) -</code> same as -w
 blits. Editing options:
-blits. <code> --mark,   -M TAG -</code> mark <code>TAG</code> as a <i>BLIT</i>
-blits. <code> --ignore, -I TAG -</code> mark <code>TAG</code> as a non-<i>BLIT</i>
+blits. <code> --include,-I TAG -</code> mark <code>TAG</code> as a <i>BLIT</i>
+blits. <code> --exclude,-E TAG -</code> mark <code>TAG</code> as a non-<i>BLIT</i>
 blits. <code> --delete, -D TAG -</code> clear <code>TAG</code> entirely from <i>BLIT</i> list
 janitor.syncposts. <code>/syncposts</code>
 syncposts. This command is used to keep my internal index of ` + api.ApiName + ` data up to date. This index is used to speed up operations like searching for similar tag names and listing all posts with a tag. Some metadata is maintained for each tag, each tag alias, and each post, on the site.
