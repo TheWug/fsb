@@ -1335,22 +1335,22 @@ func Blits(ctx *gogram.MessageCtx) {
 	if err != nil || !creds.Janitor { return }
 
 	mode := MODE_LIST
-	include, exclude := make(map[string]bool), make(map[string]bool)
+	include, exclude, to_delete := make(map[string]bool), make(map[string]bool), make(map[string]bool)
 	
 	list_settings := ListSettings{wild: true}
 
 	for _, token := range ctx.Cmd.Args {
-		token = strings.Replace(strings.ToLower(token), "\uFE0F", "", -1)
+		ltoken := strings.Replace(strings.ToLower(token), "\uFE0F", "", -1)
 		if mode == MODE_EXCLUDE {
-			exclude[token] = true
+			exclude[ltoken] = true
 		} else if mode == MODE_INCLUDE {
-			include[token]
+			include[ltoken] = true
 		} else if mode == MODE_DELETE {
-			to_delete[token] = true
+			to_delete[ltoken] = true
 		} else if token == "--include" || token == "-I" {
-			mode = MODE_MARK
+			mode = MODE_INCLUDE
 		} else if token == "--exclude" || token == "-E" {
-			mode = MODE_IGNORE
+			mode = MODE_EXCLUDE
 		} else if token == "--delete" || token == "-D" {
 			mode = MODE_DELETE
 		} else if token == "--list-wild" || token == "-w" {
