@@ -1002,6 +1002,46 @@ func MarkBlit(id int, mark bool, ctrl EnumerateControl) (error) {
 	return err
 }
 
+var ErrNoTag = errors.New("no corresponding tag exists")
+
+func MarkBlitByName(name string, mark bool, ctrl EnumerateControl) (error) {
+	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
+	defer ctrl.Transaction.Finalize(mine)
+	if ctrl.Transaction.err != nil { return ctrl.Transaction.err }
+
+	out, err := tx.Exec("INSERT INTO blit_tag_registry SELECT tag_id, $2 as is_blit FROM tag_index WHERE tag_name = $1 ON CONFLICT (tag_id) DO UPDATE SET is_blit = EXCLUDED.is_blit", name, mark)
+
+	rows, err := out.RowsAffected()
+	if err != nil { return err }
+
+	ctrl.Transaction.commit = mine
+
+	if rows == 0 {
+		return ErrNoTag
+	}
+
+	return err
+}
+
+func DeleteBlitByName(name string, ctrl EnumerateControl) (error) {
+	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
+	defer ctrl.Transaction.Finalize(mine)
+	if ctrl.Transaction.err != nil { return ctrl.Transaction.err }
+
+	out, err := tx.Exec("DELETE FROM blit_tag_registry WHERE tag_id = (SELECT tag_id FROM tag_index WHERE tag_name = $1)", name)
+
+	rows, err := out.RowsAffected()
+	if err != nil { return err }
+
+	ctrl.Transaction.commit = mine
+
+	if rows == 0 {
+		return ErrNoTag
+	}
+
+	return err
+}
+
 type CorrectionMode int
 const Untracked CorrectionMode = 0
 const Ignore CorrectionMode = 1
