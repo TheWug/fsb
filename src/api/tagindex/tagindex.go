@@ -838,6 +838,8 @@ const (
 	MODE_UNIGNORE = iota
 	MODE_FIX = iota
 	MODE_REASON = iota
+	MODE_MARK = iota
+	MODE_DELETE = iota
 )
 
 type TagEditBox struct {
@@ -1287,6 +1289,23 @@ func RefetchDeletedPostsInternal(user, api_key string, settings storage.UpdaterS
 	return nil
 }
 
+type ListSettings struct {
+	overridden, wild, yes, no bool
+}
+
+func (ls *ListSettings) Apply(other ListSettings) {
+	// the first change overwrites all of the defaults.
+	// subsequent ones are cumulative
+	if !ls.overridden {
+		*ls = other
+		ls.overridden == true
+	} else {
+		ls.wild |= other.wild
+		ls.yes |= other.yes
+		ls.no |= other.no
+	}
+}
+
 func Blits(ctx *gogram.MessageCtx) {
 	txbox, err := storage.NewTxBox()
 	if err != nil {
@@ -1305,21 +1324,33 @@ func Blits(ctx *gogram.MessageCtx) {
 	creds, err := storage.GetUserCreds(storage.UpdaterSettings{Transaction: txbox}, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return }
 
-	mode := MODE_READY
+	mode := MODE_LIST
 	include, exclude := make(map[string]bool), make(map[string]bool)
+	
+	list_settings := ListSettings{wild: true}
 
 	for _, token := range ctx.Cmd.Args {
 		token = strings.Replace(strings.ToLower(token), "\uFE0F", "", -1)
-		if token == "--exclude" {
-			mode = MODE_EXCLUDE
-		} else if token == "--mark" {
-			mode = MODE_INCLUDE
-		} else if token == "--list" {
-			mode = MODE_LIST
-		} else if mode == MODE_EXCLUDE {
+		if mode == MODE_EXCLUDE {
 			exclude[token] = true
 		} else if mode == MODE_INCLUDE {
-			include[token] = true
+			include[token]
+		} else if mode == MODE_DELETE {
+			to_delete[token] = true
+		} else if token == "--include" || token == "-I" {
+			mode = MODE_MARK
+		} else if token == "--exclude" || token == "-E" {
+			mode = MODE_IGNORE
+		} else if token == "--delete" || token == "-D" {
+			mode = MODE_DELETE
+		} else if token == "--list-wild" || token == "-w" {
+			list_settings.Apply(ListSettings{wild: true})
+		} else if token == "--list-yes" || token == "-y" {
+			list_settings.Apply(ListSettings{yes: true})
+		} else if token == "--list-no" || token == "-n" {
+			list_settings.Apply(ListSettings{no: true})
+		} else if token == "--list" || token == "-l" {
+			list_settings.Apply(ListSettings{yes: true, no: true})
 		}
 	}
 
