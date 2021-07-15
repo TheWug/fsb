@@ -1298,11 +1298,11 @@ func (ls *ListSettings) Apply(other ListSettings) {
 	// subsequent ones are cumulative
 	if !ls.overridden {
 		*ls = other
-		ls.overridden == true
+		ls.overridden = true
 	} else {
-		ls.wild |= other.wild
-		ls.yes |= other.yes
-		ls.no |= other.no
+		ls.wild = ls.wild || other.wild
+		ls.yes = ls.yes || other.yes
+		ls.no = ls.no || other.no
 	}
 }
 
