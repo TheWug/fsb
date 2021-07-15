@@ -967,7 +967,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	progress, err := ProgressMessage2(data.OMessage{SendData: data.SendData{ReplyToId: &ctx.Msg.Id, ParseMode: data.ParseHTML}, DisableWebPagePreview: true},
+	progress, err := ProgressMessage2(data.OMessage{SendData: data.SendData{TargetData: data.TargetData{ChatId: ctx.Msg.Chat.Id}, ReplyToId: &ctx.Msg.Id, ParseMode: data.ParseHTML}, DisableWebPagePreview: true},
 	                                  "Checking for typos...", 3 * time.Second, ctx.Bot)
 	if err != nil {
 		ctx.Bot.ErrorLog.Println("ProgressMessage2() failed:", err.Error())
