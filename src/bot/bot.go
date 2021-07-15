@@ -113,7 +113,10 @@ cats. <code> --autofix, -X -</code> matching posts will be automatically correct
 cats. <code> --delete,  -D -</code> remove this entry from the database
 cats. <code> --fix,     -x -</code> fix matching posts right now
 janitor.blits. <code>/blits</code>
-blits. A <i>BLIT</i> is a tag that is not eligible to be part of a <i>CAT</i>. Such tags are usually very short, and occur coincidentally at the start or end of other tags. All tags 2 characters or shorter are <i>BLIT</i>s by default, and all tags longer than that are not. This can be overridden or clarified for specific tags using this command.
+blits. A <i>BLIT</i> is a tag that is not automatically eligible to be part of a <i>CAT</i>. A tag should be marked as a <i>BLIT</i> if it is both:
+blits. <code> -</code> unlikely to ever be used in a valid way on a post
+blits. <code> -</code> likely to appear as a prefix or suffix within another valid tag
+blits. Tags which are 2 characters or shorter are automatically marked as <i>BLIT</i>s. However, a small number of short tags exist (such as m and f, aliases of male and female) which should be exempt from this classification. Additionally, many blits exist which are longer than 2 characters. This command manages or exports the <i>BLIT</i> list.
 blits. Listing options:
 blits. <code> --list-wild -w -</code> list wild (unmarked) <i>BLIT</i>s
 blits. <code> --list-yes, -y -</code> list known <i>BLIT</i>s
