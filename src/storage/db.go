@@ -240,7 +240,7 @@ func WriteTagEntries(list []interface{}, settings UpdaterSettings) (error) {
 	if settings.Transaction.err != nil { return settings.Transaction.err }
 
 	stmt, err := tx.Prepare(pq.CopyIn("tag_index", "tag_id", "tag_name", "tag_count", "tag_type", "tag_type_locked"))
-	
+
 	for i := 0; i < len(list); i += 5 {
 		_, err = stmt.Exec(list[i], list[i+1], list[i+2], list[i+3], list[i+4])
 		if err != nil { return err }
@@ -493,7 +493,7 @@ func EnumerateAllTags(ctrl EnumerateControl) (apitypes.TTagInfoArray, error) {
 
 	sql := "SELECT tag_id, tag_name, tag_count, tag_count_full, tag_type, tag_type_locked FROM tag_index %s"
 	order_by := "ORDER BY %s"
-	
+
 	if ctrl.OrderByCount {
 		order_by = fmt.Sprintf(order_by, "-tag_count")
 	} else {
@@ -501,7 +501,7 @@ func EnumerateAllTags(ctrl EnumerateControl) (apitypes.TTagInfoArray, error) {
 	}
 
 	sql = fmt.Sprintf(sql, order_by)
-		
+
 	rows, err := tx.Query(sql)
 	if err != nil { return nil, err }
 
@@ -783,7 +783,7 @@ func PostsWithTag(tag apitypes.TTagData, ctrl EnumerateControl) (apitypes.TPostI
 	}
 
 	ctrl.Transaction.commit = mine
-	return out, nil	
+	return out, nil
 }
 
 func PostByID(id int, ctrl UpdaterSettings) (*apitypes.TPostInfo, error) {
@@ -799,7 +799,7 @@ func PostByID(id int, ctrl UpdaterSettings) (*apitypes.TPostInfo, error) {
 	item.Sources = strings.Split(sources, "\n")
 
 	ctrl.Transaction.commit = mine
-	return &item, nil	
+	return &item, nil
 }
 
 func PostByMD5(md5 string, ctrl UpdaterSettings) (*apitypes.TPostInfo, error) {
@@ -996,7 +996,7 @@ func GetTagTypos(tag string, ctrl EnumerateControl) (map[string]TypoData, error)
 		if err != nil { return nil, err }
 		results[data.Tag.Name] = data
 	}
-	
+
 	ctrl.Transaction.commit = mine
 	return results, nil
 }
@@ -1257,7 +1257,7 @@ func GetAutoFixHistoryForPosts(posts []int, settings UpdaterSettings) (map[int][
 
 		results[id] = append(results[id], tags.TagDiffFromString(diff_string))
 	}
-	
+
 	settings.Transaction.commit = mine
 	return results, nil
 }
@@ -1350,5 +1350,4 @@ func SavePromptPost(id int, x *PromptPostInfo, settings UpdaterSettings) (error)
 	settings.Transaction.commit = mine
 	return nil
 }
-
 
