@@ -62,15 +62,15 @@ type PostFile struct {
 func ShowHelp(topic string) (string) {
 	// this works by filtering the full help document by the provided substring
 	// against the first token in the line, as a sort of poor man's help topic selector.
-	// the 
+	// the
 	help :=
 `.public.janitor. Hello! I'm the <b>` + api.ApiName + ` Telegram Bot</b>!
-.public.janitor. 
+.public.janitor.
 .public.janitor. Content on ` + api.ApiName + ` may be unsuitable for kids.
 .public.janitor. <b>You must be 18 or older to use this bot.</b>
-. 
+.
 . To view a detailed explanation of my features and functions, please <a href="https://telegra.ph/Knottybot-Usage-Guide-08-20">check out this post</a>.
-. 
+.
 . <b>Short story:</b>
 . <code>* </code>Search inline for ` + api.ApiName + ` posts
 . <code>* </code>Connect your ` + api.ApiName + ` account
@@ -78,7 +78,7 @@ func ShowHelp(topic string) (string) {
 . <code>* </code>Upload new posts
 . <code>* </code>Edit existing posts
 . <code>* </code>All without leaving Telegram!
-. 
+.
 . <b>Important Info and FAQ</b>
 . <code>* </code>Adjust your rating filter and blacklist from your search settings.
 . <code>* </code>Before posting to ` + api.ApiName + `, please make sure you read the site's rules.
@@ -87,11 +87,11 @@ func ShowHelp(topic string) (string) {
 . <code>* </code>To report a bug, see <code>/help report.</code>
 security.abuse.report. <b>Reporting abuse, bugs, or other issues</b>
 security.abuse.report. Use the following command to send a message to the janitor's chat. If your issue is private or security related, please send a report asking to be contacted back.
-security.abuse.report. 
+security.abuse.report.
 security.abuse.report. <code>/operator [message for janitors]</code>
-public. 
+public.
 public. This bot's commands and help messages should be used via PM.
-janitor. 
+janitor.
 janitor. <b>Janitor Commands</b>
 janitor. For a full description of any command, use <code>/help [command]</code>.
 janitor.cats. <code>/cats</code>
@@ -112,13 +112,14 @@ cats. <code> --notify,  -N -</code> matching posts will prompt for corrective ac
 cats. <code> --autofix, -X -</code> matching posts will be automatically corrected
 cats. <code> --delete,  -D -</code> remove this entry from the database
 cats. <code> --fix,     -x -</code> fix matching posts right now
-janitor.blits. <code>/blits</code>	
+janitor.blits. <code>/blits</code>
 blits. A <i>BLIT</i> is a tag that is not eligible to be part of a <i>CAT</i>. Such tags are usually very short, and occur coincidentally at the start or end of other tags. All tags 2 characters or shorter are <i>BLIT</i>s by default, and all tags longer than that are not. This can be overridden or clarified for specific tags using this command.
 blits. Listing options:
-blits. <code> (no arguments) -</code> list some candidate <i>BLIT</i>s with no status
+blits. <code> --list-wild -w -</code> list wild (unmarked) <i>BLIT</i>s
 blits. <code> --list-yes, -y -</code> list known <i>BLIT</i>s
 blits. <code> --list-no,  -n -</code> list known non-<i>BLIT</i>s
 blits. <code> --list,     -l -</code> shorthand for -y and -n
+blits. <code> (no arguments) -</code> same as -w
 blits. Editing options:
 blits. <code> --mark,   -M TAG -</code> mark <code>TAG</code> as a <i>BLIT</i>
 blits. <code> --ignore, -I TAG -</code> mark <code>TAG</code> as a non-<i>BLIT</i>
@@ -552,7 +553,7 @@ func (this *EditState) Handle(ctx *gogram.MessageCtx) {
 		}
 	}
 
-	
+
 	if ctx.Cmd.Command == "/edit" && ctx.GetState() == nil {
 		this.Edit(ctx)
 	} else if ctx.Cmd.Command == "/reply" {
