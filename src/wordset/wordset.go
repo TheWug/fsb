@@ -51,6 +51,20 @@ func (this WordSet) Magnitudes() (int, int, int) {
 	return positive, -negative, positive - negative
 }
 
+func (this WordSet) DifferenceMagnitudes(other WordSet) (int, int, int) {
+	positive, negative := 0, 0
+	for k, v := range other.letters {
+		d := this.letters[k] - v
+		if d > 0 {
+			positive += d
+		} else {
+			negative += d
+		}
+	}
+	//     positive  negative  total
+	return positive, -negative, positive - negative
+}
+
 func Utf8Split(str string, at int) (string, string) {
 	i := 0
 	out1 := ""
