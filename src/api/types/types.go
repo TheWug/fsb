@@ -283,6 +283,16 @@ func (this *TPostInfo) TagSet() (tags.TagSet) {
 	return t
 }
 
+func (this *TPostInfo) ExtendedTagSet() (tags.TagSet) {
+	t := this.TagSet()
+	t.Set(fmt.Sprintf("rating:%s", this.Rating))
+	t.Set(fmt.Sprintf("type:%s", this.File_ext))
+	if this.Parent_id != 0 {
+		t.Set(fmt.Sprintf("parent:%d", this.Parent_id))
+	}
+	return t
+}
+
 func matchIntRange(tag string, against int) bool {
 	if strings.HasPrefix(tag, ">=") {
 		i, err := strconv.Atoi(tag[2:])
