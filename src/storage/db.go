@@ -599,7 +599,6 @@ func GetMostRecentlyUpdatedPost(settings UpdaterSettings) (*apitypes.TPostInfo, 
 	row := tx.QueryRow("SELECT post_id, post_change_seq, post_rating, post_description, post_hash FROM post_index ORDER BY post_change_seq DESC LIMIT 1")
 	err := row.Scan(&p.Id, &p.Change, &p.Rating, &p.Description, &p.Md5)
 
-
 	if err == sql.ErrNoRows {
 		return nil, nil
 	} else if err != nil {
@@ -879,7 +878,6 @@ func UpdatePost(post apitypes.TPostInfo, settings UpdaterSettings) (error) {
 	query = "DELETE FROM post_index WHERE post_id = $1"
 	_, err = tx.Exec(query, post.Id)
 	if err != nil { return err }
-
 
 	query = "INSERT INTO post_index (post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted) VALUES ($1, $2, $3, $4, $5, $6, $7)"
 	_, err = tx.Exec(query, post.Id, post.Change, post.Rating, post.Description, strings.Join(post.Sources, "\n"), strings.ToLower(post.Md5), post.Deleted)
