@@ -674,6 +674,7 @@ func SyncPostsInternal(user, api_key string, settings storage.UpdaterSettings, a
 		if err := RecountTagsInternal(settings, progress); err != nil { return err }
 		if err := CalculateAliasedCountsInternal(settings, progress); err != nil { return err }
 	}
+
 	progress.SetStatus("done.")
 
 	return nil
