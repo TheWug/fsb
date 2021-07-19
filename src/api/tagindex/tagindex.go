@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+	"sort"
 )
 
 type ProgMessage struct {
@@ -870,72 +871,57 @@ func NewTagsFromOldTags(oldtags []string, deltags, addtags map[string]bool) (str
 	return strings.Join(tags, " ")
 }
 
-func FindTagTypos(ctx *gogram.MessageCtx) {
-	mode := MODE_READY
-	var distinct, include, exclude []string
-	var threshhold int = -1
-	var fix, save, autofix bool
-	var show_short, show_zero, show_all, show_all_posts, only_general bool
-	var start_tag string
-	reason := "likely typo"
-	results := make(map[string]TagEditBox)
+type Pair struct {
+	tag, fixed *types.TTagData
+}
 
-	for _, token := range ctx.Cmd.Args {
-		token = strings.ToLower(token)
-		if mode == MODE_DISTINCT {
-			distinct = append(distinct, token)
-		} else if mode == MODE_EXCLUDE {
-			exclude = append(exclude, token)
-		} else if mode == MODE_INCLUDE {
-			include = append(include, token)
-		} else if mode == MODE_THRESHHOLD {
-			t, err := strconv.Atoi(token)
-			if err == nil { threshhold = t }
-		} else if mode == MODE_REASON {
-			reason = token
-		}
+func (p Pair) TypoData() storage.TypoData2 {
+	return storage.TypoData2{Tag: *p.tag, Fix: p.fixed}
+}
 
-		if mode != MODE_READY {
-			mode = MODE_READY
-		} else {
-			if !strings.HasPrefix(token, "-") {
-				start_tag = token
-			} else if token == "--all"         || token == "-a" {
-				show_all = true
-			} else if token == "--all-posts"   || token == "-p" {
-				show_all_posts = true
-			} else if token == "--show-short"  || token == "-s" {
-				show_short = true
-			} else if token == "--show-zero"   || token == "-z" {
-				show_zero = true
-			} else if token == "--only-general"|| token == "-g" {
-				only_general = true
-			} else if token == "--threshhold"  || token == "-t" {
-				mode = MODE_THRESHHOLD
-			} else if token == "--exclude"     || token == "-e" {
-				mode = MODE_EXCLUDE
-			} else if token == "--distinct"    || token == "-d" {
-				mode = MODE_DISTINCT
-			} else if token == "--include"     || token == "-i" {
-				mode = MODE_INCLUDE
-			} else if token == "--save"        || token == "-S" {
-				save = true
-			} else if token == "--autofix"     || token == "-X" {
-				autofix = true
-			} else if token == "--fix"         || token == "-x" {
-				fix = true
-			} else if token == "--reason"      || token == "-r" {
-				mode = MODE_REASON
-			}
-		}
+func (p Pair) String() string {
+	names := map[types.TagCategory]rune{
+		types.TCGeneral: ' ',
+		types.TCArtist: 'A',
+		types.TCCopyright: 'P',
+		types.TCCharacter: 'C',
+		types.TCSpecies: 'S',
+		types.TCInvalid: 'I',
+		types.TCMeta: 'M',
+		types.TCLore: 'L',
 	}
 
+	r, ok := names[p.tag.Type]
+	if !ok {
+		r = '?'
+	}
 
+	return fmt.Sprintf("%8d %s %s", p.tag.Count, string(r), p.tag.Name)
+}
+
+func max(a, b int) int {
+	if a > b { return a }
+	return b
+}
+
+func min(a, b int) int {
+	if a < b { return a }
+	return b
+}
+
+func abs(a int) int {
+	if a < 0 { return 0 - a }
+	return a
+}
+
+func FindTagTypos(ctx *gogram.MessageCtx) {
 	txbox, err := storage.NewTxBox()
 	if err != nil {
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error opening DB transaction: %s.", err.Error())}}, nil)
 		return
 	}
+
+	show_all_posts := false
 
 	ctrl := storage.EnumerateControl{
 		Transaction: txbox,
@@ -943,12 +929,120 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		OrderByCount: true,
 		IncludeDeleted: show_all_posts,
 	}
-
 	defer ctrl.Transaction.Finalize(true)
 
 	creds, err := storage.GetUserCreds(storage.UpdaterSettings{Transaction: ctrl.Transaction}, ctx.Msg.From.Id)
-	if (err != nil || !creds.Janitor) && fix {
-		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
+	if (err != nil || !creds.Janitor) {
+		return
+	}
+
+	mode := MODE_READY
+	var alias, distinct, include, exclude []string
+	var threshold_real int = -1
+	var fix, autofix, register, unregister, del bool
+	var show_blits, show_zero, only_general, no_auto bool
+	var start_tag string
+	reason := "supervised tag replacement"
+	results := make(map[string]Pair)
+
+	list_settings := ListSettings{wild: true}
+
+	for _, token := range ctx.Cmd.Args {
+		ltoken := strings.Replace(strings.ToLower(token), "\uFE0F", "", -1)
+		switch token {
+		case "--list-wild", "-w":  // show unconfirmed possible typos
+			list_settings.Apply(ListSettings{wild: true})
+		case "--list-yes", "-y":   // show confirmed typos
+			list_settings.Apply(ListSettings{yes: true})
+		case "--list-no", "-n":    // show confirmed non-typos
+			list_settings.Apply(ListSettings{no: true})
+		case "--list", "-l":       // show confirmed typos and non-typos
+			list_settings.Apply(ListSettings{yes: true, no: true})
+		case "--show-blits", "-b": // typos which are blits
+			show_blits = true
+		case "--show-zero", "-z":  // typos which have zero posts
+			show_zero = true
+		case "--no-auto", "-x":    // don't automatically count start tag as an alias
+			no_auto = true
+		case "--general", "-g":    // show tags which are general tags
+			only_general = true
+		case "--threshold", "-t":  // set the edit distance threshold
+			mode = MODE_THRESHOLD
+		case "--reason", "-r":     // set the edit reason
+			mode = MODE_REASON
+		case "--select", "-s":     // select a specific tag
+			mode = MODE_SELECT
+		case "--skip", "-k":       // deselect a specific tag
+			mode = MODE_SKIP
+		case "--alias", "-a":      // select all tags similar to a specific tag
+			mode = MODE_ALIAS
+		case "--distinct", "-d":   // deselect all tags more similar to a specific tag
+			mode = MODE_DISTINCT
+		case "--exclude", "-E":     // mark all selected tags as non-typos
+			mode = MODE_EXCLUDE
+		case "--include", "-I":     // mark all selected tags as typos
+			mode = MODE_INCLUDE
+		case "--delete", "-D":      // forget all selected tags completely.
+			mode = MODE_DELETE
+		case "--autofix", "-A":     // mark all selected tags for automatic fixes
+			mode = MODE_AUTOFIX
+		case "--fix", "-F":         // fix all matching posts immediately
+			mode = MODE_FIX
+		default:
+			switch mode {
+			case MODE_READY:
+				start_tag = ltoken
+			case MODE_THRESHOLD:
+				t, err := strconv.Atoi(token)
+				if err == nil { threshold_real = t }
+			case MODE_SELECT:
+				include = append(include, ltoken)
+			case MODE_SKIP:
+				exclude = append(exclude, ltoken)
+			case MODE_DISTINCT:
+				distinct = append(distinct, ltoken)
+			case MODE_ALIAS:
+				alias = append(alias, ltoken)
+			case MODE_REASON:
+				reason = token
+			}
+			mode = MODE_READY
+		}
+
+		switch mode {
+		case MODE_READY, MODE_THRESHOLD, MODE_SELECT, MODE_SKIP, MODE_DISTINCT, MODE_ALIAS, MODE_REASON: // any mode which attempts to read a parameter skips everything past this point.
+			continue
+		case MODE_FIX:
+		default:
+			register = false
+			unregister = false
+			del = false
+			autofix = false
+		}
+
+		switch mode {
+		case MODE_FIX:
+			fix = true
+		case MODE_INCLUDE:
+			register = true
+		case MODE_EXCLUDE:
+			unregister = true
+		case MODE_DELETE:
+			del = true
+		case MODE_AUTOFIX:
+			register = true
+			autofix = true
+		}
+	}
+
+	switch mode {
+	case MODE_READY, MODE_LIST:
+	default:
+		err = fmt.Errorf("missing required argument (%d)", mode)
+	}
+
+	if err != nil {
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Bad arguments: %s.", err.Error())}}, nil)
 		return
 	}
 
@@ -957,22 +1051,24 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	len1 := utf8.RuneCountInString(start_tag)
-	if threshhold == -1 {
-		if len1 < 8 {
-			threshhold = 1
-		} else if len1 < 16 {
-			threshhold = 2
-		} else if len1 < 32 {
-			threshhold = 3
-		} else {
-			threshhold = 4
+	get_threshold := func(length int) int {
+		switch {
+		case threshold_real > 0:
+			return threshold_real
+		case length < 8:
+			return 1
+		case length < 16:
+			return 2
+		case length < 32:
+			return 3
+		default:
+			return 4
 		}
 	}
 
-	t1, err := storage.GetTag(start_tag, ctrl)
+	target, err := storage.GetTag(start_tag, ctrl)
 	if err != nil { log.Printf("Error occurred when looking up tag: %s", err.Error()) }
-	if t1 == nil {
+	if target == nil {
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Tag doesn't exist: %s.", start_tag)}}, nil)
 		return
 	}
@@ -986,153 +1082,122 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 	defer progress.Close()
 
 	alltags, err := storage.EnumerateAllTags(ctrl)
-	blits, err := storage.EnumerateAllBlits(ctrl)
+	blits, err := storage.EnumerateAllBlits(ctrl) // XXX make this return yes and wild blits
 	typos, err := storage.GetTagTypos(start_tag, ctrl)
 
-	for _, t2 := range alltags {
-		if t1.Name == t2.Name { continue } // skip tag = tag
+	if !no_auto {
+		alias = append(alias, start_tag)
+	}
 
-		is_blit2, reg_blit2 := blits[t2.Name]
+	var alias_wordsets []wordset.WordSet
+	var alias_thresholds []int
+	var alias_lengths []int
+	for _, tag := range alias {
+		alias_wordsets = append(alias_wordsets, wordset.MakeWordSet(tag))
+		alias_lengths = append(alias_lengths, utf8.RuneCountInString(tag))
+		alias_thresholds = append(alias_thresholds, get_threshold(alias_lengths[len(alias_lengths) - 1]))
+	}
 
-		// shortest name first (in terms of codepoints)
-		var t1n, t2n string
-		var t1l, t2l int
-		len2 := utf8.RuneCountInString(t2.Name)
-		if len1 > len2 {
-			t1n, t2n = t2.Name, t1.Name
-			t1l, t2l = len2, len1
-		} else {
-			t1n, t2n = t1.Name, t2.Name
-			t1l, t2l = len1, len2
-		}
-
-		tooshort := (t1l < 3) // tag length too short
-		blit := reg_blit2 && is_blit2
-		notblit := reg_blit2 && !is_blit2
-		zero := t2.ApparentCount(show_all_posts) <= 0
-
-		if tooshort && !notblit && !show_short ||
-		   blit && !show_all ||
-		   zero && !show_zero {
-			// if it's too short and not a confirmed non-blit, AND the short override isn't specified OR
-			// if it's a blit, and the all override isn't specified OR
-			// if it's got no posts and the no-post override isn't specified
-			// skip
+	tags_by_name := make(map[string]*types.TTagData)
+	for x, tag := range alltags {
+		tags_by_name[tag.Name] = &alltags[x]
+		if _, blit := blits[tag.Name]; blit && !show_blits { continue }
+		if zero := tag.ApparentCount(show_all_posts) <= 0; zero && !show_zero { continue }
+		if tag.Type != types.TCGeneral && !only_general { continue }
+		if typo, is_typo := typos[tag.Name]; is_typo {
+			// if it's already a registered or deregistered typo, only show it if we're
+			// in the correct list mode.
+			if !list_settings.no && typo.Mode == storage.Ignore { continue }
+			if !list_settings.yes && typo.Mode > storage.Ignore { continue }
+			results[tag.Name] = Pair{fixed: target, tag: &alltags[x]}
 			continue
 		}
 
-		// if it doesn't match, skip
-		// the length difference is a lower bound on the edit distance so if the lengths are too dissimilar, skip.
-		if t2l - t1l > threshhold { continue }
+		// if it's not a registered or deregistered typo, and we're not showing wild typos, skip it.
+		if !list_settings.wild { continue }
 
-		// check the edit distance and bail if it's not low.
-		distance := wordset.Levenshtein(t1n, t2n)
-		if distance > threshhold { continue }
-
-		// these tags are similar!
-		results[t2.Name] = TagEditBox{Tag: t2, EditDistance: distance}
-	}
-
-	for name, value := range typos {
-		if !show_all {
-			// if override isn't specified and we already have a rule for this one, skip it
-			delete(results, name)
-		} else {
-			// if override IS specified, always show all rules
-			results[name] = TagEditBox{Tag: value.Tag, EditDistance: wordset.Levenshtein(start_tag, name), Mode: value.Mode}
-		}
-	}
-
-	// now for selectors, which take priority over all of the blanket filter options
-	// remove any matches that were manually excluded.
-	progress.SetStatus("remove excluded")
-	for _, item := range exclude {
-		delete(results, item)
-	}
-
-	// now remove any matches which are more closely matched by the distinct list.
-	progress.SetStatus("remove distinct")
-	for _, item := range distinct {
-		for k, v := range results {
-			if wordset.Levenshtein(item, k) < v.EditDistance {
-				exclude = append(exclude, k)
-				delete(results, k)
+		var tag_wordset_real *wordset.WordSet
+		tag_wordset := func() *wordset.WordSet {
+			// populate tag_wordset_real only if it's actually needed, as building a map is expensive
+			// and a heuristic may rule the tag out first.
+			if tag_wordset_real == nil {
+				w := wordset.MakeWordSet(tag.Name)
+				tag_wordset_real = &w
 			}
+			return tag_wordset_real
+		}
+
+		tag_len := utf8.RuneCountInString(tag.Name)
+
+		for i, alias_tag := range alias {
+			// two cheap checks, which establish lower bounds on the edit distance, skip if it's too high
+			if abs(tag_len - alias_lengths[i]) > alias_thresholds[i] { continue }
+			add, remove, _ := tag_wordset().DifferenceMagnitudes(alias_wordsets[i])
+			if max(add, remove) > alias_thresholds[i] { continue }
+
+			// calculate the actual edit distance, which is expensive, and skip this tag if it's too high
+			distance := wordset.Levenshtein(tag.Name, alias_tag)
+			if distance > alias_thresholds[i] { continue }
+
+			// check if it's closer/equal to something we are excluding, and skip if it is
+			for _, item := range exclude {
+				if tag.Name == item { continue }
+			}
+
+			for _, item := range distinct {
+				if wordset.Levenshtein(tag.Name, item) < distance { continue }
+			}
+
+			// these tags are similar!
+			results[tag.Name] = Pair{fixed: target, tag: &alltags[x]}
 		}
 	}
 
 	// now remove any matches which are already aliased to the target tag.
-	progress.SetStatus("remove aliases")
 	aliases, err := storage.GetAliasesFor(start_tag, ctrl)
 	if err != nil { log.Printf("Error when searching for aliases to %s: %s", start_tag, err.Error()) }
 	for _, item := range aliases {
 		delete(results, item.Name)
 	}
 
-	// filter only the general tags, removing any typed ones
-	if only_general {
-		progress.SetStatus("remove non-general")
-		for k, v := range results {
-			if v.Tag.Type != types.TCGeneral {
-				delete(results, k)
-			}
+	// aaaaaand finally add any matches manually included.
+	ctrl.CreatePhantom = false
+	for _, item := range include {
+		if tag, ok := tags_by_name[item]; ok {
+			results[item] = Pair{fixed: target, tag: tag}
 		}
 	}
 
-	// aaaaaand finally add any matches manually included.
-	progress.SetStatus("merge included")
-	ctrl.CreatePhantom = false
-	for _, item := range include {
-		t, _ := storage.GetTag(item, ctrl)
-		if t != nil { results[item] = TagEditBox{Tag: *t, EditDistance: wordset.Levenshtein(t1.Name, t.Name)} }
-	}
-
-	progress.SetStatus("done.")
+	var results_ordered []Pair
 
 	total_posts := 0
 	for _, v := range results {
-		total_posts += v.Tag.ApparentCount(show_all_posts)
+		total_posts += v.tag.ApparentCount(show_all_posts)
+		results_ordered = append(results_ordered, v)
 	}
 
-	if len(results) > 50 {
-		var buf bytes.Buffer
-		buf.WriteString(fmt.Sprintf("Possible typos of %s: %d (%d estimated posts)\n", start_tag, len(results), total_posts))
-		for _, v := range results {
-			alert := " "
-			if v.Tag.Type != types.TCGeneral { alert = "!" }
-			buf.WriteString(fmt.Sprintf("%8d %s%s %s\n", v.Tag.ApparentCount(show_all_posts), v.Mode.Display(), alert, v.Tag.Name))
-		}
-		ctx.Bot.Remote.SendDocumentAsync(data.ODocument{
-			SendData: data.SendData{
-				TargetData: data.TargetData{ChatId: progress.Ctx.Msg.Chat.Id},
-				ReplyToId: &progress.Ctx.Msg.Id,
-			},
-			MediaData: data.MediaData{
-				FileName: "tag_duplicates.txt",
-				File: buf.Bytes(),
-			},
-		}, nil)
-		progress.AppendNotice(fmt.Sprintf("Possible typos of <code>%s</code>: %d (%d estimated posts)\n\nResults not shown, too many of them!\nSee attached text file.", html.EscapeString(start_tag), len(results), total_posts))
-	} else {
-		var buf bytes.Buffer
-		buf.WriteString(fmt.Sprintf("Possible typos of <code>%s</code>: %d (%d estimated posts)\n<pre>", html.EscapeString(start_tag), len(results), total_posts))
-		for _, v := range results {
-			alert := " "
-			if v.Tag.Type != types.TCGeneral { alert = "!" }
-			buf.WriteString(fmt.Sprintf("%7d %s%s %s\n", v.Tag.ApparentCount(show_all_posts), v.Mode.Display(), alert, html.EscapeString(v.Tag.Name)))
-		}
-		buf.WriteString("</pre>")
-		progress.AppendNotice(buf.String())
+	sort.Slice(results_ordered, func(i, j int) bool {
+		return results_ordered[i].tag.Count > results_ordered[j].tag.Count ||
+		results_ordered[i].tag.Count == results_ordered[j].tag.Count && (
+		results_ordered[i].tag.Name < results_ordered[j].tag.Name)
+	})
+
+	var buf bytes.Buffer
+	buf.WriteString("Possible typos:\n<code>")
+	for _, p := range results_ordered {
+		buf.WriteString(p.String())
+		buf.WriteString("\n")
 	}
+	buf.WriteString("</code>")
+
+	ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: buf.String(), ParseMode: data.ParseHTML}}, nil)
 
 	if fix {
-		progress.AppendNotice("Fixing tags on ??? posts...")
-
 		updated := 1
 		diffs := make(map[int]tags.TagDiff)
 
 		for _, v := range results {
-			array, err := storage.PostsWithTag(v.Tag, ctrl)
+			array, err := storage.PostsWithTag(*v.tag, ctrl)
 			if err != nil {
 				ctx.Bot.ErrorLog.Println("Error in FindTagTypos()/PostsWithTag():", err.Error())
 				progress.SetStatus("error!")
@@ -1141,15 +1206,14 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 
 			for _, post := range array {
 				d := diffs[post.Id]
-				d.Add(start_tag)
-				d.Remove(v.Tag.Name)
+				d.Add(v.fixed.Name)
+				d.Remove(v.tag.Name)
 				diffs[post.Id] = d
 			}
 		}
 
 		// we now know for sure that exactly this many edits are required
 		total_posts = len(diffs)
-		progress.ReplaceNotice(fmt.Sprintf("Fixing tags on %d posts...", total_posts))
 
 		for id, diff := range diffs {
 			if diff.IsZero() { continue }
@@ -1183,30 +1247,24 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		progress.SetStatus("done.")
 	}
 
-	if save {
-		progress.AppendNotice(fmt.Sprintf("Saving %d identified typos...", len(results)))
-		// everything in results goes into the database as either prompt or auto
-		mode := storage.Prompt
-		if autofix { mode = storage.AutoFix }
-		for name, _ := range results {
-			if _, already_exists := typos[name]; already_exists { continue }
-			err := storage.AddTagTypo(start_tag, name, mode, storage.UpdaterSettings{Transaction: ctrl.Transaction})
+	if del {
+		for _, action := range results {
+			err = storage.DelTagTypoByTag(ctrl, action.TypoData())
 			if err != nil {
-				log.Printf("Error adding tag typo to database (%s -> %s): %s", name, start_tag, err.Error())
+				// whoops!
 				return
 			}
 		}
-		// everything in exclude goes in as ignore
-		for _, name := range exclude {
-			if _, already_exists := typos[name]; already_exists { continue }
-			if _, already_exists := results[name]; already_exists { continue }
-			err := storage.AddTagTypo(start_tag, name, storage.Ignore, storage.UpdaterSettings{Transaction: ctrl.Transaction})
+	}
+
+	if register || unregister || autofix {
+		for _, action := range results {
+			err = storage.SetTagTypoByTag(ctrl, action.TypoData(), register || autofix, autofix)
 			if err != nil {
-				log.Printf("Error adding tag typo to database (%s -> %s): %s", name, start_tag, err.Error())
+				// whoops!
 				return
 			}
 		}
-		progress.SetStatus("done.")
 	}
 
 	ctrl.Transaction.MarkForCommit()
