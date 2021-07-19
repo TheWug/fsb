@@ -86,6 +86,7 @@ func (this *Behavior) DoMaintenance(bot *gogram.TelegramBot) {
 func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool) {
 	channel := make(chan bool)
 	go func() {
+		MainLoop:
 		for maintenances := 0; true; maintenances++ {
 			_ = <- channel
 
@@ -134,32 +135,54 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 				continue
 			}
 
-			edits, err := storage.GetSuggestedPostEdits(updated_post_ids, settings)
-			if err != nil {
-				bot.ErrorLog.Println("Error in GetSuggestedPostEdits:", err.Error())
-				continue
+			replace_id := int64(-1)
+			replacements, err := storage.GetReplacements(settings, replace_id)
+			actual_posts, err := storage.PostsById(updated_post_ids, settings)
+
+			type shim struct {
+				post *apitypes.TPostInfo
+				metadata tags.TagSet
 			}
 
-			autofixes, err := storage.GetAutoFixHistoryForPosts(updated_post_ids, settings) // map of id to array of tag diff
-			if err != nil {
-				bot.ErrorLog.Println("Error in GetAutoFixHistoryForPosts:", err.Error())
-				continue
+			posts_and_stuff := make(map[int]shim)
+
+			for i, _ := range actual_posts {
+				posts_and_stuff[actual_posts[i].Id] = shim{post: &actual_posts[i], metadata: actual_posts[i].ExtendedTagSet()}
 			}
+
+			replacement_history, err := storage.GetReplacementHistory(settings, updated_post_ids)
+
+			edits := make(map[int]*storage.PostSuggestedEdit)
+			for len(replacements) != 0 {
+				if err != nil {
+					bot.ErrorLog.Println("Error getting replacers:", err.Error())
+					continue MainLoop
+				}
+
+				for _, r := range replacements {
+					m := r.Matcher()
+					for id, sh := range posts_and_stuff {
+						if replacement_history[storage.ReplacementHistoryShim{ReplacerId: r.Id, PostId: id}] { continue }
+						if m.Matches(sh.metadata) {
+							if edits[id] == nil {
+								edits[id] = &storage.PostSuggestedEdit{}
+							}
+
+							to := &edits[id].Prompt
+							if r.Autofix {
+								to = &edits[id].AutoFix
+							}
+							*to = append(*to, m.ReplaceSpec)
+						}
+					}
+				}
+				replace_id = replacements[len(replacements) - 1].Id
+				replacements, err = storage.GetReplacements(settings, replace_id)
+			}
+
 			default_creds := this.MySettings.DefaultSearchCredentials()
 
 			for id, edit := range edits {
-				// remove any recent autofix changes from the autofix list, bit by bit.
-				// also filter out any edits which become no-ops
-				autofix := autofixes[id]
-				var new_autofix []tags.TagDiff
-				for i, _ := range edit.AutoFix {
-					for _, already_done := range autofix {
-						edit.AutoFix[i] = edit.AutoFix[i].Difference(already_done)
-					}
-					if !edit.AutoFix[i].IsZero() { new_autofix = append(new_autofix, edit.AutoFix[i]) }
-				}
-				edit.AutoFix = new_autofix
-
 				edit.SelectAutofix()
 				auto_diff := edit.GetChangeToApply()
 				if !auto_diff.IsZero() {
@@ -189,7 +212,7 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 					continue
 				}
 				post := updated_posts[id]
-				post_info = this.PromptPost(bot, post_info, id, &post, &edit)
+				post_info = this.PromptPost(bot, post_info, id, &post, edit)
 				err = storage.SavePromptPost(id, post_info, settings)
 				if err != nil {
 					bot.ErrorLog.Println("Error in SavePromptPost:", err.Error())
