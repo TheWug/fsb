@@ -23,11 +23,7 @@ func (c CatData) String() string {
 	}
 }
 
-func GetCats(yes, no bool, ctrl EnumerateControl) ([]CatData, []CatData, error) {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return nil, nil, ctrl.Transaction.err }
-
+func GetCats(tx *sql.Tx, yes, no bool) ([]CatData, []CatData, error) {
 	query :=
 `SELECT cat_id, marked,
     a.tag_id, a.tag_name, a.tag_type, a.tag_count,
@@ -70,24 +66,18 @@ WHERE ($1 AND marked)
 		}
 	}
 
-	ctrl.Transaction.commit = mine
 	return out_yes, out_no, err
 }
 
-func SetCatByTagNames(ctrl EnumerateControl, cat CatData, marked, autofix bool) error {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return ctrl.Transaction.err }
-
-	var err error
-	merged, err := GetTag(cat.Merged.Name, EnumerateControl{Transaction: ctrl.Transaction, CreatePhantom: true})
+func SetCatByTagNames(tx *sql.Tx, cat CatData, marked, autofix bool) error {
+	merged, err := GetTag(cat.Merged.Name, EnumerateControl{Transaction: tx, CreatePhantom: true})
 	if err != nil { return err }
 	cat.Merged = *merged
 
 	if marked {
-		cat.First, err = GetTag(cat.First.Name, EnumerateControl{Transaction: ctrl.Transaction, CreatePhantom: true})
+		cat.First, err = GetTag(cat.First.Name, EnumerateControl{Transaction: tx, CreatePhantom: true})
 		if err != nil { return err }
-		cat.Second, err = GetTag(cat.Second.Name, EnumerateControl{Transaction: ctrl.Transaction, CreatePhantom: true})
+		cat.Second, err = GetTag(cat.Second.Name, EnumerateControl{Transaction: tx, CreatePhantom: true})
 		if err != nil { return err }
 	} else {
 		cat.First = nil
@@ -118,31 +108,24 @@ RETURNING cat_id, replace_id`
 	if cat.Marked {
 		if cat.ReplaceId == nil {
 			replacement := &Replacer{MatchSpec: cat.Merged.Name, ReplaceSpec: fmt.Sprintf("-%s %s %s", cat.Merged.Name, cat.First.Name, cat.Second.Name), Autofix: autofix}
-			replacement, err = AddReplacement(ctrl, *replacement)
+			replacement, err = AddReplacement(EnumerateControl{Transaction: tx}, *replacement)
 			if err != nil { return err }
 
 			query := `UPDATE cats_registered SET replace_id = $2 WHERE cat_id = $1`
 			_, err = tx.Exec(query, cat.Id, replacement.Id)
 
 		} else {
-			err = UpdateReplacement(ctrl, Replacer{Id: *cat.ReplaceId, MatchSpec: cat.Merged.Name, ReplaceSpec: fmt.Sprintf("-%s %s %s", cat.Merged.Name, cat.First.Name, cat.Second.Name), Autofix: autofix})
+			err = UpdateReplacement(EnumerateControl{Transaction: tx}, Replacer{Id: *cat.ReplaceId, MatchSpec: cat.Merged.Name, ReplaceSpec: fmt.Sprintf("-%s %s %s", cat.Merged.Name, cat.First.Name, cat.Second.Name), Autofix: autofix})
 
 		}
 	} else if cat.ReplaceId != nil {
-		err = DeleteReplacement(ctrl, *cat.ReplaceId)
+		err = DeleteReplacement(EnumerateControl{Transaction: tx}, *cat.ReplaceId)
 	}
-	if err != nil { return err }
-
-	ctrl.Transaction.commit = mine
 	return err
 }
 
-func DeleteCatByTagNames(ctrl EnumerateControl, cat CatData) error {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return ctrl.Transaction.err }
-
-	merged, err := GetTag(cat.Merged.Name, EnumerateControl{Transaction: ctrl.Transaction})
+func DeleteCatByTagNames(tx *sql.Tx, cat CatData) error {
+	merged, err := GetTag(cat.Merged.Name, EnumerateControl{Transaction: tx})
 	if err != nil { return err }
 	if merged == nil { return nil }
 	cat.Merged = *merged
@@ -150,8 +133,6 @@ func DeleteCatByTagNames(ctrl EnumerateControl, cat CatData) error {
         _, err = tx.Exec(`DELETE FROM replacements WHERE replace_id = (SELECT replace_id FROM cats_registered WHERE tag_id_merged = $1)`, cat.Merged.Id)
 	if err != nil { return err }
         _, err = tx.Exec(`DELETE FROM cats_registered WHERE tag_id_merged = $1`, cat.Merged.Id)
-	if err != nil { return err }
 
-	ctrl.Transaction.commit = mine
 	return err
 }
