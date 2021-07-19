@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/lib/pq"
 )
 
 type TTagData struct {
@@ -241,6 +243,18 @@ type TUserInfo struct {
 	LevelString     string `json:"level_string"`
 	Email           string `json:"email"` // only present when logged in, and only for your own account
 	Blacklist       string `json:"blacklisted_tags"`
+}
+
+type Scannable interface {
+	Scan(...interface{}) error
+}
+
+func (this *TPostInfo) ScanFrom(rows Scannable) error {
+	var sources string
+	err := rows.Scan(&this.Id, &this.Change, &this.Rating, &this.Description, &sources, &this.Md5, &this.Deleted, pq.Array(&this.General))
+	if err != nil { return err }
+	this.Sources = strings.Split(sources, "\n")
+	return nil
 }
 
 func (this *TPostInfo) Tags() ([]string) {
