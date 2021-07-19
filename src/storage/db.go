@@ -452,31 +452,6 @@ func TagUpdater(input chan apitypes.TTagData, settings UpdaterSettings) (error) 
 	return nil
 }
 
-func ResolvePhantomTags(settings UpdaterSettings) (error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
-	// this one merits a tiny bit of explaining
-	// fetches the phantom id and the real id using the name and the newest ID of all doubly duplicate tags (by name), then swaps all phantom ids with their associated real id in post_tags.
-	_, err := tx.Exec("UPDATE post_tags SET tag_id = map.mapto FROM tag_index INNER JOIN (" +
-				"WITH b AS (" +
-					"WITH a AS (" +
-						"SELECT COUNT(tag_name), tag_name FROM tag_index GROUP BY tag_name" +
-					") SELECT tag_name, MAX(tag_id) FROM a INNER JOIN tag_index USING (tag_name) WHERE count = 2 GROUP BY tag_name" +
-				") SELECT tag_id, max FROM b INNER JOIN tag_index USING (tag_name) WHERE max > 0 AND tag_id < 0" +
-			") AS map(tag_id, mapto) USING (tag_id) WHERE tag_index.tag_id = post_tags.tag_id")
-	if err != nil { return err }
-
-	_, err = tx.Exec("DELETE FROM tag_index WHERE tag_id < 0")
-	if err != nil { return err }
-	_, err = tx.Exec("DELETE FROM post_tags WHERE tag_id < 0")
-	if err != nil { return err }
-
-	settings.Transaction.commit = mine
-	return nil
-}
-
 //func EnumerateAllTagNames() ([]string, error) {
 //	return []string{"tawny_otter_(character)", "tawny", "otter", "character"}, nil
 //}

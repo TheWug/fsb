@@ -417,9 +417,6 @@ func SyncTagsInternal(user, api_key string, settings storage.UpdaterSettings, pr
 	close(fixed_tags)
 	wg.Wait()
 
-	progress.AppendNotice("Resolving phantom tags...")
-	storage.ResolvePhantomTags(settings)
-
 	progress.SetStatus("done.")
 	return nil
 }
