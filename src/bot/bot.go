@@ -51,8 +51,6 @@ const (
 	file_id
 )
 
-
-
 type PostFile struct {
 	mode int
 	file_id data.FileID
@@ -561,7 +559,6 @@ func (this *EditState) Handle(ctx *gogram.MessageCtx) {
 			ctx.DeleteAsync(nil)
 		}
 	}
-
 
 	if ctx.Cmd.Command == "/edit" && ctx.GetState() == nil {
 		this.Edit(ctx)
