@@ -76,13 +76,9 @@ func TagDiffFromStringsWithDelimiter(add_tags, remove_tags, delimiter string) (T
 }
 
 func TagDiffFromArray(tag_diff []string) (TagDiff) {
-	var diff TagDiff
-	diff.ApplyArray(tag_diff)
-	return diff
+	return TagDiff{StringDiff: StringDiffFromArray(tag_diff)}
 }
 
 func TagDiffFromArrays(add_tags, remove_tags []string) (TagDiff) {
-	var diff TagDiff
-	diff.ApplyArrays(add_tags, remove_tags, nil)
-	return diff
+	return TagDiff{StringDiff: StringDiffFromArrays(add_tags, remove_tags)}
 }
