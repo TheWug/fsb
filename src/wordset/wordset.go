@@ -33,7 +33,12 @@ func (this WordSet) Subtract(other WordSet) (WordSet) {
 	return newset
 }
 
-func (this WordSet) Magnitudes() (int, int, int, int) {
+// interpreting this wordset as a set of differences, compute the aggregate magnitude of the difference.
+// return values:
+// positive: total number of letters you'd need to add from zero to reach this point
+// negative: total number of letters you'd need to subtract from zero to reach this point
+// total: positive + negative
+func (this WordSet) Magnitudes() (int, int, int) {
 	positive, negative := 0, 0
 	for _, v := range this.letters {
 		if v > 0 {
@@ -42,8 +47,8 @@ func (this WordSet) Magnitudes() (int, int, int, int) {
 			negative += v
 		}
 	}
-	//     positive  negative  net                  absolute
-	return positive, negative, positive + negative, positive - negative
+	//     positive  negative  total
+	return positive, -negative, positive - negative
 }
 
 func Utf8Split(str string, at int) (string, string) {
