@@ -84,7 +84,7 @@ func Utf8Split(str string, at int) (string, string) {
 func Levenshtein(str1, str2 string) int {
 	s1len := utf8.RuneCountInString(str1)
 	column := make([]int, s1len+1)
- 
+
 	for y := 1; y <= s1len; y++ {
 		column[y] = y
 	}
@@ -109,7 +109,7 @@ func Levenshtein(str1, str2 string) int {
 	}
 	return column[s1len]
 }
- 
+
 func minimum(a, b, c int) int {
 	if a < b {
 		if a < c {
