@@ -41,7 +41,7 @@ type TTagListing struct {
 }
 
 func (this *TTagListing) UnmarshalJSON(b []byte) (error) {
-	
+
 	type TTagListingAlt TTagListing
 	var temp TTagListingAlt
 	err1 := json.Unmarshal(b, &temp)
@@ -76,7 +76,7 @@ type TAliasListing struct {
 }
 
 func (this *TAliasListing) UnmarshalJSON(b []byte) (error) {
-	
+
 	type TAliasListingAlt TAliasListing
 	var temp TAliasListingAlt
 	err1 := json.Unmarshal(b, &temp)
@@ -395,7 +395,7 @@ type TPostListing struct {
 }
 
 func (this *TPostListing) UnmarshalJSON(b []byte) (error) {
-	
+
 	type TPostListingAlt TPostListing
 	var temp TPostListingAlt
 	err1 := json.Unmarshal(b, &temp)
