@@ -441,13 +441,10 @@ func TagUpdater(input chan apitypes.TTagData, settings UpdaterSettings) (error) 
 	defer func(){ for _ = range input {} }()
 
 	for tag := range input {
-		_, err := settings.Transaction.tx.Exec("DELETE FROM tag_index WHERE tag_id = $1", tag.Id)
-		if err != nil { return err }
-
 		f := false
 		if tag.Locked == nil { tag.Locked = &f }
 
-		_, err = settings.Transaction.tx.Exec("INSERT INTO tag_index (tag_id, tag_name, tag_count, tag_type, tag_type_locked) VALUES ($1, $2, $3, $4, $5)", tag.Id, tag.Name, tag.Count, tag.Type, *tag.Locked)
+		_, err := settings.Transaction.tx.Exec("INSERT INTO tag_index (tag_id, tag_name, tag_count, tag_type, tag_type_locked) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (tag_name) DO UPDATE SET tag_id = EXCLUDED.tag_id, tag_count = EXCLUDED.tag_count, tag_type = EXCLUDED.tag_type, tag_type_locked = EXCLUDED.tag_type_locked", tag.Id, tag.Name, tag.Count, tag.Type, *tag.Locked)
 		if err != nil { return err }
 	}
 
