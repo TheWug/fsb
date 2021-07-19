@@ -202,12 +202,29 @@ func StringDiffFromStringsWithDelimiter(add_tags, remove_tags, delimiter string)
 	return StringDiffFromArrays(strings.Split(add_tags,delimiter), strings.Split(remove_tags, delimiter))
 }
 
+// StringDiffFromArray (singular) builds a new StringDiff using the specified tag list.
+// all of the *single argument* constructor functions for StringDiff and TagDiff fkow through
+// this function. It's not simply implemented in terms of Apply because that function is designed to
+// interpret tags starting with = as "reset" tags, i.e. remove them from both lists, and because of
+// that it also treats + as a special prefix to enable adding natural tags beginning with =. All in
+// all, it creates a bit of a mess, so it's useful to separate that logic (which is more suitable for
+// ongoing mutations of existing objects) from this logic, which is useful for constructing new
+// objects, most typically from API-compatible string exports of old ones.
 func StringDiffFromArray(tag_diff []string) (StringDiff) {
-	var diff StringDiff
-	diff.ApplyArray(tag_diff)
-	return diff
+	var added, removed []string
+	for _, str := range tag_diff {
+		if strTrimmed := strings.TrimPrefix(str, "-"); strTrimmed != str {
+			removed = append(removed, strTrimmed)
+		} else {
+			added = append(added, str)
+		}
+	}
+	return StringDiffFromArrays(added, removed)
 }
 
+// StringDiffFromArrays builds a new StringDiff using the specified add and remove tags.
+// Ultimately, all of the other constructor functions for StringDiff and TagDiff flow through
+// this function.
 func StringDiffFromArrays(add_tags, remove_tags []string) (StringDiff) {
 	var diff StringDiff
 	diff.ApplyArrays(add_tags, remove_tags, nil)
