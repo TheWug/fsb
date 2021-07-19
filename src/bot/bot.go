@@ -102,19 +102,21 @@ cats. <code> --list,      -l -</code> shorthand for -y and -n
 cats. <code> (no arguments)  -</code> same as -w
 cats. <b>Directed Listing options:</b>
 cats. <code> --inspect,    -i T -</code> List all possible <i>CAT</i>s including tag <code>T</code>
-cats. <code> --prefix,     -p   -</code> sed with -i, <code>T</code> must be a prefix
-cats. <code> --suffix,     -s   -</code> Used with -i, <code>T</code> must be a suffix
+cats. <code> --first,      -1   -</code> sed with -i, <code>T</code> must be a prefix
+cats. <code> --second,     -2   -</code> Used with -i, <code>T</code> must be a suffix
 cats. <code> --ratio,      -r N -</code> <i>CAT</i>s must be <code>N</code> times rarer than base tags
-cats. <code> --with-blits, -w   -</code> include wild <i>CAT</i>s which include <i>BLIT</i>s
+cats. <code> --with-blits, -b   -</code> include wild <i>CAT</i>s which include <i>BLIT</i>s
+cats. <code> --with-empty, -0   -</code> include <i>CAT</i>s with no tagged posts
+cats. <code> --with-typed, -t   -</code> include <i>CAT</i>s which aren't general tags
 cats. <b>Selection options:</b>
 cats. <code> --entry,  -e N     -</code> reply to listing to select <i>CAT</i> <code>N</code>
 cats. <code> --select, -s T1 T2 -</code> manually specify <i>CAT</i> formed by <code>T1 + T2</code>
 cats. <b>Editing options:</b>
 cats. <code> --exclude, -E -</code> exclude selected (indicating a valid tag)
 cats. <code> --prompt,  -P -</code> confirm selected, prompt to fix new posts
-cats. <code> --autofix, -F -</code> confirm selected, automatically fix new posts
+cats. <code> --autofix, -A -</code> confirm selected, automatically fix new posts
 cats. <code> --delete,  -D -</code> remove selected from the database
-cats. <code> --fix,     -f -</code> fix posts matching selected <i>CAT</i>s right now
+cats. <code> --fix,     -F -</code> fix posts matching selected <i>CAT</i>s right now
 cats. <code>                </code> (can be combined with any other editing option)
 janitor.blits. <code>/blits</code>
 blits. A <i>BLIT</i> is a tag that is not automatically eligible to be part of a <i>CAT</i>. A tag should be marked as a <i>BLIT</i> if it is both:
