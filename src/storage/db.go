@@ -623,7 +623,13 @@ func ImportPostTagsFromNameToID(settings UpdaterSettings, sfx chan string) (erro
 
 	var new_count, existing_count int64
 	var err error
-	if err = tx.QueryRow("SELECT COUNT(*) FROM post_tags_by_name").Scan(&new_count); err != nil { return err }
+	if err = tx.QueryRow("SELECT COUNT(*) FROM post_tags_by_name").Scan(&new_count); err != nil {
+		return err
+	}
+	var unique_count int64
+	if err = tx.QueryRow("SELECT COUNT(*) FROM (SELECT DISTINCT post_id FROM post_tags_by_name) as q").Scan(&unique_count); err != nil {
+		return err
+	}
 	if err = tx.QueryRow("SELECT n_live_tup FROM pg_stat_all_tables WHERE relname = 'post_tags'").Scan(&existing_count); err != nil { return err } // estimate, but super fast
 
 	// check if the amount of new data is large relative to the size of the existing dataset (1% or more out of 10s of millions of rows usually)
