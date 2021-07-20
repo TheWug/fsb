@@ -357,28 +357,20 @@ func SyncTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress
 		defer progress.Close()
 	}
 
-	return SyncTagsInternal(creds.User, creds.ApiKey, settings, progress)
+	return storage.DefaultTransact(func(tx *sql.Tx) error { return SyncTagsInternal(tx, creds.User, creds.ApiKey, progress) })
 }
 
 
-func SyncTagsInternal(user, api_key string, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
-	m := "Syncing tag database..."
-	if settings.Full {
-		m = "Full syncing tag database..."
-	}
-
-	progress.AppendNotice(m)
-
-	if settings.Full {
-		storage.ClearTagIndex(settings)
-	}
+func SyncTagsInternal(tx *sql.Tx, user, api_key string, progress *ProgMessage) (error) {
+	progress.AppendNotice("Syncing tag database...")
 
 	fixed_tags := make(chan types.TTagData)
 
 	limit := 1000
 	last_existing_tag_id := 0
 	consecutive_errors := 0
-	last, err := storage.GetLastTag(settings)
+	last, err := storage.GetLastTag(tx)
+
 	if err != nil { return err }
 	if last != nil { last_existing_tag_id = last.Id }
 	if last_existing_tag_id < 0 { last_existing_tag_id = 0 }
@@ -386,7 +378,7 @@ func SyncTagsInternal(user, api_key string, settings storage.UpdaterSettings, pr
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		err := storage.TagUpdater(fixed_tags, settings)
+		err := storage.TagUpdater(tx, fixed_tags)
 		if err != nil { log.Println(err.Error()) }
 		wg.Done()
 	}()
@@ -574,7 +566,7 @@ func SyncPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, aliases
 		defer progress.Close()
 	}
 
-	return SyncPostsInternal(creds.User, creds.ApiKey, settings, aliases_too, recount_too, progress, nil)
+	return storage.DefaultTransact(func(tx *sql.Tx) error { return SyncPostsInternal(tx, creds.User, creds.ApiKey, aliases_too, recount_too, progress, nil) })
 }
 
 func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSettings, progress *ProgMessage, post_updates chan []types.TPostInfo) (error) {
@@ -646,11 +638,12 @@ func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSetting
 	return nil
 }
 
-func SyncPostsInternal(user, api_key string, settings storage.UpdaterSettings, aliases_too, recount_too bool, progress *ProgMessage, post_updates chan []types.TPostInfo) (error) {
+func SyncPostsInternal(tx *sql.Tx, user, api_key string, aliases_too, recount_too bool, progress *ProgMessage, post_updates chan []types.TPostInfo) (error) {
 	progress.AppendNotice("Syncing activity... ")
+	settings := storage.UpdaterSettings{Transaction: storage.Wrap(tx)}
 
 	if err := SyncOnlyPostsInternal(user, api_key, settings, progress, post_updates); err != nil { return err }
-	if err := SyncTagsInternal(user, api_key, settings, progress); err != nil { return err }
+	if err := SyncTagsInternal(tx, user, api_key, progress); err != nil { return err }
 
 	if aliases_too {
 		if err := SyncAliasesInternal(user, api_key, settings, progress); err != nil { return err }
@@ -789,39 +782,6 @@ func Traverse(words []string, solutions chan []string, so_far []string, combined
 				Traverse(words, solutions, so_far, str1)
 			}
 		}
-	}
-}
-
-func FindTagConcatenations(ctx *gogram.MessageCtx) {
-	tags, err := storage.EnumerateAllTags(storage.EnumerateControl{})
-	if err != nil {
-		log.Printf("Error enumerating all tags: %s", err.Error())
-		return
-	}
-
-	var long_general_tags []string
-	var long_tags []string
-	for _, t := range tags {
-		if len(t.Name) == 0 { continue }
-		if utf8.RuneCountInString(t.Name) >= MINLENGTH && t.Type == types.TCGeneral {
-			long_general_tags = append(long_general_tags, t.Name)
-		}
-		if utf8.RuneCountInString(t.Name) >= MINLENGTH {
-			long_tags = append(long_tags, t.Name)
-		}
-	}
-
-	solutions := make(chan []string)
-
-	go func(){
-		so_far := []string{""}
-		for _, v := range long_general_tags {
-			so_far[0] = v
-			Traverse(long_tags, solutions, so_far, "")
-		}
-	}()
-
-	for _ = range solutions {
 	}
 }
 
@@ -1079,11 +1039,11 @@ func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, pr
 		}
 	}
 
-	target, err := storage.GetTag(control.start_tag, storage.EnumerateControl{Transaction: storage.Wrap(tx)})
+	target, err := storage.GetTagByName(tx, control.start_tag, false)
 	if err != nil { log.Printf("Error occurred when looking up tag: %s", err.Error()) }
 	if target == nil { return errors.New(fmt.Sprintf("Tag doesn't exist: %s", control.start_tag)) }
 
-	alltags, err := storage.EnumerateAllTags(storage.EnumerateControl{Transaction: storage.Wrap(tx)})
+	alltags, err := storage.EnumerateAllTags(tx, false)
 	if err != nil { return err }
 	blits, err := storage.EnumerateAllBlits(storage.EnumerateControl{Transaction: storage.Wrap(tx)}) // XXX make this return yes and wild blits
 	if err != nil { return err }
@@ -1769,7 +1729,7 @@ func CatsInternal(tx *sql.Tx, control CatsControl, creds storage.UserCreds, prog
 		var yesCandidates, noCandidates []storage.CatData
 
 		if control.list_settings.wild {
-			tags, err := storage.EnumerateAllTags(storage.EnumerateControl{Transaction: storage.Wrap(tx)})
+			tags, err := storage.EnumerateAllTags(tx, false)
 			if err != nil { return err }
 
 			// fetch blits the same way
@@ -1816,7 +1776,7 @@ func CatsInternal(tx *sql.Tx, control CatsControl, creds storage.UserCreds, prog
 			if control.inspect_tag == "" {
 				yesCandidates = exceptions_yes
 			} else {
-				tag, err := storage.GetTag(control.inspect_tag, storage.EnumerateControl{Transaction: storage.Wrap(tx)})
+				tag, err := storage.GetTagByName(tx, control.inspect_tag, false)
 				if err != nil { return err }
 
 				for _, v := range exceptions_yes {
@@ -1897,7 +1857,7 @@ func CatsInternal(tx *sql.Tx, control CatsControl, creds storage.UserCreds, prog
 	if len(control.fix_list) != 0 {
 		var updated int
 		for _, triplet := range control.fix_list {
-			triplet.tag, err = storage.GetTag(triplet.tag.Name, storage.EnumerateControl{Transaction: storage.Wrap(tx)})
+			triplet.tag, err = storage.GetTagByName(tx, triplet.tag.Name, false)
 			if triplet.tag == nil { continue }
 
 			posts, err := storage.PostsWithTag(*triplet.tag, storage.EnumerateControl{Transaction: storage.Wrap(tx)})

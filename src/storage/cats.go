@@ -70,14 +70,14 @@ WHERE ($1 AND marked)
 }
 
 func SetCatByTagNames(tx *sql.Tx, cat CatData, marked, autofix bool) error {
-	merged, err := GetTag(cat.Merged.Name, EnumerateControl{Transaction: TransactionBox{tx: tx}, CreatePhantom: true})
+	merged, err := GetTagByName(tx, cat.Merged.Name, true)
 	if err != nil { return err }
 	cat.Merged = *merged
 
 	if marked {
-		cat.First, err = GetTag(cat.First.Name, EnumerateControl{Transaction: TransactionBox{tx: tx}, CreatePhantom: true})
+		cat.First, err = GetTagByName(tx, cat.First.Name, true)
 		if err != nil { return err }
-		cat.Second, err = GetTag(cat.Second.Name, EnumerateControl{Transaction: TransactionBox{tx: tx}, CreatePhantom: true})
+		cat.Second, err = GetTagByName(tx, cat.Second.Name, true)
 		if err != nil { return err }
 	} else {
 		cat.First = nil
@@ -125,7 +125,7 @@ RETURNING cat_id, replace_id`
 }
 
 func DeleteCatByTagNames(tx *sql.Tx, cat CatData) error {
-	merged, err := GetTag(cat.Merged.Name, EnumerateControl{Transaction: TransactionBox{tx: tx}})
+	merged, err := GetTagByName(tx, cat.Merged.Name, false)
 	if err != nil { return err }
 	if merged == nil { return nil }
 	cat.Merged = *merged

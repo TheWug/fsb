@@ -50,55 +50,6 @@ type EnumerateControl struct {
 	Transaction TransactionBox
 }
 
-func GetTag(name string, ctrl EnumerateControl) (*apitypes.TTagData, error) {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
-
-	sq := "SELECT tag_id, tag_name, tag_count, tag_count_full, tag_type, tag_type_locked FROM tag_index WHERE LOWER(tag_name) = LOWER($1) LIMIT 1"
-	name, typ := PrefixedTagToTypedTag(name)
-
-	row := tx.QueryRow(sq, name)
-
-	var tag apitypes.TTagData
-	err := row.Scan(&tag.Id, &tag.Name, &tag.Count, &tag.FullCount, &tag.Type, &tag.Locked)
-
-	if err == sql.ErrNoRows {
-		if !ctrl.CreatePhantom { return nil, nil } // don't create phantom tag, so just return nil for "not found"
-		// otherwise, insert a phantom tag
-		row = tx.QueryRow("INSERT INTO tag_index (tag_id, tag_name, tag_count, tag_type, tag_type_locked) VALUES (nextval('phantom_tag_seq'), $1, 0, $2, false) RETURNING tag_id, tag_name, tag_count, tag_count_full, tag_type, tag_type_locked", name, typ)
-		err = row.Scan(&tag.Id, &tag.Name, &tag.Count, &tag.FullCount, &tag.Type, &tag.Locked)
-		if err == sql.ErrNoRows { return nil, nil } // this really shouldn't happen, but just in case.
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	ctrl.Transaction.commit = mine
-	return &tag, err
-}
-
-func GetLastTag(settings UpdaterSettings) (*apitypes.TTagData, error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
-
-	sq := "SELECT tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM tag_index WHERE tag_id = (SELECT MAX(tag_id) FROM tag_index) LIMIT 1"
-	row := tx.QueryRow(sq)
-
-	var tag apitypes.TTagData
-	err := row.Scan(&tag.Id, &tag.Name, &tag.Count, &tag.Type, &tag.Locked)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
-	} else if err != nil {
-		return nil, err
-	}
-
-	settings.Transaction.commit = mine
-	return &tag, nil
-}
-
 func ClearTagIndex(settings UpdaterSettings) (error) {
 	// don't delete phantom tags. phantom tags have an id less than zero, and that id is transient, so if the
 	// tag database has phantom tags applied to any posts and they are deleted from here they will become dangling.
@@ -155,31 +106,6 @@ func WriteTagEntries(list []interface{}, settings UpdaterSettings) (error) {
 
 	settings.Transaction.commit = mine && (err != nil)
 	return err
-}
-
-func GetTagsWithCountLess(count int) (apitypes.TTagInfoArray, error) { return getTagsWithCount(count, "<") }
-func GetTagsWithCountGreater(count int) (apitypes.TTagInfoArray, error) { return getTagsWithCount(count, ">") }
-func GetTagsWithCountEqual(count int) (apitypes.TTagInfoArray, error) { return getTagsWithCount(count, "=") }
-
-func getTagsWithCount(count int, differentiator string) (apitypes.TTagInfoArray, error) {
-	sql := fmt.Sprintf("SELECT tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM tag_index WHERE tag_count %s $1", differentiator)
-	rows, err := Db_pool.Query(sql, count)
-	if err != nil {
-		return nil, err
-	}
-
-	defer rows.Close()
-	var d apitypes.TTagData
-	var out apitypes.TTagInfoArray
-
-	for rows.Next() {
-		err = rows.Scan(&d.Id, &d.Name, &d.Count, &d.Type, &d.Locked)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, d)
-	}
-	return out, nil
 }
 
 func GetAliasesFor(tag string, ctrl EnumerateControl) (apitypes.TTagInfoArray, error) {
@@ -333,64 +259,6 @@ func GetHighestPostID(settings UpdaterSettings) (int) {
 
 	settings.Transaction.commit = mine && (err == nil || err == sql.ErrNoRows)
 	return result
-}
-
-func TagUpdater(input chan apitypes.TTagData, settings UpdaterSettings) (error) {
-	mine, _ := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
-	defer func(){ for _ = range input {} }()
-
-	for tag := range input {
-		f := false
-		if tag.Locked == nil { tag.Locked = &f }
-
-		_, err := settings.Transaction.tx.Exec("INSERT INTO tag_index (tag_id, tag_name, tag_count, tag_type, tag_type_locked) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (tag_name) DO UPDATE SET tag_id = EXCLUDED.tag_id, tag_count = EXCLUDED.tag_count, tag_type = EXCLUDED.tag_type, tag_type_locked = EXCLUDED.tag_type_locked", tag.Id, tag.Name, tag.Count, tag.Type, *tag.Locked)
-		if err != nil { return err }
-	}
-
-	settings.Transaction.commit = mine
-	return nil
-}
-
-//func EnumerateAllTagNames() ([]string, error) {
-//	return []string{"tawny_otter_(character)", "tawny", "otter", "character"}, nil
-//}
-
-func EnumerateAllTags(ctrl EnumerateControl) (apitypes.TTagInfoArray, error) {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
-
-	var output apitypes.TTagInfoArray
-
-	sql := "SELECT tag_id, tag_name, tag_count, tag_count_full, tag_type, tag_type_locked FROM tag_index %s"
-	order_by := "ORDER BY %s"
-
-	if ctrl.OrderByCount {
-		order_by = fmt.Sprintf(order_by, "-tag_count")
-	} else {
-		order_by = ""
-	}
-
-	sql = fmt.Sprintf(sql, order_by)
-
-	rows, err := tx.Query(sql)
-	if err != nil { return nil, err }
-
-	defer rows.Close()
-	var d apitypes.TTagData
-
-	for rows.Next() {
-		err = rows.Scan(&d.Id, &d.Name, &d.Count, &d.FullCount, &d.Type, &d.Locked)
-		if err != nil { return nil, err }
-
-		output = append(output, d)
-	}
-
-	ctrl.Transaction.commit = mine
-	return output, nil
 }
 
 func EnumerateAllBlits(ctrl EnumerateControl) (map[string]bool, error) {

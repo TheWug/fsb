@@ -34,6 +34,10 @@ func (this TTagData) ApparentCount(include_deleted bool) int {
 	}
 }
 
+func (tag *TTagData) ScanFrom(row Scannable) error {
+	return row.Scan(&tag.Id, &tag.Name, &tag.Count, &tag.FullCount, &tag.Type, &tag.Locked)
+}
+
 type TTagInfoArray []TTagData
 
 type TTagListing struct {
