@@ -1158,7 +1158,7 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 	} else if ctx.Cmd.Command == "/blits" {
 		go tagindex.Blits(ctx)
 	} else if ctx.Cmd.Command == "/findtagtypos" {
-		go tagindex.FindTagTypos(ctx)
+		go tagindex.Typos(ctx)
 	} else if ctx.Cmd.Command == "/recounttags" {
 		go tagindex.RecountTagsCommand(ctx)
 	} else if ctx.Cmd.Command == "/resyncdeleted" {
