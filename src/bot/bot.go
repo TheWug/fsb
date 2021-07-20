@@ -149,31 +149,31 @@ indextags. <code> --full         -</code> discard local database and sync from s
 indextags. This operation is invoked by <code>/syncposts</code>, which passes <code>--full</code> to this command if it is present.
 janitor.indextagaliases. <code>/indextagaliases</code>
 indextagaliases. This command syncs tag aliases between ` + api.ApiName + ` and the local alias database. Because of how aliases are listed on ` + api.ApiName + `, an incremental sync is not possible, and a full sync is always performed. This command takes no options. It is invoked by <code>/syncposts</code> if <code>--aliases</code> is specified.
-janitor.findtagtypos. <code>/findtagtypos</code>
-findtagtypos. This command searches for likely typos of a tag, as determined by their edit distance to other tags. The way you should use this command is broadly at first, listing all typos, and then more and more specifically as you investigate each possible option on the site, adding selection options until you have a comprehensive, accurate listing of typos, then apply them to the site by issuing the command again with <code>--fix</code> and using <code>--include</code> or <code>--autofix</code> to register them for future auto-fixes.
-findtagtypos. <i>Listing</i> options:
-findtagtypos. <code> --no-auto,     -x -</code> do not automatically treat <code>START_TAG</code> alias
-findtagtypos. <code> --list-wild,   -w -</code> show unconfirmed typos (default)
-findtagtypos. <code> --list-yes,    -y -</code> show confirmed typos
-findtagtypos. <code> --list-no,     -n -</code> show confirmed non-typos
-findtagtypos. <code> --list,        -l -</code> same as -y -n
-findtagtypos. <code> --show-blits,  -b -</code> include typos which are blits
-findtagtypos. <code> --show-zero,   -z -</code> include typos with no tagged posts
-findtagtypos. <code> --general-only,-g -</code> include typos which are non-general tags
-findtagtypos. <code> --threshold, -t N -</code> show tags with edit distance <code>N</code> or less
-findtagtypos. <i>Selection</i> options:
-findtagtypos. <code> [args] START_TAG -</code> find typos of <code>TAG</code> (required)
-findtagtypos. <code> --select,   -s T -</code> select a specific, arbitrary tag <code>T</code>
-findtagtypos. <code> --skip,     -k T -</code> deselect a specific, arbitrary tag <code>T</code>
-findtagtypos. <code> --alias,    -a T -</code> also search for typos near tag <code>T</code>
-findtagtypos. <code> --distinct, -d T -</code> treat <code>T</code> as distinct, and ignore nearby typos
-findtagtypos. <i>Submission</i> options:
-findtagtypos. <code> --delete,  -D   -</code> delete these typo records, if they exist
-findtagtypos. <code> --exclude, -E   -</code> register the selected tags as non-typos
-findtagtypos. <code> --include, -I   -</code> register the selected tags as typos
-findtagtypos. <code> --autofix, -A   -</code> automatically fix the selected typos
-findtagtypos. <code> --fix,     -F   -</code> fix the selected typos now
-findtagtypos. <code> --reason,  -r R -</code> include reason <code>R</code> when performing edits
+janitor.typos. <code>/typos</code>
+typos. This command searches for likely typos of a tag, as determined by their edit distance to other tags. The way you should use this command is broadly at first, listing all typos, and then more and more specifically as you investigate each possible option on the site, adding selection options until you have a comprehensive, accurate listing of typos, then apply them to the site by issuing the command again with <code>--fix</code> and using <code>--include</code> or <code>--autofix</code> to register them for future auto-fixes.
+typos. <i>Listing</i> options:
+typos. <code> --no-auto,     -x -</code> do not automatically treat <code>START_TAG</code> alias
+typos. <code> --list-wild,   -w -</code> show unconfirmed typos (default)
+typos. <code> --list-yes,    -y -</code> show confirmed typos
+typos. <code> --list-no,     -n -</code> show confirmed non-typos
+typos. <code> --list,        -l -</code> same as -y -n
+typos. <code> --show-blits,  -b -</code> include typos which are blits
+typos. <code> --show-zero,   -z -</code> include typos with no tagged posts
+typos. <code> --general-only,-g -</code> include typos which are non-general tags
+typos. <code> --threshold, -t N -</code> show tags with edit distance <code>N</code> or less
+typos. <i>Selection</i> options:
+typos. <code> [args] START_TAG -</code> find typos of <code>TAG</code> (required)
+typos. <code> --select,   -s T -</code> select a specific, arbitrary tag <code>T</code>
+typos. <code> --skip,     -k T -</code> deselect a specific, arbitrary tag <code>T</code>
+typos. <code> --alias,    -a T -</code> also search for typos near tag <code>T</code>
+typos. <code> --distinct, -d T -</code> treat <code>T</code> as distinct, and ignore nearby typos
+typos. <i>Submission</i> options:
+typos. <code> --delete,  -D   -</code> delete these typo records, if they exist
+typos. <code> --exclude, -E   -</code> register the selected tags as non-typos
+typos. <code> --include, -I   -</code> register the selected tags as typos
+typos. <code> --autofix, -A   -</code> automatically fix the selected typos
+typos. <code> --fix,     -F   -</code> fix the selected typos now
+typos. <code> --reason,  -r R -</code> include reason <code>R</code> when performing edits
 janitor.recounttags. <code>/recounttags</code>
 recounttags. This command recounts the cached tag counts, providing an accurate count (the site itself becomes desynced sometimes and its counts are not always accurate). It does so for both visible and deleted posts. It takes no arguments. It is invoked by <code>/syncposts</code> if the <code>--recount</code> option is specified.
 janitor.resyncdeleted. <code>/resyncdeleted</code>
@@ -1157,7 +1157,7 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 		go tagindex.Concatenations(ctx)
 	} else if ctx.Cmd.Command == "/blits" {
 		go tagindex.Blits(ctx)
-	} else if ctx.Cmd.Command == "/findtagtypos" {
+	} else if ctx.Cmd.Command == "/typos" {
 		go tagindex.Typos(ctx)
 	} else if ctx.Cmd.Command == "/recounttags" {
 		go tagindex.RecountTagsCommand(ctx)
