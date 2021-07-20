@@ -72,27 +72,6 @@ func ClearPosts(settings UpdaterSettings) (error) {
 	return err
 }
 
-func WriteTagEntries(list []interface{}, settings UpdaterSettings) (error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
-	stmt, err := tx.Prepare(pq.CopyIn("tag_index", "tag_id", "tag_name", "tag_count", "tag_type", "tag_type_locked"))
-
-	for i := 0; i < len(list); i += 5 {
-		_, err = stmt.Exec(list[i], list[i+1], list[i+2], list[i+3], list[i+4])
-		if err != nil { return err }
-	}
-
-	_, err = stmt.Exec()
-	if err != nil { return err }
-
-	err = stmt.Close()
-
-	settings.Transaction.commit = mine && (err != nil)
-	return err
-}
-
 func GetAliasesFor(tag string, ctrl EnumerateControl) (apitypes.TTagInfoArray, error) {
 	sql :=	"SELECT a.tag_id, a.tag_name, a.tag_count, a.tag_type, a.tag_type_locked FROM " +
 			"tag_index AS %s INNER JOIN " +
