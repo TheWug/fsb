@@ -75,3 +75,7 @@ func NewTxBox() (TransactionBox, error) {
 		tx: newtx,
 	}, err
 }
+
+func Wrap(tx *sql.Tx) TransactionBox {
+	return TransactionBox{tx: tx}
+}
