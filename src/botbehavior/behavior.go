@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"database/sql"
 )
 
 func ShowHelp() {
@@ -475,7 +476,8 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 	if q.debugmode { debugstr = ", DEBUG" }
 	ctx.Bot.Log.Printf("[behavior] Received inline query (from %d %s%s): %s", ctx.Query.From.Id, ctx.Query.From.UsernameString(), debugstr, ctx.Query.Query)
 
-	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Query.From.Id)
+	var creds storage.UserCreds
+	creds, err := storage.GetUserCreds(nil, ctx.Query.From.Id)
 	if err == storage.ErrNoLogin {
 		creds = this.MySettings.DefaultSearchCredentials()
 	} else if err != nil {
@@ -494,7 +496,7 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 			} else if err != nil {
 				ctx.Bot.ErrorLog.Println("Error testing login: ", err.Error())
 			}
-			err = storage.WriteUserCreds(storage.UpdaterSettings{}, creds)
+			err = storage.DefaultTransact(func(tx *sql.Tx) error { return storage.WriteUserCreds(tx, creds) })
 			if err != nil {
 				ctx.Bot.ErrorLog.Println("Error writing credentials: ", err.Error())
 			}

@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"database/sql"
 )
 
 const (
@@ -251,7 +252,7 @@ func (this *AutofixState) HandleCallback(ctx *gogram.CallbackCtx) {
 		}
 		defer settings.Transaction.Finalize(true)
 
-		creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Cb.From.Id)
+		creds, err := storage.GetUserCreds(nil, ctx.Cb.From.Id)
 		if err == storage.ErrNoLogin {
 			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F512 You need to login to do that!\n(use /login, in PM)", ShowAlert: true}, nil)
 			return
@@ -422,7 +423,7 @@ func (this *VoteState) MarkAndTestRecentlyFaved(tg_user data.UserID, post_id int
 func (this *VoteState) HandleCmd(from *data.TUser, cmd *gogram.CommandData, reply_message *data.TMessage, bot *gogram.TelegramBot) (data.OMessage, bool) {
 	var response data.OMessage
 
-	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, from.Id)
+	creds, err := storage.GetUserCreds(nil, from.Id)
 	if err == storage.ErrNoLogin {
 		response.Text = "\U0001F512 You need to login to do that!\n(use /login, in PM)"
 		return response, true
@@ -662,7 +663,7 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 
 	if ctx.Msg.From == nil { return }
 
-	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil {
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to use this command!"}}, nil)
 		if err != storage.ErrNoLogin {
@@ -736,7 +737,7 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 		ctx.SetState(nil)
 		return
 	} else if ctx.Cmd.Command == "/logout" {
-		storage.WriteUserCreds(storage.UpdaterSettings{}, storage.UserCreds{TelegramId: ctx.Msg.From.Id})
+		storage.WriteUserCreds(nil, storage.UserCreds{TelegramId: ctx.Msg.From.Id})
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You are now logged out."}}, nil)
 		ctx.SetState(nil)
 		return
@@ -757,12 +758,14 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 				user, success, err := api.TestLogin(this.user, this.apikey)
 				if success && err == nil {
 					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("You are now logged in as <code>%s</code>.\n\nTo protect the security of your account, I have deleted the message containing your API key.", this.user), ParseMode: data.ParseHTML}}, nil)
-					storage.WriteUserCreds(storage.UpdaterSettings{}, storage.UserCreds{
-						TelegramId: ctx.Msg.From.Id,
-						User: this.user,
-						ApiKey: this.apikey,
-						Blacklist: user.Blacklist,
-						BlacklistFetched: time.Now(),
+					err = storage.DefaultTransact(func(tx *sql.Tx) error {
+						return storage.WriteUserCreds(tx, storage.UserCreds{
+							TelegramId: ctx.Msg.From.Id,
+							User: this.user,
+							ApiKey: this.apikey,
+							Blacklist: user.Blacklist,
+							BlacklistFetched: time.Now(),
+						})
 					})
 					ctx.SetState(nil)
 				} else if err != nil {
@@ -793,7 +796,7 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 		}
 		return
 	} else if ctx.Cmd.Command == "/sync" {
-		creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+		creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 		if err == storage.ErrNoLogin {
 			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "You have not connected your " + api.ApiName + " account."}}, nil)
 			return
@@ -813,7 +816,7 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 		}
 		creds.Blacklist = user.Blacklist
 		creds.BlacklistFetched = time.Now()
-		err = storage.WriteUserCreds(storage.UpdaterSettings{}, creds)
+		err = storage.DefaultTransact(func(tx *sql.Tx) error { return storage.WriteUserCreds(tx, creds) })
 		if err != nil {
 			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "An error occurred while saving your settings! Try again later."}}, nil)
 			ctx.Bot.ErrorLog.Println("An error occurred saving user creds: ", err.Error())
@@ -898,7 +901,7 @@ func (this *TagRuleState) Handle(ctx *gogram.MessageCtx) {
 
 	if this.tagwizardrules != "" && this.tagrulename != "" {
 		this.tagwizardrules = strings.Replace(this.tagwizardrules, "\r", "", -1) // pesky windows carriage returns
-		storage.WriteUserTagRules(storage.UpdaterSettings{}, ctx.Msg.From.Id, this.tagrulename, this.tagwizardrules)
+		_ = storage.DefaultTransact(func(tx *sql.Tx) error { return storage.WriteUserTagRules(tx, ctx.Msg.From.Id, this.tagrulename, this.tagwizardrules) })
 		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Set new tag rules."}}, nil)
 		ctx.SetState(nil)
 	}
@@ -932,7 +935,7 @@ func PostStateFactoryWithData(jstr []byte, sbp persist.StateBasePersistent, data
 }
 
 func (this *PostState) WriteUserTagRules(my_id data.UserID, tagrules, name string) {
-	storage.WriteUserTagRules(storage.UpdaterSettings{}, my_id, name, tagrules)
+	_ = storage.DefaultTransact(func(tx *sql.Tx) error { return storage.WriteUserTagRules(tx, my_id, name, tagrules) })
 }
 
 func (this *PostState) HandleCallback(ctx *gogram.CallbackCtx) {
@@ -1032,7 +1035,7 @@ func (this *PostState) Post(ctx *gogram.MessageCtx) {
 
 	if ctx.Msg.From == nil { return }
 
-	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil {
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to use this command!"}}, nil)
 		if err != storage.ErrNoLogin {
@@ -1047,7 +1050,12 @@ func (this *PostState) Post(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	tagrules, err := storage.GetUserTagRules(storage.UpdaterSettings{}, ctx.Msg.From.Id, "main")
+	var tagrules string
+	err = storage.DefaultTransact(func(tx *sql.Tx) error {
+		var err error
+		tagrules, err = storage.GetUserTagRules(tx, ctx.Msg.From.Id, "main")
+		return err
+	})
 	if err != nil {
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Couldn't load your tag rules for some reason."}}, nil)
 		return
@@ -1137,7 +1145,7 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if !creds.Janitor {
 		// commands from non-authorized users are silently ignored
 		return

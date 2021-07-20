@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"html"
 	"strconv"
+	"database/sql"
 )
 
 const SETTINGS = "/settings"
@@ -106,7 +107,7 @@ func (this *SettingsState) Handle(ctx *gogram.MessageCtx) {
 			return
 		}
 
-		creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+		creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 		if err != nil && err != storage.ErrNoLogin {
 			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Sorry! There was an error looking up your " + api.ApiName + " account."}}, nil)
 			ctx.Bot.ErrorLog.Printf("Error looking up " + api.ApiName + " account for %d: %s", ctx.Msg.From.Id, err.Error())
@@ -118,8 +119,8 @@ func (this *SettingsState) Handle(ctx *gogram.MessageCtx) {
 		if ctx.Cmd.Argstr == "Yes I'm sure!" {
 			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("I'll always remember you, %s!\n<i>MEMORY DELETED</i>", html.EscapeString(ctx.Msg.From.FirstName)), ParseMode: data.ParseHTML}}, nil)
 			if err := storage.DeleteUserSettings(storage.UpdaterSettings{}, ctx.Msg.From.Id); err != nil { ctx.Bot.ErrorLog.Println("Error deleting settings: ", err.Error()) }
-			if err := storage.DeleteUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id); err != nil { ctx.Bot.ErrorLog.Println("Error deleting credentials: ", err.Error()) }
-			if err := storage.DeleteUserTagRules(storage.UpdaterSettings{}, ctx.Msg.From.Id); err != nil { ctx.Bot.ErrorLog.Println("Error deleting credentials: ", err.Error()) }
+			if err := storage.DefaultTransact(func(tx *sql.Tx) error { return storage.DeleteUserCreds(tx, ctx.Msg.From.Id) }); err != nil { ctx.Bot.ErrorLog.Println("Error deleting credentials: ", err.Error()) }
+			if err := storage.DefaultTransact(func(tx *sql.Tx) error { return storage.DeleteUserTagRules(tx, ctx.Msg.From.Id) }); err != nil { ctx.Bot.ErrorLog.Println("Error deleting credentials: ", err.Error()) }
 		} else if len(ctx.Cmd.Argstr) == 0 || ctx.Cmd.Argstr != "Yes I'm sure!" {
 			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "<b>Forget all data and settings: are you sure?</b>\n\nIf you're sure, copy and paste the command\n<code>/delete_my_data_and_forget_me Yes I'm sure!</code>", ParseMode: data.ParseHTML}}, nil)
 			return
@@ -139,7 +140,7 @@ func (this *SettingsState) HandleCallback(ctx *gogram.CallbackCtx) {
 			return
 		}
 
-		creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Cb.From.Id)
+		creds, err := storage.GetUserCreds(nil, ctx.Cb.From.Id)
 		if err != nil && err != storage.ErrNoLogin {
 			answer.Notification, answer.ShowAlert = "Sorry! There was an error looking up your " + api.ApiName + " account.", true
 			ctx.Bot.ErrorLog.Printf("Error looking up " + api.ApiName + " account for %d: %s", ctx.Cb.From.Id, err.Error())

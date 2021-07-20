@@ -222,7 +222,7 @@ func ResyncListCommand(ctx *gogram.MessageCtx) {
 }
 
 func ResyncList(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
-	creds, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
+	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return err }
 
 	doc := ctx.Msg.Document
@@ -348,7 +348,7 @@ func SyncTagsCommand(ctx *gogram.MessageCtx) {
 }
 
 func SyncTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
-	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return err }
 
 	if progress == nil {
@@ -443,7 +443,7 @@ func RecountTagsCommand(ctx *gogram.MessageCtx) {
 }
 
 func RecountTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress *ProgMessage, real_counts, alias_counts bool) (error) {
-	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil { return err }
 	if !creds.Janitor { return errors.New("You need to be a janitor to use this command.") }
 
@@ -565,7 +565,7 @@ func SyncPostsCommand(ctx *gogram.MessageCtx) {
 }
 
 func SyncPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, aliases_too, recount_too bool, progress *ProgMessage) (error) {
-	creds, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
+	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return err }
 
 	if progress == nil {
@@ -692,7 +692,7 @@ func SyncAliasesCommand(ctx *gogram.MessageCtx) {
 }
 
 func SyncAliases(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
-	creds, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
+	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return err }
 
 	if progress == nil {
@@ -941,12 +941,7 @@ type TyposControl struct {
 }
 
 func Typos(ctx *gogram.MessageCtx) {
-	var err error
-	var creds storage.UserCreds
-	storage.DefaultTransact(func(tx *sql.Tx) error {
-		creds, err = storage.GetUserCreds(storage.UpdaterSettings{Transaction: storage.Wrap(tx)}, ctx.Msg.From.Id)
-		return err
-	})
+	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return }
 
 	var control TyposControl
@@ -1283,7 +1278,7 @@ func RefetchDeletedPostsCommand(ctx *gogram.MessageCtx) {
 }
 
 func RefetchDeletedPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
-	creds, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
+	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return err }
 
 	if progress == nil {
@@ -1380,7 +1375,7 @@ func Blits(ctx *gogram.MessageCtx) {
 
 	defer ctrl.Transaction.Finalize(true)
 
-	creds, err := storage.GetUserCreds(storage.UpdaterSettings{Transaction: txbox}, ctx.Msg.From.Id)
+	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return }
 
 	mode := MODE_LIST
@@ -1581,12 +1576,7 @@ type CatsControl struct {
 }
 
 func Concatenations(ctx *gogram.MessageCtx) {
-	var err error
-	var creds storage.UserCreds
-	storage.DefaultTransact(func(tx *sql.Tx) error {
-		creds, err = storage.GetUserCreds(storage.UpdaterSettings{Transaction: storage.Wrap(tx)}, ctx.Msg.From.Id)
-		return err
-	})
+	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return }
 
 	var control CatsControl

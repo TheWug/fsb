@@ -19,8 +19,6 @@ import (
 
 var Db_pool *sql.DB
 
-var ErrNoLogin error = errors.New("No stored credentials for user")
-
 // initialize the DAL. Closing it might be important at some point, but who cares right now.
 func DBInit(dburl string) (error) {
 	var err error
@@ -31,102 +29,6 @@ func DBInit(dburl string) (error) {
 	}
 	log.Println("[util    ] OK!")
 	return nil
-}
-
-type UserCreds struct {
-	TelegramId tgtypes.UserID
-	User, ApiKey string
-	Janitor bool
-	Blacklist string
-	BlacklistFetched time.Time
-}
-
-func WriteUserCreds(settings UpdaterSettings, creds UserCreds) (error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
-	query := `
-INSERT INTO remote_user_credentials (telegram_id, api_user, api_key, api_blacklist, api_blacklist_last_updated)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (telegram_id) DO UPDATE
-SET	api_user = EXCLUDED.api_user,
-	api_key = EXCLUDED.api_key,
-	api_blacklist = EXCLUDED.api_blacklist,
-	api_blacklist_last_updated = EXCLUDED.api_blacklist_last_updated
-`
-	_, err := tx.Exec(query, creds.TelegramId, creds.User, creds.ApiKey, creds.Blacklist, creds.BlacklistFetched)
-	if (err != nil) { return err }
-
-	settings.Transaction.commit = mine
-	return nil
-}
-
-func GetUserCreds(settings UpdaterSettings, id tgtypes.UserID) (UserCreds, error) {
-	creds := UserCreds{TelegramId: id}
-
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return creds, settings.Transaction.err }
-
-	row := tx.QueryRow("SELECT api_user, api_key, privilege_janitorial, api_blacklist, api_blacklist_last_updated FROM remote_user_credentials WHERE telegram_id = $1", id)
-
-	err := row.Scan(&creds.User, &creds.ApiKey, &creds.Janitor, &creds.Blacklist, &creds.BlacklistFetched)
-	if err == sql.ErrNoRows || len(creds.User) == 0 || len(creds.ApiKey) == 0 { err = ErrNoLogin }
-
-	settings.Transaction.commit = mine
-	return creds, err
-}
-
-func DeleteUserCreds(settings UpdaterSettings, id tgtypes.UserID) (error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
-	query := "DELETE FROM remote_user_credentials WHERE telegram_id = $1"
-	_, err := tx.Exec(query, id)
-
-	settings.Transaction.commit = mine && (err == nil)
-	return err
-}
-
-func WriteUserTagRules(settings UpdaterSettings, id tgtypes.UserID, name, rules string) (error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
-	_, err := tx.Exec("DELETE FROM user_tagrules WHERE telegram_id = $1 AND name = $2", id, name)
-	if (err != nil) { return err }
-	_, err = tx.Exec("INSERT INTO user_tagrules (telegram_id, name, rules) VALUES ($1, $2, $3)", id, name, rules)
-	if (err != nil) { return err }
-
-	settings.Transaction.commit = mine
-	return nil
-}
-
-func GetUserTagRules(settings UpdaterSettings, id tgtypes.UserID, name string) (string, error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return "", settings.Transaction.err }
-
-	row := tx.QueryRow("SELECT rules FROM user_tagrules WHERE telegram_id = $1 AND name = $2", id, name)
-	var rules string
-	err := row.Scan(&rules)
-	if err == sql.ErrNoRows { err = nil } // no data for user is not an error.
-
-	settings.Transaction.commit = mine
-	return rules, err
-}
-
-func DeleteUserTagRules(settings UpdaterSettings, id tgtypes.UserID) (error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
-	_, err := tx.Exec("DELETE FROM user_tagrules WHERE telegram_id = $1", id)
-
-	settings.Transaction.commit = mine && (err == nil)
-	return err
 }
 
 func PrefixedTagToTypedTag(name string) (string, int) {
