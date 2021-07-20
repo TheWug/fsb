@@ -203,13 +203,6 @@ func MarkPostDeleted(post_id int, settings UpdaterSettings) error {
 	return err
 }
 
-func GetHighestStagedPostID(settings UpdaterSettings) (int) {
-	row := Db_pool.QueryRow("SELECT MAX(post_id) FROM post_tags_by_name")
-	var result int
-	_ = row.Scan(&result)
-	return result
-}
-
 func GetHighestPostID(settings UpdaterSettings) (int) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
@@ -427,18 +420,6 @@ func ImportPostTagsFromNameToID(settings UpdaterSettings, sfx chan string) (erro
 
 	settings.Transaction.commit = mine
 	return nil
-}
-
-func ResetPostTags(settings UpdaterSettings) (error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
-	query := "TRUNCATE post_tags, post_tags_by_name"
-	_, err := tx.Exec(query)
-
-	settings.Transaction.commit = mine && (err != nil)
-	return err
 }
 
 func CountTags(settings UpdaterSettings, sfx chan string) (error) {
@@ -985,69 +966,6 @@ func (this PostSuggestedEdit) Flatten() tags.TagDiff {
 	return this.Prompt.Flatten().Union(this.AutoFix.Flatten())
 }
 
-func GetSuggestedPostEdits(posts []int, settings UpdaterSettings) (map[int]PostSuggestedEdit, error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
-
-	results := make(map[int]PostSuggestedEdit)
-	populate := func(id int, mode CorrectionMode) *tags.TagDiff {
-		value := results[id]
-
-		array := &value.Prompt
-		if mode == Prompt {
-		} else if mode == AutoFix {
-			array = &value.AutoFix
-		} else {
-			panic("bad CorrectionMode? should be either Prompt or Autofix")
-		}
-
-		*array = append(*array, tags.TagDiff{})
-		results[id] = value
-		return &(*array)[len(*array) - 1]
-	}
-
-	query := "SELECT post_id, tag_typo_name, tag_implied_name, mode FROM typos_identified INNER JOIN tag_index ON tag_typo_name = tag_name INNER JOIN post_tags USING (tag_id) WHERE mode IN ($1, $2) AND post_id = ANY($3::int[])"
-	rows, err := tx.Query(query, Prompt, AutoFix, pq.Array(posts))
-	if err != nil { return nil, err }
-	defer rows.Close()
-
-	for rows.Next() {
-		var id int
-		var typo, fixed string
-		var mode CorrectionMode
-		err = rows.Scan(&id, &typo, &fixed, &mode)
-		if err != nil { return nil, err }
-
-		diff := populate(id, mode)
-
-		diff.Remove(typo)
-		diff.Add(fixed)
-	}
-
-	query = "SELECT post_id, tag_cat_name, tag_1_name, tag_2_name, mode FROM cats_identified INNER JOIN tag_index ON tag_cat_name = tag_name INNER JOIN post_tags USING (tag_id) WHERE mode IN ($1, $2) AND post_id = ANY($3::int[])"
-	rows, err = tx.Query(query, Prompt, AutoFix, pq.Array(posts))
-	if err != nil { return nil, err }
-	defer rows.Close()
-
-	for rows.Next() {
-		var id int
-		var cat, first, second string
-		var mode CorrectionMode
-		err = rows.Scan(&id, &cat, &first, &second, &mode)
-		if err != nil { return nil, err }
-
-		diff := populate(id, mode)
-
-		diff.Remove(cat)
-		diff.Add(first)
-		diff.Add(second)
-	}
-
-	settings.Transaction.commit = mine
-	return results, nil
-}
-
 type PromptPostInfo struct {
 	PostId     int
 	PostType   string
@@ -1061,45 +979,6 @@ type PromptPostInfo struct {
 	Timestamp  time.Time
 	Captioned  bool
 	Edit      *PostSuggestedEdit
-}
-
-func GetAutoFixHistoryForPosts(posts []int, settings UpdaterSettings) (map[int][]tags.TagDiff, error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
-
-	query := "SELECT post_id, fix_change FROM autofix_history WHERE post_id = ANY($1::int[])"
-	rows, err := tx.Query(query, pq.Array(posts))
-	if err != nil { return nil, err }
-	defer rows.Close()
-
-	results := make(map[int][]tags.TagDiff)
-
-	for rows.Next()	{
-		var id int
-		var diff_string string
-
-		err = rows.Scan(&id, &diff_string)
-		if err != nil { return nil, err }
-
-		results[id] = append(results[id], tags.TagDiffFromString(diff_string))
-	}
-
-	settings.Transaction.commit = mine
-	return results, nil
-}
-
-func AddAutoFixHistoryForPost(post_id int, changes []string, settings UpdaterSettings) (error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
-	query := "INSERT INTO autofix_history (post_id, fix_ts, fix_change) SELECT $1, now(), change FROM UNNEST($2::varchar[]) AS change ON CONFLICT DO NOTHING"
-	_, err := tx.Exec(query, post_id, pq.Array(changes))
-	if err != nil { return err }
-
-	settings.Transaction.commit = mine
-	return nil
 }
 
 func FindPromptPost(id int, settings UpdaterSettings) (*PromptPostInfo, error) {

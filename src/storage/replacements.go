@@ -153,3 +153,44 @@ func GetReplacementHistory(settings UpdaterSettings, post_ids []int) (map[Replac
 	settings.Transaction.commit = mine
 	return out, nil
 }
+
+// func AddReplacementHistory // implement this
+
+func GetAutoFixHistoryForPosts(posts []int, settings UpdaterSettings) (map[int][]tags.TagDiff, error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
+
+	query := "SELECT post_id, fix_change FROM autofix_history WHERE post_id = ANY($1::int[])"
+	rows, err := tx.Query(query, pq.Array(posts))
+	if err != nil { return nil, err }
+	defer rows.Close()
+
+	results := make(map[int][]tags.TagDiff)
+
+	for rows.Next()	{
+		var id int
+		var diff_string string
+
+		err = rows.Scan(&id, &diff_string)
+		if err != nil { return nil, err }
+
+		results[id] = append(results[id], tags.TagDiffFromString(diff_string))
+	}
+
+	settings.Transaction.commit = mine
+	return results, nil
+}
+
+func AddAutoFixHistoryForPost(post_id int, changes []string, settings UpdaterSettings) (error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
+
+	query := "INSERT INTO autofix_history (post_id, fix_ts, fix_change) SELECT $1, now(), change FROM UNNEST($2::varchar[]) AS change ON CONFLICT DO NOTHING"
+	_, err := tx.Exec(query, post_id, pq.Array(changes))
+	if err != nil { return err }
+
+	settings.Transaction.commit = mine
+	return nil
+}
