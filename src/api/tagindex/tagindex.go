@@ -25,6 +25,7 @@ import (
 	"time"
 	"unicode/utf8"
 	"sort"
+	"database/sql"
 )
 
 type ProgMessage struct {
@@ -1561,26 +1562,52 @@ func (t Triplet) CatData() storage.CatData {
 	return storage.CatData{Merged: *t.tag, First: t.subtag1, Second: t.subtag2}
 }
 
+type CatsControl struct {
+	cats            []Triplet
+
+	fix_list        []Triplet
+	exclude_list    []Triplet
+	prompt_list     []Triplet
+	autofix_list    []Triplet
+	delete_list     []Triplet
+
+	mode              int
+	ratio             int
+
+	inspect_tag       string
+
+	prefix_only       bool
+	suffix_only       bool
+	with_blits        bool
+	with_empty        bool
+	with_typed        bool
+	needs_empty       bool
+	needs_empty_fixed bool
+
+	list_settings     ListSettings
+}
+
 func Concatenations(ctx *gogram.MessageCtx) {
-	txbox, err := storage.NewTxBox()
-	if err != nil {
-		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error opening DB transaction: %s.", err.Error())}}, nil)
-		return
-	}
-
-	ctrl := storage.EnumerateControl{
-		Transaction: txbox,
-		CreatePhantom: true,
-		OrderByCount: true,
-	}
-
-	defer ctrl.Transaction.Finalize(true)
-
-	creds, err := storage.GetUserCreds(storage.UpdaterSettings{Transaction: txbox}, ctx.Msg.From.Id)
+	var err error
+	var creds storage.UserCreds
+	storage.DefaultTransact(func(tx *sql.Tx) error {
+		creds, err = storage.GetUserCreds(storage.UpdaterSettings{Transaction: storage.Wrap(tx)}, ctx.Msg.From.Id)
+		return err
+	})
 	if err != nil || !creds.Janitor { return }
 
+	var control CatsControl
+
+	var current_list []Triplet
+	var select_first   string
+
+	control.ratio = 10
+	control.mode = MODE_LIST
+	control.prefix_only = true
+	control.suffix_only = true
+	control.list_settings = ListSettings{wild: true}
+
 	// read candidate cats from the replied message, if there is one, so -e can select them
-	var cats []Triplet
 	header := "Here are some random concatenated tags:"
 	if ctx.Msg.ReplyToMessage != nil {
 		text := ctx.Msg.ReplyToMessage.Text
@@ -1595,148 +1622,135 @@ func Concatenations(ctx *gogram.MessageCtx) {
 					t.subtag1.Name = tokens[1]
 					t.subtag2.Name = tokens[3]
 					t.tag.Name = t.subtag1.Name + t.subtag2.Name
-					cats = append(cats, t)
+					control.cats = append(control.cats, t)
 				}
 			}
 		}
 	}
-
-	ratio := 10
-	mode := MODE_LIST
-	prefix_only, suffix_only := true, true
-
-	var with_blits, with_empty, with_typed bool
-	var fix_list, exclude_list, prompt_list, autofix_list, delete_list []Triplet
-	var inspect_tag string
-	var needs_empty, needs_empty_fixed bool
-	var current_list []Triplet
-	var select_first string
-
-	list_settings := ListSettings{wild: true}
 
 	for _, token := range ctx.Cmd.Args {
 		ltoken := strings.Replace(strings.ToLower(token), "\uFE0F", "", -1)
 		switch token {
 		case "--list-wild", "-w":
-			list_settings.Apply(ListSettings{wild: true})
+			control.list_settings.Apply(ListSettings{wild: true})
 		case "--list-yes", "-y":
-			list_settings.Apply(ListSettings{yes: true})
+			control.list_settings.Apply(ListSettings{yes: true})
 		case "--list-no", "-n":
-			list_settings.Apply(ListSettings{no: true})
+			control.list_settings.Apply(ListSettings{no: true})
 		case "--list", "-l":
-			list_settings.Apply(ListSettings{yes: true, no: true})
+			control.list_settings.Apply(ListSettings{yes: true, no: true})
 
 		case "--inspect", "-i":
-			mode = MODE_INSPECT
+			control.mode = MODE_INSPECT
 		case "--first", "-1":
-			prefix_only, suffix_only = true, false
+			control.prefix_only, control.suffix_only = true, false
 		case "--second", "-2":
-			prefix_only, suffix_only = false, true
+			control.prefix_only, control.suffix_only = false, true
 		case "--ratio", "-r":
-			mode = MODE_FREQ_RATIO
+			control.mode = MODE_FREQ_RATIO
 		case "--with-blits", "-b":
-			with_blits = true
+			control.with_blits = true
 		case "--with-empty", "-0":
-			with_empty = true
+			control.with_empty = true
 		case "--with-typed", "-t":
-			with_typed = true
+			control.with_typed = true
 
 		case "--entry", "-e":
-			mode = MODE_ENTRY
+			control.mode = MODE_ENTRY
 		case "--select", "-s":
-			mode = MODE_SELECT_1
+			control.mode = MODE_SELECT_1
 		case "--cat-name", "-c":
-			mode = MODE_SELECT_CAT
+			control.mode = MODE_SELECT_CAT
 
 		case "--exclude", "-E":
-			mode = MODE_EXCLUDE
+			control.mode = MODE_EXCLUDE
 		case "--prompt", "-P":
-			mode = MODE_PROMPT
+			control.mode = MODE_PROMPT
 		case "--autofix", "-A":
-			mode = MODE_AUTOFIX
+			control.mode = MODE_AUTOFIX
 		case "--delete", "-D":
-			mode = MODE_DELETE
+			control.mode = MODE_DELETE
 		case "--fix", "-F":
-			mode = MODE_FIX
+			control.mode = MODE_FIX
 		default: // we failed to parse a mode changing token, so try to parse an argument for the current mode.
-			switch mode {
+			switch control.mode {
 			case MODE_ENTRY, MODE_SELECT_2, MODE_SELECT_CAT: // all cases which write to current_list
-				if needs_empty || needs_empty_fixed {
+				if control.needs_empty || control.needs_empty_fixed {
 					current_list = current_list[0:0]
-					needs_empty = false
-					needs_empty_fixed = false
+					control.needs_empty = false
+					control.needs_empty_fixed = false
 				}
 			}
 
-			switch mode {
+			switch control.mode {
 			case MODE_INSPECT:
-				inspect_tag = ltoken
-				mode = MODE_LIST
+				control.inspect_tag = ltoken
+				control.mode = MODE_LIST
 			case MODE_FREQ_RATIO:
 				var temp int
 				temp, err = strconv.Atoi(ltoken)
 				if err == nil {
-					ratio = temp
+					control.ratio = temp
 				} else {
 					break
 				}
-				mode = MODE_LIST
+				control.mode = MODE_LIST
 			case MODE_ENTRY:
 				var temp int
 				temp, err = strconv.Atoi(ltoken)
-				if err == nil && temp >= 0 && temp < len(cats) {
-					current_list = append(current_list, cats[temp])
+				if err == nil && temp >= 0 && temp < len(control.cats) {
+					current_list = append(current_list, control.cats[temp])
 				} else {
 					break
 				}
-				mode = MODE_READY
+				control.mode = MODE_READY
 			case MODE_SELECT_1:
 				select_first = ltoken
-				mode = MODE_SELECT_2
+				control.mode = MODE_SELECT_2
 			case MODE_SELECT_2:
 				current_list = append(current_list, Triplet{&types.TTagData{Name: select_first + ltoken}, &types.TTagData{Name: select_first}, &types.TTagData{Name: ltoken}})
-				mode = MODE_READY
+				control.mode = MODE_READY
 			case MODE_SELECT_CAT:
 				current_list = append(current_list, Triplet{tag: &types.TTagData{Name: ltoken}})
-				mode = MODE_READY
+				control.mode = MODE_READY
 			}
 		}
 
-		switch mode {
+		switch control.mode {
 		case MODE_READY, MODE_LIST, MODE_INSPECT, MODE_FREQ_RATIO, MODE_ENTRY, MODE_SELECT_1, MODE_SELECT_2, MODE_SELECT_CAT: // any mode which attempts to read a parameter skips everything past this point.
 			continue
 		case MODE_FIX: // fix is special because it should be read once but not mutually exclusively with the others so handle it here.
-			mode = MODE_READY
-			if needs_empty_fixed { continue }
-			fix_list = append(fix_list, current_list...)
-			needs_empty_fixed = true
+			control.mode = MODE_READY
+			if control.needs_empty_fixed { continue }
+			control.fix_list = append(control.fix_list, current_list...)
+			control.needs_empty_fixed = true
 			continue
 		default: // for any other edit control mode, continue if we've already pulled the list but not added anything to it.
-			if needs_empty {
-				mode = MODE_READY
+			if control.needs_empty {
+				control.mode = MODE_READY
 				continue
 			}
 		}
 
-		switch mode {
+		switch control.mode {
 		case MODE_EXCLUDE:
-			exclude_list = append(exclude_list, current_list...)
+			control.exclude_list = append(control.exclude_list, current_list...)
 		case MODE_PROMPT:
-			prompt_list = append(prompt_list, current_list...)
+			control.prompt_list = append(control.prompt_list, current_list...)
 		case MODE_AUTOFIX:
-			autofix_list = append(autofix_list, current_list...)
+			control.autofix_list = append(control.autofix_list, current_list...)
 		case MODE_DELETE:
-			delete_list = append(delete_list, current_list...)
+			control.delete_list = append(control.delete_list, current_list...)
 		}
 
-		needs_empty = true
-		mode = MODE_READY
+		control.needs_empty = true
+		control.mode = MODE_READY
 	}
 
-	switch mode {
+	switch control.mode {
 	case MODE_READY, MODE_LIST:
 	default:
-		err = fmt.Errorf("missing required argument (%d)", mode)
+		err = fmt.Errorf("missing required argument (%d)", control.mode)
 	}
 
 	// If there was an error processing command line arguments, report the error and bail.
@@ -1745,32 +1759,41 @@ func Concatenations(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	// if we're still in list mode, that means we are definitely doing a list command, so do it and return
-	if mode == MODE_LIST {
-		exceptions_yes, exceptions_no, err := storage.GetCats(list_settings.yes, list_settings.no, ctrl)
-		if err != nil {
-			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "6Whoops: " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
-			return
-		}
+	progress, err := ProgressMessage2(data.OMessage{SendData: data.SendData{TargetData: data.TargetData{ChatId: ctx.Msg.Chat.Id}, ReplyToId: &ctx.Msg.Id, ParseMode: data.ParseHTML}, DisableWebPagePreview: true},
+	                                  "", 3 * time.Second, ctx.Bot)
+
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("Failed to create ProgMessage")
+		return
+	}
+
+	defer progress.Close()
+
+	err = storage.DefaultTransact(func(tx *sql.Tx) error { return CatsInternal(tx, control, creds, progress) })
+	if err != nil {
+		progress.SetMessage(fmt.Sprintf("Whoops! An error occurred: %s", html.EscapeString(err.Error())))
+	}
+}
+
+func CatsInternal(tx *sql.Tx, control CatsControl, creds storage.UserCreds, progress *ProgMessage) error {
+	var err error
+
+	if control.mode == MODE_LIST {
+		exceptions_yes, exceptions_no, err := storage.GetCats(tx, control.list_settings.yes, control.list_settings.no)
+		if err != nil { return err }
 
 		var wildCandidates []Triplet
 		var yesCandidates, noCandidates []storage.CatData
 
-		if list_settings.wild {
-			tags, err := storage.EnumerateAllTags(storage.EnumerateControl{Transaction: ctrl.Transaction})
-			if err != nil {
-				ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "5Whoops: " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
-				return
-			}
+		if control.list_settings.wild {
+			tags, err := storage.EnumerateAllTags(storage.EnumerateControl{Transaction: storage.Wrap(tx)})
+			if err != nil { return err }
 
 			// fetch blits the same way
 			var blits_yes, blits_wild []storage.BlitData
-			if !with_blits {
-				blits_yes, _, blits_wild, err = storage.GetBlits(true, false, true, ctrl)
-				if err != nil {
-					ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "4Whoops: " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
-					return
-				}
+			if !control.with_blits {
+				blits_yes, _, blits_wild, err = storage.GetBlits(true, false, true, storage.EnumerateControl{Transaction: storage.Wrap(tx)})
+				if err != nil { return err }
 			}
 
 			tagMap := make(map[string]*types.TTagData, len(tags))
@@ -1800,41 +1823,38 @@ func Concatenations(ctx *gogram.MessageCtx) {
 				}
 			}
 
-			if inspect_tag == "" {
-				wildCandidates = GetAllWildCats(tagMap, blitsMap, ratio, with_empty, with_typed)
+			if control.inspect_tag == "" {
+				wildCandidates = GetAllWildCats(tagMap, blitsMap, control.ratio, control.with_empty, control.with_typed)
 			} else {
-				wildCandidates = GetSpecificWildCats(tagMap, blitsMap, inspect_tag, prefix_only, suffix_only, ratio, with_empty, with_typed)
+				wildCandidates = GetSpecificWildCats(tagMap, blitsMap, control.inspect_tag, control.prefix_only, control.suffix_only, control.ratio, control.with_empty, control.with_typed)
 			}
 		}
-		if list_settings.yes {
-			if inspect_tag == "" {
+		if control.list_settings.yes {
+			if control.inspect_tag == "" {
 				yesCandidates = exceptions_yes
 			} else {
-				tag, err := storage.GetTag(inspect_tag, ctrl)
-				if err != nil {
-					ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "3Whoops: " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
-					return
-				}
+				tag, err := storage.GetTag(control.inspect_tag, storage.EnumerateControl{Transaction: storage.Wrap(tx)})
+				if err != nil { return err }
 
 				for _, v := range exceptions_yes {
-					if prefix_only && v.First.Id == tag.Id {
+					if control.prefix_only && v.First.Id == tag.Id {
 						yesCandidates = append(yesCandidates, v)
 					}
-					if suffix_only && v.Second.Id == tag.Id {
+					if control.suffix_only && v.Second.Id == tag.Id {
 						yesCandidates = append(yesCandidates, v)
 					}
 				}
 			}
 		}
-		if list_settings.no {
-			if inspect_tag == "" {
+		if control.list_settings.no {
+			if control.inspect_tag == "" {
 				noCandidates = exceptions_no
 			} else {
 				for _, v := range exceptions_no {
-					if prefix_only && strings.HasPrefix(v.Merged.Name, inspect_tag) {
+					if control.prefix_only && strings.HasPrefix(v.Merged.Name, control.inspect_tag) {
 						noCandidates = append(noCandidates, v)
 					}
-					if suffix_only && strings.HasSuffix(v.Merged.Name, inspect_tag) {
+					if control.suffix_only && strings.HasSuffix(v.Merged.Name, control.inspect_tag) {
 						noCandidates = append(noCandidates, v)
 					}
 				}
@@ -1858,64 +1878,48 @@ func Concatenations(ctx *gogram.MessageCtx) {
 
 		// teach it to write a format it can understand with -e
 
-		ctx.Bot.Remote.SendDocumentAsync(data.ODocument{SendData: data.SendData{Text: "Cat List", ReplyToId: &ctx.Msg.Id, TargetData: data.TargetData{ChatId: ctx.Msg.Chat.Id}}, MediaData: data.MediaData{File: ioutil.NopCloser(&buf), FileName: "catlist.txt"}}, nil)
-		return
+		// ctx.Bot.Remote.SendDocumentAsync(data.ODocument{SendData: data.SendData{Text: "Cat List", ReplyToId: &ctx.Msg.Id, TargetData: data.TargetData{ChatId: ctx.Msg.Chat.Id}}, MediaData: data.MediaData{File: ioutil.NopCloser(&buf), FileName: "catlist.txt"}}, nil)
+		return nil
 	}
 
 	work := []struct {
 		list []Triplet
 		mark, autofix bool
 	}{
-		{exclude_list, false, false},
-		{prompt_list, true, false},
-		{autofix_list, true, true},
-		{fix_list, false, false},
-		{delete_list, false, false},
+		{control.exclude_list, false, false},
+		{control.prompt_list, true, false},
+		{control.autofix_list, true, true},
+		{control.fix_list, false, false},
+		{control.delete_list, false, false},
 	}
 
 	for _, job := range work[1:4] { // only do subtags check for prompt, autofix, and fix lists
 		for _, triplet := range job.list {
-			if triplet.subtag1 == nil || triplet.subtag2 == nil {
-				ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Error while processing command: tried to add or update a cat without specifying subtags", ParseMode: data.ParseHTML}}, nil)
-				return
-			}
+			if triplet.subtag1 == nil || triplet.subtag2 == nil { return errors.New("tried to add or update a cat without specifying subtags") }
 		}
 	}
 
 	for _, job := range work[0:3] { // process normal additions and removals from the exclude, prompt, and autofix lists
 		for _, triplet := range job.list {
-			err = storage.SetCatByTagNames(ctrl, triplet.CatData(), job.mark, job.autofix)
-			if err != nil {
-				ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "2Whoops: " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
-				return
-			}
+			err = storage.SetCatByTagNames(tx, triplet.CatData(), job.mark, job.autofix)
+			if err != nil { return err }
 		}
 	}
 
-	for _, triplet := range delete_list {
-		err = storage.DeleteCatByTagNames(ctrl, triplet.CatData())
-		if err != nil {
-			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "1Whoops: " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
-			return
-		}
+	for _, triplet := range control.delete_list {
+		err = storage.DeleteCatByTagNames(tx, triplet.CatData())
+		if err != nil { return err }
 	}
 
-	progress, err := ProgressMessage2(data.OMessage{SendData: data.SendData{TargetData: data.TargetData{ChatId: ctx.Msg.Chat.Id}, ReplyToId: &ctx.Msg.Id, ParseMode: data.ParseHTML}, DisableWebPagePreview: true},
-                                       fmt.Sprintf("Successfully updated %d cats.", len(delete_list) + len(exclude_list) + len(prompt_list) + len(autofix_list)), 3 * time.Second, ctx.Bot)
-	defer progress.Close()
-
-	if len(fix_list) != 0 {
-		progress.AppendNotice("\nUpdating posts which need fixing...")
-
+	if len(control.fix_list) != 0 {
 		var updated int
-		for _, triplet := range fix_list {
-			triplet.tag, err = storage.GetTag(triplet.tag.Name, storage.EnumerateControl{Transaction: txbox})
+		for _, triplet := range control.fix_list {
+			triplet.tag, err = storage.GetTag(triplet.tag.Name, storage.EnumerateControl{Transaction: storage.Wrap(tx)})
 			if triplet.tag == nil { continue }
 
-			posts, err := storage.PostsWithTag(*triplet.tag, storage.EnumerateControl{Transaction: txbox})
+			posts, err := storage.PostsWithTag(*triplet.tag, storage.EnumerateControl{Transaction: storage.Wrap(tx)})
 			if err != nil {
-				progress.SetStatus(fmt.Sprintf(" (error: %s)", html.EscapeString(err.Error())))
-				return
+				return err
 			}
 
 			reason := fmt.Sprintf("Bulk retag: %s --> %s, %s (fixed concatenated tags)", triplet.tag.Name, triplet.subtag1.Name, triplet.subtag2.Name)
@@ -1925,29 +1929,18 @@ func Concatenations(ctx *gogram.MessageCtx) {
 				diff.Add(triplet.subtag1.Name)
 				diff.Add(triplet.subtag2.Name)
 				diff.Remove(triplet.tag.Name)
-				ctx.Bot.Log.Println(diff)
 				newp, err := api.UpdatePost(creds.User, creds.ApiKey, p.Id, diff, nil, nil, nil, nil, &reason)
-				ctx.Bot.Log.Println("Post update: ", updated)
-				if err != nil {
-					progress.SetStatus(fmt.Sprintf(" (error: %s)", html.EscapeString(err.Error())))
-					return
-				}
+				if err != nil { return err }
 
 				if newp != nil {
-					err = storage.UpdatePost(*newp, storage.UpdaterSettings{Transaction: txbox})
-					if err != nil {
-						progress.SetStatus(fmt.Sprintf(" (error: %s)", html.EscapeString(err.Error())))
-						return
-					}
+					err = storage.UpdatePost(*newp, storage.UpdaterSettings{Transaction: storage.Wrap(tx)})
+					if err != nil { return err }
 				}
-
-				progress.SetStatus(fmt.Sprintf(" (%d/%d %d: <code>%s</code> -> <code>%s</code>, <code>%s</code>)", updated, -1, p.Id, html.EscapeString(triplet.tag.Name), html.EscapeString(triplet.subtag1.Name), html.EscapeString(triplet.subtag2.Name)))
 			}
-			progress.SetStatus("done.")
 		}
 	}
 
-	ctrl.Transaction.MarkForCommit()
+	return nil
 }
 
 /*
