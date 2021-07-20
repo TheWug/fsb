@@ -70,3 +70,6 @@ func Transact(db_connection *sql.DB, callback func(*sql.Tx) error) error {
 	return err
 }
 
+func DefaultTransact(callback func(*sql.Tx) error) error {
+	return Transact(Db_pool, callback)
+}
