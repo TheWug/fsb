@@ -50,21 +50,6 @@ type EnumerateControl struct {
 	Transaction TransactionBox
 }
 
-func ClearTagIndex(settings UpdaterSettings) (error) {
-	// don't delete phantom tags. phantom tags have an id less than zero, and that id is transient, so if the
-	// tag database has phantom tags applied to any posts and they are deleted from here they will become dangling.
-	// instead, keep them. they may conflict later with real tags, in which case they will be de-phantomified.
-
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
-	_, err := tx.Exec("DELETE FROM tag_index WHERE tag_id > 0")
-
-	settings.Transaction.commit = mine
-	return err
-}
-
 func ClearAliasIndex(settings UpdaterSettings) (error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
