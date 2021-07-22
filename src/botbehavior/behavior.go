@@ -21,7 +21,6 @@ import (
 	"html"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"database/sql"
 )
@@ -87,152 +86,127 @@ func (this *Behavior) DoMaintenance(bot *gogram.TelegramBot) {
 func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool) {
 	channel := make(chan bool)
 	go func() {
-		MainLoop:
 		for maintenances := 0; true; maintenances++ {
 			_ = <- channel
 
-			var err error
-			extra_expensive := (maintenances % 144 == 143)
-			settings := storage.UpdaterSettings{Full: false}
-			settings.Transaction, err = storage.NewTxBox()
+			err := storage.DefaultTransact(func(tx *sql.Tx) error { return this.maintenanceInternal(tx, bot, maintenances % 144 == 143) })
 			if err != nil {
-				bot.Log.Println("Error in maintenance loop:", err.Error())
-				continue
+				bot.ErrorLog.Println("Error during maintenance routine:", err)
 			}
-
-			update_chan := make(chan []apitypes.TPostInfo)
-			var updated_post_ids []int
-			updated_posts := make(map[int]apitypes.TPostInfo)
-
-			var wg sync.WaitGroup
-			wg.Add(2)
-			go func() {
-				for posts := range update_chan {
-					for _, p := range posts {
-						if !p.Deleted { // skip deleted posts since they can't be edited.
-							updated_post_ids = append(updated_post_ids, p.Id)
-							updated_posts[p.Id] = p
-						}
-					}
-				}
-				wg.Done()
-			}()
-
-			go func() {
-				err = storage.DefaultTransact(func(tx *sql.Tx) error { return tagindex.SyncPostsInternal(tx, this.MySettings.SearchUser, this.MySettings.SearchAPIKey, extra_expensive, extra_expensive, nil, update_chan) })
-				close(update_chan)
-				wg.Done()
-				if err != nil { bot.ErrorLog.Println("SyncPostsInternal in maintenance routine:", err.Error()) }
-			}()
-
-			wg.Wait()
-
-			settings.Transaction.MarkForCommit()
-			settings.Transaction.Finalize(true)
-
-			settings.Transaction, err = storage.NewTxBox()
-			if err != nil {
-				bot.ErrorLog.Println("Error creating transaction:", err.Error())
-				continue
-			}
-
-			replace_id := int64(-1)
-			replacements, err := storage.GetReplacements(settings, replace_id)
-			actual_posts, err := storage.PostsById(updated_post_ids, settings)
-
-			type shim struct {
-				post *apitypes.TPostInfo
-				metadata tags.TagSet
-			}
-
-			posts_and_stuff := make(map[int]shim)
-
-			for i, _ := range actual_posts {
-				posts_and_stuff[actual_posts[i].Id] = shim{post: &actual_posts[i], metadata: actual_posts[i].ExtendedTagSet()}
-			}
-
-			replacement_history, err := storage.GetReplacementHistorySince(settings, updated_post_ids, time.Now().Add(-1 * 7 * 24 * time.Hour))
-
-			edits := make(map[int]*storage.PostSuggestedEdit)
-			for len(replacements) != 0 {
-				if err != nil {
-					bot.ErrorLog.Println("Error getting replacers:", err.Error())
-					continue MainLoop
-				}
-
-				for _, r := range replacements {
-					m := r.Matcher()
-					for id, sh := range posts_and_stuff {
-						if _, ok := replacement_history[storage.ReplacementHistoryKey{ReplacerId: r.Id, PostId: id}]; ok { continue }
-						if m.Matches(sh.metadata) {
-							if edits[id] == nil {
-								edits[id] = &storage.PostSuggestedEdit{}
-							}
-
-							to := &edits[id].Prompt
-							if r.Autofix {
-								to = &edits[id].AutoFix
-							}
-							*to = append(*to, m.ReplaceSpec)
-						}
-					}
-				}
-				replace_id = replacements[len(replacements) - 1].Id
-				replacements, err = storage.GetReplacements(settings, replace_id)
-			}
-
-			default_creds := this.MySettings.DefaultSearchCredentials()
-
-			for id, edit := range edits {
-				edit.SelectAutofix()
-				auto_diff := edit.GetChangeToApply()
-				if !auto_diff.IsZero() {
-					post, err := api.UpdatePost(default_creds.User, default_creds.ApiKey, id, auto_diff, nil, nil, nil, nil, sptr("Automatic tag cleanup: typos and concatenations (via KnottyBot)"))
-					if err != nil {
-						bot.ErrorLog.Println("Error updating post:", err.Error())
-					} else {
-						edit.Apply()
-						var applied_api []string
-						for k, _ := range edit.AppliedEdits { applied_api = append(applied_api, k) }
-						storage.DefaultTransact(func(tx *sql.Tx) error { return storage.AddReplacementHistory(tx, &storage.ReplacementHistory{
-							ReplacementHistoryKey: storage.ReplacementHistoryKey{
-								ReplacerId: 0,
-								PostId: id,
-							},
-							TelegramUserId: -1,
-							Timestamp: time.Now(),
-						}) })
-
-						if post != nil {
-							err = storage.UpdatePost(*post, settings)
-							if err != nil {
-								bot.ErrorLog.Println("Failed to locally update post:", err.Error())
-								continue
-							}
-						}
-					}
-				}
-
-				// generate a prompt post, or find an existing one and edit it
-				post_info, err := storage.FindPromptPost(id, settings)
-				if err != nil {
-					bot.ErrorLog.Println("Error in FindPromptPost:", err.Error())
-					continue
-				}
-				post := updated_posts[id]
-				post_info = this.PromptPost(bot, post_info, id, &post, edit)
-				err = storage.SavePromptPost(id, post_info, settings)
-				if err != nil {
-					bot.ErrorLog.Println("Error in SavePromptPost:", err.Error())
-					continue
-				}
-			}
-
-			settings.Transaction.MarkForCommit()
-			settings.Transaction.Finalize(true)
 		}
 	}()
 	return channel
+}
+
+func (this *Behavior) maintenanceInternal(tx *sql.Tx, bot *gogram.TelegramBot, extra_expensive bool) error {
+	var err error
+
+	update_chan := make(chan []apitypes.TPostInfo)
+	var updated_post_ids []int
+	updated_posts := make(map[int]apitypes.TPostInfo)
+
+	go func() {
+		for posts := range update_chan {
+			for _, p := range posts {
+				if !p.Deleted { // skip deleted posts since they can't be edited.
+					updated_post_ids = append(updated_post_ids, p.Id)
+					updated_posts[p.Id] = p
+				}
+			}
+		}
+		close(update_chan)
+	}()
+
+	err = tagindex.SyncPostsInternal(tx, this.MySettings.SearchUser, this.MySettings.SearchAPIKey, extra_expensive, extra_expensive, nil, update_chan)
+	if err != nil { return err }
+
+	replace_id := int64(-1)
+	replacements, err := storage.GetReplacements(storage.UpdaterSettings{Transaction: storage.Wrap(tx)}, replace_id)
+	if err != nil { return err }
+	actual_posts, err := storage.PostsById(updated_post_ids, storage.UpdaterSettings{Transaction: storage.Wrap(tx)})
+	if err != nil { return err }
+
+	type shim struct {
+		post *apitypes.TPostInfo
+		metadata tags.TagSet
+	}
+
+	posts_and_stuff := make(map[int]shim)
+
+	for i, _ := range actual_posts {
+		posts_and_stuff[actual_posts[i].Id] = shim{post: &actual_posts[i], metadata: actual_posts[i].ExtendedTagSet()}
+	}
+
+	replacement_history, err := storage.GetReplacementHistorySince(storage.UpdaterSettings{Transaction: storage.Wrap(tx)}, updated_post_ids, time.Now().Add(-1 * 7 * 24 * time.Hour))
+	if err != nil {	return err }
+
+	edits := make(map[int]*storage.PostSuggestedEdit)
+	for len(replacements) != 0 {
+		for _, r := range replacements {
+			m := r.Matcher()
+			for id, sh := range posts_and_stuff {
+				if _, ok := replacement_history[storage.ReplacementHistoryKey{ReplacerId: r.Id, PostId: id}]; ok { continue }
+				if m.Matches(sh.metadata) {
+					if edits[id] == nil {
+						edits[id] = &storage.PostSuggestedEdit{}
+					}
+
+					edits[id].Represents = append(edits[id].Represents, r.Id)
+					to := &edits[id].Prompt
+					if r.Autofix {
+						to = &edits[id].AutoFix
+					}
+					*to = append(*to, m.ReplaceSpec)
+				}
+			}
+		}
+		replace_id = replacements[len(replacements) - 1].Id
+		replacements, err = storage.GetReplacements(storage.UpdaterSettings{Transaction: storage.Wrap(tx)}, replace_id)
+		if err != nil {	return err }
+	}
+
+	default_creds := this.MySettings.DefaultSearchCredentials()
+
+	for id, edit := range edits {
+		edit.SelectAutofix()
+		auto_diff := edit.GetChangeToApply()
+		if !auto_diff.IsZero() {
+			post, err := api.UpdatePost(default_creds.User, default_creds.ApiKey, id, auto_diff, nil, nil, nil, nil, sptr("Automatic tag cleanup: typos and concatenations (via KnottyBot)"))
+			if err != nil {
+				bot.ErrorLog.Println("Error updating post:", err.Error())
+			} else {
+				edit.Apply()
+				var applied_api []string
+				for k, _ := range edit.AppliedEdits { applied_api = append(applied_api, k) }
+
+				for _, replacerId := range edit.Represents {
+					storage.AddReplacementHistory(
+						tx,
+						&storage.ReplacementHistory{
+							ReplacementHistoryKey: storage.ReplacementHistoryKey{ReplacerId: replacerId, PostId: id},
+							TelegramUserId: -1,
+							Timestamp: time.Now(),
+						},
+					)
+				}
+
+				if post != nil {
+					err = storage.UpdatePost(*post, storage.UpdaterSettings{Transaction: storage.Wrap(tx)})
+					if err != nil { return err }
+				}
+			}
+		}
+
+		// generate a prompt post, or find an existing one and edit it
+		post_info, err := storage.FindPromptPost(id, storage.UpdaterSettings{Transaction: storage.Wrap(tx)})
+		if err != nil { return err }
+		post := updated_posts[id]
+		post_info = this.PromptPost(bot, post_info, id, &post, edit)
+		err = storage.SavePromptPost(id, post_info, storage.UpdaterSettings{Transaction: storage.Wrap(tx)})
+		if err != nil { return err }
+	}
+
+	return nil
 }
 
 func ternary(b bool, x, y string) string {
