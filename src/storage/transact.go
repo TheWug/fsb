@@ -54,17 +54,17 @@ func Transact(db_connection *sql.DB, callback func(*sql.Tx) error) error {
 
 	if err == nil {
 		err = tx.Commit()
-	} else if err.(RollbackAndMask) != nil {
-		err = tx.Rollback()
-	} else if err.(CommitAndYield) != nil {
-		innerErr := tx.Commit()
-		if innerErr != nil {
-			return innerErr
-		}
 	} else {
-		innerErr := tx.Rollback()
-		if innerErr != nil {
-			return innerErr
+		typedErr := err
+		switch typedErr.(type) {
+		case RollbackAndMask:
+			err = tx.Rollback()
+		case CommitAndYield:
+			innerErr := tx.Commit()
+			if innerErr != nil { return innerErr }
+		default:
+			innerErr := tx.Rollback()
+			if innerErr != nil { return innerErr }
 		}
 	}
 	return err
