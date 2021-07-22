@@ -49,18 +49,18 @@ RETURNING typo_id, replace_id`
 	if typo.Marked {
 		if typo.ReplaceId == nil {
 			var replacement *Replacer
-			replacement, err := AddReplacement(EnumerateControl{Transaction: Wrap(tx)}, Replacer{MatchSpec: typo.Tag.Name, ReplaceSpec: fmt.Sprintf("-%s %s", typo.Tag.Name, typo.Fix.Name), Autofix: autofix})
+			replacement, err := AddReplacement(tx, Replacer{MatchSpec: typo.Tag.Name, ReplaceSpec: fmt.Sprintf("-%s %s", typo.Tag.Name, typo.Fix.Name), Autofix: autofix})
 			if err != nil { return err }
 
 			query := `UPDATE typos_registered SET replace_id = $2 WHERE typo_id = $1`
 			_, err = tx.Exec(query, typo.Id, replacement.Id)
 
 		} else {
-			err = UpdateReplacement(EnumerateControl{Transaction: Wrap(tx)}, Replacer{Id: *typo.ReplaceId, MatchSpec: typo.Tag.Name, ReplaceSpec: fmt.Sprintf("-%s %s", typo.Tag.Name, typo.Fix.Name), Autofix: autofix})
+			err = UpdateReplacement(tx, Replacer{Id: *typo.ReplaceId, MatchSpec: typo.Tag.Name, ReplaceSpec: fmt.Sprintf("-%s %s", typo.Tag.Name, typo.Fix.Name), Autofix: autofix})
 
 		}
 	} else if typo.ReplaceId != nil {
-		err = DeleteReplacement(EnumerateControl{Transaction: Wrap(tx)}, *typo.ReplaceId)
+		err = DeleteReplacement(tx, *typo.ReplaceId)
 	}
 	return err
 }

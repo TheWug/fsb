@@ -121,7 +121,7 @@ func (this *Behavior) maintenanceInternal(tx *sql.Tx, bot *gogram.TelegramBot, e
 	if err != nil { return err }
 
 	replace_id := int64(-1)
-	replacements, err := storage.GetReplacements(storage.UpdaterSettings{Transaction: storage.Wrap(tx)}, replace_id)
+	replacements, err := storage.GetReplacements(tx, replace_id)
 	if err != nil { return err }
 	actual_posts, err := storage.PostsById(updated_post_ids, storage.UpdaterSettings{Transaction: storage.Wrap(tx)})
 	if err != nil { return err }
@@ -137,7 +137,7 @@ func (this *Behavior) maintenanceInternal(tx *sql.Tx, bot *gogram.TelegramBot, e
 		posts_and_stuff[actual_posts[i].Id] = shim{post: &actual_posts[i], metadata: actual_posts[i].ExtendedTagSet()}
 	}
 
-	replacement_history, err := storage.GetReplacementHistorySince(storage.UpdaterSettings{Transaction: storage.Wrap(tx)}, updated_post_ids, time.Now().Add(-1 * 7 * 24 * time.Hour))
+	replacement_history, err := storage.GetReplacementHistorySince(tx, updated_post_ids, time.Now().Add(-1 * 7 * 24 * time.Hour))
 	if err != nil {	return err }
 
 	edits := make(map[int]*storage.PostSuggestedEdit)
@@ -161,7 +161,7 @@ func (this *Behavior) maintenanceInternal(tx *sql.Tx, bot *gogram.TelegramBot, e
 			}
 		}
 		replace_id = replacements[len(replacements) - 1].Id
-		replacements, err = storage.GetReplacements(storage.UpdaterSettings{Transaction: storage.Wrap(tx)}, replace_id)
+		replacements, err = storage.GetReplacements(tx, replace_id)
 		if err != nil {	return err }
 	}
 

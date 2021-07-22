@@ -63,66 +63,27 @@ func (this *ReplacementHistory) ScanFrom(rows Scannable) error {
 	return rows.Scan(&this.ReplacerId, &this.PostId)
 }
 
-func AddReplacement(ctrl EnumerateControl, repl Replacer) (*Replacer, error) {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
-
-	query :=
-`INSERT
-    INTO replacements (match_spec, replace_spec, autofix)
-        VALUES ($1, $2, $3)
-RETURNING replace_id`
+func AddReplacement(tx *sql.Tx, repl Replacer) (*Replacer, error) {
+	query := "INSERT INTO replacements (match_spec, replace_spec, autofix) VALUES ($1, $2, $3) RETURNING replace_id"
 
 	row := tx.QueryRow(query, repl.MatchSpec, repl.ReplaceSpec, repl.Autofix)
 	err := row.Scan(&repl.Id)
-	if err != nil { return nil, err }
-
-	ctrl.Transaction.commit = mine
 	return &repl, err
 }
 
-func UpdateReplacement(ctrl EnumerateControl, repl Replacer) error {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return ctrl.Transaction.err }
-
-	query :=
-`UPDATE replacements
-    SET match_spec = $2,
-        replace_spec = $3,
-        autofix = $4
-WHERE replace_id = $1`
-
+func UpdateReplacement(tx *sql.Tx, repl Replacer) error {
+	query := "UPDATE replacements SET match_spec = $2, replace_spec = $3, autofix = $4 WHERE replace_id = $1"
 	_, err := tx.Exec(query, repl.Id, repl.MatchSpec, repl.ReplaceSpec, repl.Autofix)
-	if err != nil { return err }
-
-	ctrl.Transaction.commit = mine
 	return err
 }
 
-func DeleteReplacement(ctrl EnumerateControl, id int64) (error) {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return ctrl.Transaction.err }
-
-	query :=
-`DELETE
-    FROM replacements
-WHERE replace_id = $1`
-
+func DeleteReplacement(tx *sql.Tx, id int64) (error) {
+	query := "DELETE FROM replacements WHERE replace_id = $1"
 	_, err := tx.Exec(query, id)
-	if err != nil { return err }
-
-	ctrl.Transaction.commit = mine
 	return err
 }
 
-func GetReplacements(settings UpdaterSettings, after_id int64) ([]Replacer, error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
-
+func GetReplacements(tx *sql.Tx, after_id int64) ([]Replacer, error) {
 	query := "SELECT replace_id, match_spec, replace_spec, autofix FROM replacements WHERE replace_id > $1 ORDER BY replace_id LIMIT 500"
 	rows, err := tx.Query(query, after_id)
 	defer rows.Close()
@@ -138,15 +99,10 @@ func GetReplacements(settings UpdaterSettings, after_id int64) ([]Replacer, erro
 		out = append(out, r)
 	}
 
-	settings.Transaction.commit = mine
 	return out, nil
 }
 
-func GetReplacementHistorySince(settings UpdaterSettings, post_ids []int, since time.Time) (map[ReplacementHistoryKey]ReplacementHistory, error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
-
+func GetReplacementHistorySince(tx *sql.Tx, post_ids []int, since time.Time) (map[ReplacementHistoryKey]ReplacementHistory, error) {
 	query := "SELECT action_id, telegram_user_id, replace_id, post_id, action_ts FROM replacement_actions WHERE post_id = ANY($1::int[]) AND action_ts > $2"
 	rows, err := tx.Query(query, pq.Array(post_ids), since)
 	if err != nil { return nil, err }
@@ -162,7 +118,6 @@ func GetReplacementHistorySince(settings UpdaterSettings, post_ids []int, since 
 		out[r.ReplacementHistoryKey] = r
 	}
 
-	settings.Transaction.commit = mine
 	return out, nil
 }
 

@@ -108,18 +108,18 @@ RETURNING cat_id, replace_id`
 	if cat.Marked {
 		if cat.ReplaceId == nil {
 			replacement := &Replacer{MatchSpec: cat.Merged.Name, ReplaceSpec: fmt.Sprintf("-%s %s %s", cat.Merged.Name, cat.First.Name, cat.Second.Name), Autofix: autofix}
-			replacement, err = AddReplacement(EnumerateControl{Transaction: TransactionBox{tx: tx}}, *replacement)
+			replacement, err = AddReplacement(tx, *replacement)
 			if err != nil { return err }
 
 			query := `UPDATE cats_registered SET replace_id = $2 WHERE cat_id = $1`
 			_, err = tx.Exec(query, cat.Id, replacement.Id)
 
 		} else {
-			err = UpdateReplacement(EnumerateControl{Transaction: TransactionBox{tx: tx}}, Replacer{Id: *cat.ReplaceId, MatchSpec: cat.Merged.Name, ReplaceSpec: fmt.Sprintf("-%s %s %s", cat.Merged.Name, cat.First.Name, cat.Second.Name), Autofix: autofix})
+			err = UpdateReplacement(tx, Replacer{Id: *cat.ReplaceId, MatchSpec: cat.Merged.Name, ReplaceSpec: fmt.Sprintf("-%s %s %s", cat.Merged.Name, cat.First.Name, cat.Second.Name), Autofix: autofix})
 
 		}
 	} else if cat.ReplaceId != nil {
-		err = DeleteReplacement(EnumerateControl{Transaction: TransactionBox{tx: tx}}, *cat.ReplaceId)
+		err = DeleteReplacement(tx, *cat.ReplaceId)
 	}
 	return err
 }
