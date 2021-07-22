@@ -142,24 +142,24 @@ func GetReplacements(settings UpdaterSettings, after_id int64) ([]Replacer, erro
 	return out, nil
 }
 
-func GetReplacementHistory(settings UpdaterSettings, post_ids []int) (map[ReplacementHistoryKey]bool, error) {
+func GetReplacementHistorySince(settings UpdaterSettings, post_ids []int, since time.Time) (map[ReplacementHistoryKey]ReplacementHistory, error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
 
-	query := "SELECT action_id, telegram_user_id, replace_id, post_id, action_ts FROM replacement_actions WHERE post_id = ANY($1::int[])"
-	rows, err := tx.Query(query, pq.Array(post_ids))
+	query := "SELECT action_id, telegram_user_id, replace_id, post_id, action_ts FROM replacement_actions WHERE post_id = ANY($1::int[]) AND action_ts > $2"
+	rows, err := tx.Query(query, pq.Array(post_ids), since)
 	if err != nil { return nil, err }
 	defer rows.Close()
 
-	out := make(map[ReplacementHistoryKey]bool)
+	out := make(map[ReplacementHistoryKey]ReplacementHistory)
 
 	for rows.Next() {
 		var r ReplacementHistory
 		err = r.ScanFrom(rows)
 		if err != nil { return nil, err }
 
-		out[r.ReplacementHistoryKey] = true
+		out[r.ReplacementHistoryKey] = r
 	}
 
 	settings.Transaction.commit = mine

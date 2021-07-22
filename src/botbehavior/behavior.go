@@ -151,7 +151,7 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 				posts_and_stuff[actual_posts[i].Id] = shim{post: &actual_posts[i], metadata: actual_posts[i].ExtendedTagSet()}
 			}
 
-			replacement_history, err := storage.GetReplacementHistory(settings, updated_post_ids)
+			replacement_history, err := storage.GetReplacementHistorySince(settings, updated_post_ids, time.Now().Add(-1 * 7 * 24 * time.Hour))
 
 			edits := make(map[int]*storage.PostSuggestedEdit)
 			for len(replacements) != 0 {
@@ -163,7 +163,7 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 				for _, r := range replacements {
 					m := r.Matcher()
 					for id, sh := range posts_and_stuff {
-						if replacement_history[storage.ReplacementHistoryKey{ReplacerId: r.Id, PostId: id}] { continue }
+						if _, ok := replacement_history[storage.ReplacementHistoryKey{ReplacerId: r.Id, PostId: id}]; ok { continue }
 						if m.Matches(sh.metadata) {
 							if edits[id] == nil {
 								edits[id] = &storage.PostSuggestedEdit{}
