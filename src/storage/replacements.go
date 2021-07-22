@@ -2,6 +2,7 @@ package storage
 
 import (
 	"time"
+	"database/sql"
 
 	"api/tags"
 
@@ -204,4 +205,11 @@ func AddAutoFixHistoryForPost(post_id int, changes []string, settings UpdaterSet
 
 	settings.Transaction.commit = mine
 	return nil
+}
+
+func AddReplacementHistory(tx *sql.Tx, event *ReplacementHistory) error {
+	query := "INSERT INTO replacement_actions (action_id, telegram_user_id, replace_id, post_id, action_ts) VALUES (default, $1, $2, $3, $4) RETURNING action_id"
+	row := tx.QueryRow(query, event.TelegramUserId, event.ReplacerId, event.PostId, event.Timestamp)
+	err := row.Scan(event.Id)
+	return err // ErrNoRows will be passed through here, and we do want to propagate that because it should never happen
 }
