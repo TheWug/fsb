@@ -194,7 +194,14 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 						edit.Apply()
 						var applied_api []string
 						for k, _ := range edit.AppliedEdits { applied_api = append(applied_api, k) }
-						storage.AddAutoFixHistoryForPost(id, applied_api, settings)
+						storage.DefaultTransact(func(tx *sql.Tx) error { return storage.AddReplacementHistory(tx, &storage.ReplacementHistory{
+							ReplacementHistoryKey: storage.ReplacementHistoryKey{
+								ReplacerId: 0,
+								PostId: id,
+							},
+							TelegramUserId: -1,
+							Timestamp: time.Now(),
+						}) })
 
 						if post != nil {
 							err = storage.UpdatePost(*post, settings)
