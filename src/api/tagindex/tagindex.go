@@ -366,7 +366,7 @@ func SyncTagsInternal(tx *sql.Tx, user, api_key string, progress *ProgMessage) (
 
 	fixed_tags := make(chan types.TTagData)
 
-	limit := 1000
+	limit := 320
 	last_existing_tag_id := 0
 	consecutive_errors := 0
 	last, err := storage.GetLastTag(tx)
