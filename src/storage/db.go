@@ -814,6 +814,7 @@ type PostSuggestedEdit struct {
 	AutoFix       tags.TagDiffArray      `json:"autofix"`
 	SelectedEdits map[string]bool        `json:"selected_edits"`
 	AppliedEdits  map[string]bool        `json:"applied_edits"`
+	Represents  []int64                  `json:"represents"`
 }
 
 func (this *PostSuggestedEdit) SelectAutofix() {
