@@ -331,14 +331,7 @@ func ResyncListInternal(user, api_key string, settings storage.UpdaterSettings, 
 }
 
 func SyncTagsCommand(ctx *gogram.MessageCtx) {
-	full := false
-	for _, token := range ctx.Cmd.Args {
-		if token == "--full" {
-			full = true
-		}
-	}
-
-	err := SyncTags(ctx, storage.UpdaterSettings{Full: full}, nil)
+	err := SyncTags(ctx, storage.UpdaterSettings{}, nil)
 	if err == storage.ErrNoLogin {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
@@ -523,13 +516,9 @@ func (this *SearchChanBox) Close() {
 }
 
 func SyncPostsCommand(ctx *gogram.MessageCtx) {
-	full := false
 	aliases := false
 	recount := false
 	for _, token := range ctx.Cmd.Args {
-		if token == "--full" {
-			full = true
-		}
 		if token == "--aliases" {
 			aliases = true
 		}
@@ -539,7 +528,7 @@ func SyncPostsCommand(ctx *gogram.MessageCtx) {
 	}
 
 	var err error
-	settings := storage.UpdaterSettings{Full: full}
+	settings := storage.UpdaterSettings{}
 	settings.Transaction, err = storage.NewTxBox()
 	if err != nil { log.Println(err.Error(), "newtxbox") }
 
@@ -577,13 +566,6 @@ func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSetting
 	}
 
 	progress.AppendNotice("Syncing posts... ")
-
-	if settings.Full {
-		err := storage.ClearPosts(settings)
-		if err != nil {
-			log.Println(err.Error(), "clearposts")
-		}
-	}
 
 	fixed_posts := make(chan types.TPostInfo)
 

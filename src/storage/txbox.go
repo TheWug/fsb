@@ -5,7 +5,6 @@ import (
 )
 
 type UpdaterSettings struct {
-	Full bool
 	Transaction TransactionBox
 }
 
