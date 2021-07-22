@@ -163,7 +163,7 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 				for _, r := range replacements {
 					m := r.Matcher()
 					for id, sh := range posts_and_stuff {
-						if replacement_history[storage.ReplacementHistoryShim{ReplacerId: r.Id, PostId: id}] { continue }
+						if replacement_history[storage.ReplacementHistoryKey{ReplacerId: r.Id, PostId: id}] { continue }
 						if m.Matches(sh.metadata) {
 							if edits[id] == nil {
 								edits[id] = &storage.PostSuggestedEdit{}

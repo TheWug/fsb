@@ -1,9 +1,12 @@
 package storage
 
 import (
+	"time"
+
 	"api/tags"
 
 	"github.com/lib/pq"
+	tgdata "github.com/thewug/gogram/data"
 )
 
 type Replacer struct {
@@ -42,12 +45,20 @@ func (rm *ReplacerMatcher) Matches(postTags tags.TagSet) bool {
 	return true
 }
 
-type ReplacementHistoryShim struct {
+type ReplacementHistory struct {
+	ReplacementHistoryKey
+
+	Id int64
+	TelegramUserId tgdata.UserID
+	Timestamp time.Time
+}
+
+type ReplacementHistoryKey struct {
 	ReplacerId int64
 	PostId int
 }
 
-func (this *ReplacementHistoryShim) ScanFrom(rows Scannable) error {
+func (this *ReplacementHistory) ScanFrom(rows Scannable) error {
 	return rows.Scan(&this.ReplacerId, &this.PostId)
 }
 
@@ -130,24 +141,24 @@ func GetReplacements(settings UpdaterSettings, after_id int64) ([]Replacer, erro
 	return out, nil
 }
 
-func GetReplacementHistory(settings UpdaterSettings, post_ids []int) (map[ReplacementHistoryShim]bool, error) {
+func GetReplacementHistory(settings UpdaterSettings, post_ids []int) (map[ReplacementHistoryKey]bool, error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
 
-	query := "SELECT replace_id, post_id FROM replacement_history WHERE post_id = ANY($1::int[])"
+	query := "SELECT action_id, telegram_user_id, replace_id, post_id, action_ts FROM replacement_actions WHERE post_id = ANY($1::int[])"
 	rows, err := tx.Query(query, pq.Array(post_ids))
 	if err != nil { return nil, err }
 	defer rows.Close()
 
-	out := make(map[ReplacementHistoryShim]bool)
+	out := make(map[ReplacementHistoryKey]bool)
 
 	for rows.Next() {
-		var r ReplacementHistoryShim
+		var r ReplacementHistory
 		err = r.ScanFrom(rows)
 		if err != nil { return nil, err }
 
-		out[r] = true
+		out[r.ReplacementHistoryKey] = true
 	}
 
 	settings.Transaction.commit = mine
