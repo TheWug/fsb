@@ -61,17 +61,6 @@ func ClearAliasIndex(settings UpdaterSettings) (error) {
 	return err
 }
 
-func ClearPosts(settings UpdaterSettings) (error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
-	_, err := tx.Exec("TRUNCATE post_tags, post_tags_by_name, post_index")
-
-	settings.Transaction.commit = mine && (err != nil)
-	return err
-}
-
 func GetAliasesFor(tag string, ctrl EnumerateControl) (apitypes.TTagInfoArray, error) {
 	sql :=	"SELECT a.tag_id, a.tag_name, a.tag_count, a.tag_type, a.tag_type_locked FROM " +
 			"tag_index AS %s INNER JOIN " +
