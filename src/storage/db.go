@@ -191,7 +191,7 @@ func RecalculateAliasedCounts(tx *sql.Tx) (error) {
 	return nil
 }
 
-func CountTags(tx *sql.Tx, sfx chan string) (error) {
+func CountTags(tx DBLike, sfx chan string) (error) {
 	status := func(s string) {
 		if sfx != nil {
 			sfx <- s

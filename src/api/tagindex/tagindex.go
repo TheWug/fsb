@@ -427,7 +427,7 @@ func RecountTagsCommand(ctx *gogram.MessageCtx) {
 	}
 }
 
-func RecountTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress *ProgMessage, real_counts, alias_counts bool) (error) {
+func RecountTags(ctx *gogram.MessageCtx, progress *ProgMessage, real_counts, alias_counts bool) (error) {
 	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil { return err }
 	if !creds.Janitor { return errors.New("You need to be a janitor to use this command.") }
@@ -438,26 +438,28 @@ func RecountTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progr
 		defer progress.Close()
 	}
 
-	if real_counts {
-		err = RecountTagsInternal(settings, progress)
-		if err != nil { return err }
-	}
+	err = storage.DefaultTransact(func(tx storage.DBLike) error {
+		if real_counts {
+			err = RecountTagsInternal(tx, progress)
+			if err != nil { return err }
+		}
 
-	if alias_counts {
-		err = CalculateAliasedCountsInternal(settings, progress)
-		if err != nil { return err }
-	}
+		if alias_counts {
+			err = CalculateAliasedCountsInternal(tx, progress)
+			if err != nil { return err }
+		}
+	})
 
 	return nil
 }
 
-func RecountTagsInternal(settings storage.UpdaterSettings, progress *ProgMessage) (error) {
+func RecountTagsInternal(tx storage.DBLike, progress *ProgMessage) (error) {
 	progress.AppendNotice("Recounting tags...")
 
 	var err error
 	sfx := make(chan string)
 	go func() {
-		err = storage.CountTags(settings, sfx)
+		err = storage.CountTags(tx, sfx)
 		if err != nil {
 			progress.SetStatus(fmt.Sprintf("(error: %s)", html.EscapeString(err.Error())))
 		} else {
