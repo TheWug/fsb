@@ -356,7 +356,7 @@ func (this *EditPrompt) PostStatus(b *bytes.Buffer) {
 	}
 }
 
-func (this *EditPrompt) CommitEdit(user, api_key string, ctx *gogram.MessageCtx, settings storage.UpdaterSettings) (*types.TPostInfo, error) {
+func (this *EditPrompt) CommitEdit(user, api_key string, ctx *gogram.MessageCtx) (*types.TPostInfo, error) {
 	if this.IsNoop() {
 		return nil, errors.New("This edit is a no-op.")
 	}
