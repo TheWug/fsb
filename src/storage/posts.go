@@ -3,9 +3,11 @@ package storage
 import (
 	"database/sql"
 	"strings"
-	
+
 	apitypes "api/types"
 	"github.com/lib/pq"
+
+	"github.com/thewug/dml"
 )
 
 func PostUpdater(tx *sql.Tx, input chan apitypes.TPostInfo) (error) {
@@ -70,17 +72,20 @@ func GetMostRecentlyUpdatedPost(tx *sql.Tx) (*apitypes.TPostInfo, error) {
 }
 
 func PostsWithTag(tx *sql.Tx, tag apitypes.TTagData, includeDeleted bool) (apitypes.TPostInfoArray, error) {
-	query := "SELECT post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted, ARRAY(SELECT tag_name FROM tag_index INNER JOIN post_tags USING (tag_id) WHERE post_id = post_index.post_id) AS post_tags FROM post_index WHERE post_id = ANY($1::int[]) AND NOT post_deleted"
+	query := "SELECT post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted, ARRAY(SELECT tag_name FROM tag_index INNER JOIN post_tags USING (tag_id) WHERE post_id = post_index.post_id) AS post_tags FROM post_index WHERE post_id IN (SELECT post_id FROM post_tags WHERE tag_id = $1) AND NOT post_deleted"
 	if includeDeleted {
-		query = "SELECT post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted, ARRAY(SELECT tag_name FROM tag_index INNER JOIN post_tags USING (tag_id) WHERE post_id = post_index.post_id) AS post_tags FROM post_index WHERE post_id = ANY($1::int[])"
+		query = "SELECT post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted, ARRAY(SELECT tag_name FROM tag_index INNER JOIN post_tags USING (tag_id) WHERE post_id = post_index.post_id) AS post_tags FROM post_index WHERE post_id IN (SELECT post_id FROM post_tags WHERE tag_id = $1)"
 	}
-	rows, err := tx.Query(query, tag.Id)
+
+	rows, err := dml.X(tx.Query(query, tag.Id))
 	if err != nil { return nil, err }
+
+	defer rows.Close()
 
 	var out apitypes.TPostInfoArray
 	var item apitypes.TPostInfo
 	for rows.Next() {
-		err := rows.Scan(&item.Id)
+		err := dml.Scan(rows, &item)
 		if err != nil { return nil, err }
 		out = append(out, item)
 	}
@@ -173,7 +178,7 @@ func ImportPostTagsFromNameToID(tx *sql.Tx, sfx chan string) (error) {
 			sfx <- s
 		}
 	}
-	
+
 	var new_count, existing_count int64
 	var err error
 	if err = tx.QueryRow("SELECT COUNT(*) FROM post_tags_by_name").Scan(&new_count); err != nil {
