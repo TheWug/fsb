@@ -43,7 +43,7 @@ func PrefixedTagToTypedTag(name string) (string, int) {
 	return name, apitypes.TCGeneral.Value()
 }
 
-func ClearAliasIndex(tx *sql.Tx) (error) {
+func ClearAliasIndex(tx DBLike) (error) {
 	_, err := tx.Exec("TRUNCATE alias_index")
 
 	return err
