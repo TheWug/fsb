@@ -217,7 +217,7 @@ func (this *PostPrompt) IsComplete() error {
 	return nil
 }
 
-func (this *PostPrompt) CommitPost(user, api_key string, ctx *gogram.MessageCtx, settings storage.UpdaterSettings) (*api.UploadCallResult, error) {
+func (this *PostPrompt) CommitPost(user, api_key string, ctx *gogram.MessageCtx) (*api.UploadCallResult, error) {
 	err := this.IsComplete()
 	if err != nil {
 		return nil, err

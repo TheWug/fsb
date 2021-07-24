@@ -19,7 +19,7 @@ import (
 // fetches an update that includes the phantom tag, its `tag_id` will be updated to reflect the true
 // id (thus promoting it from a phantom tag to a real one) and will chain this update to all tables
 // that use foreign keys to refer to tag_ids.
-func GetTagByName(tx *sql.Tx, name string, createPhantom bool) (*apitypes.TTagData, error) {
+func GetTagByName(tx DBLike, name string, createPhantom bool) (*apitypes.TTagData, error) {
 	query := "SELECT tag_id, tag_name, tag_count, tag_count_full, tag_type, tag_type_locked FROM tag_index WHERE LOWER(tag_name) = LOWER($1)"
 	name, typ := PrefixedTagToTypedTag(name)
 
@@ -65,7 +65,7 @@ func GetTags(tx *sql.Tx, ids []int) (apitypes.TTagInfoArray, error) {
 	return out, nil
 }
 
-func GetLastTag(tx *sql.Tx) (*apitypes.TTagData, error) {
+func GetLastTag(tx DBLike) (*apitypes.TTagData, error) {
 	sq := "SELECT tag_id, tag_name, tag_count, tag_count_full, tag_type, tag_type_locked FROM tag_index WHERE tag_id = (SELECT MAX(tag_id) FROM tag_index) LIMIT 1"
 	row := tx.QueryRow(sq)
 	var tag apitypes.TTagData
@@ -98,7 +98,7 @@ func getTagsWithCount(tx *sql.Tx, count int, differentiator string) (apitypes.TT
 	return out, nil
 }
 
-func TagUpdater(tx *sql.Tx, input chan apitypes.TTagData) (error) {
+func TagUpdater(tx DBLike, input chan apitypes.TTagData) (error) {
 	defer func(){ for _ = range input {} }()
 
 	for tag := range input {
@@ -112,7 +112,7 @@ func TagUpdater(tx *sql.Tx, input chan apitypes.TTagData) (error) {
 	return nil
 }
 
-func EnumerateAllTags(tx *sql.Tx, orderByCount bool) (apitypes.TTagInfoArray, error) {
+func EnumerateAllTags(tx DBLike, orderByCount bool) (apitypes.TTagInfoArray, error) {
 	query := "SELECT tag_id, tag_name, tag_count, tag_count_full, tag_type, tag_type_locked FROM tag_index %s"
 	order_by := "ORDER BY %s"
 

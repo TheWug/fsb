@@ -252,7 +252,7 @@ func ResyncList(ctx *gogram.MessageCtx, progress *ProgMessage) (error) {
 		defer progress.Close()
 	}
 
-	return storage.DefaultTransact(func(tx *sql.Tx) error { return ResyncListInternal(tx, creds.User, creds.ApiKey, file_data, progress) })
+	return storage.DefaultTransact(func(tx storage.DBLike) error { return ResyncListInternal(tx, creds.User, creds.ApiKey, file_data, progress) })
 }
 
 
@@ -350,7 +350,7 @@ func SyncTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress
 		defer progress.Close()
 	}
 
-	return storage.DefaultTransact(func(tx *sql.Tx) error { return SyncTagsInternal(tx, creds.User, creds.ApiKey, progress) })
+	return storage.DefaultTransact(func(tx storage.DBLike) error { return SyncTagsInternal(tx, creds.User, creds.ApiKey, progress) })
 }
 
 
@@ -555,7 +555,7 @@ func SyncPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, aliases
 		defer progress.Close()
 	}
 
-	return storage.DefaultTransact(func(tx *sql.Tx) error { return SyncPostsInternal(tx, creds.User, creds.ApiKey, aliases_too, recount_too, progress, nil) })
+	return storage.DefaultTransact(func(tx storage.DBLike) error { return SyncPostsInternal(tx, creds.User, creds.ApiKey, aliases_too, recount_too, progress, nil) })
 }
 
 func SyncOnlyPostsInternal(tx *sql.Tx, user, api_key string, progress *ProgMessage, post_updates chan []types.TPostInfo) (error) {
@@ -676,7 +676,7 @@ func SyncAliases(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progr
 		defer progress.Close()
 	}
 
-	return SyncAliasesInternal(creds.User, creds.ApiKey, settings, progress)
+	return storage.DefaultTransact(func(tx storage.DBLike) error { return SyncAliasesInternal(tx, creds.User, creds.ApiKey, progress) })
 }
 
 func SyncAliasesInternal(user, api_key string, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
@@ -1244,7 +1244,7 @@ func RefetchDeletedPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSetting
 		defer progress.Close()
 	}
 
-	return storage.DefaultTransact(func(tx *sql.Tx) error { return RefetchDeletedPostsInternal(tx, creds.User, creds.ApiKey, progress) })
+	return storage.DefaultTransact(func(tx storage.DBLike) error { return RefetchDeletedPostsInternal(tx, creds.User, creds.ApiKey, progress) })
 }
 
 func RefetchDeletedPostsInternal(tx *sql.Tx, user, api_key string, progress *ProgMessage) (error) {

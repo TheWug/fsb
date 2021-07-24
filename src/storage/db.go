@@ -49,7 +49,7 @@ func ClearAliasIndex(tx *sql.Tx) (error) {
 	return err
 }
 
-func GetAliasesFor(tx *sql.Tx, tag string) (apitypes.TTagInfoArray, error) {
+func GetAliasesFor(tx DBLike, tag string) (apitypes.TTagInfoArray, error) {
 	sql :=	"SELECT a.tag_id, a.tag_name, a.tag_count, a.tag_type, a.tag_type_locked FROM " +
 			"tag_index AS %s INNER JOIN " +
 			"alias_index AS b ON (%s.tag_name = b.alias_name) INNER JOIN " +
@@ -80,7 +80,7 @@ func GetAliasesFor(tx *sql.Tx, tag string) (apitypes.TTagInfoArray, error) {
 	return out, nil
 }
 
-func GetAliasedTags(tx *sql.Tx) (apitypes.TTagInfoArray, error) {
+func GetAliasedTags(tx DBLike) (apitypes.TTagInfoArray, error) {
 	sql := "SELECT tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM tag_index INNER JOIN alias_index ON alias_name = tag_name WHERE tag_count != 0 AND tag_name != ''"
 	rows, err := tx.Query(sql)
 	if err != nil {
@@ -101,7 +101,7 @@ func GetAliasedTags(tx *sql.Tx) (apitypes.TTagInfoArray, error) {
 	return out, nil
 }
 
-func AliasUpdater(tx *sql.Tx, input chan apitypes.TAliasData) (error) {
+func AliasUpdater(tx DBLike, input chan apitypes.TAliasData) (error) {
 	defer func(){ for _ = range input {} }()
 	
 	for alias := range input {

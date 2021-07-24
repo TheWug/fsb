@@ -10,7 +10,7 @@ import (
 	"github.com/thewug/dml"
 )
 
-func PostUpdater(tx *sql.Tx, input chan apitypes.TPostInfo) (error) {
+func PostUpdater(tx DBLike, input chan apitypes.TPostInfo) (error) {
 	defer func(){ for _ = range input {} }()
 
 	for post := range input {
@@ -57,7 +57,7 @@ func GetHighestPostID(tx *sql.Tx) (int, error) {
 	return result, err
 }
 
-func GetMostRecentlyUpdatedPost(tx *sql.Tx) (*apitypes.TPostInfo, error) {
+func GetMostRecentlyUpdatedPost(tx DBLike) (*apitypes.TPostInfo, error) {
 	var p apitypes.TPostInfo
 	row := tx.QueryRow("SELECT post_id, post_change_seq, post_rating, post_description, post_hash FROM post_index ORDER BY post_change_seq DESC LIMIT 1")
 	err := row.Scan(&p.Id, &p.Change, &p.Rating, &p.Description, &p.Md5)
@@ -71,7 +71,7 @@ func GetMostRecentlyUpdatedPost(tx *sql.Tx) (*apitypes.TPostInfo, error) {
 	return &p, err
 }
 
-func PostsWithTag(tx *sql.Tx, tag apitypes.TTagData, includeDeleted bool) (apitypes.TPostInfoArray, error) {
+func PostsWithTag(tx DBLike, tag apitypes.TTagData, includeDeleted bool) (apitypes.TPostInfoArray, error) {
 	query := "SELECT post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted, ARRAY(SELECT tag_name FROM tag_index INNER JOIN post_tags USING (tag_id) WHERE post_id = post_index.post_id) AS post_tags FROM post_index WHERE post_id IN (SELECT post_id FROM post_tags WHERE tag_id = $1) AND NOT post_deleted"
 	if includeDeleted {
 		query = "SELECT post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted, ARRAY(SELECT tag_name FROM tag_index INNER JOIN post_tags USING (tag_id) WHERE post_id = post_index.post_id) AS post_tags FROM post_index WHERE post_id IN (SELECT post_id FROM post_tags WHERE tag_id = $1)"
@@ -119,7 +119,7 @@ func PostsById(tx *sql.Tx, ids []int) ([]apitypes.TPostInfo, error) {
 	return out, nil
 }
 
-func PostByMD5(tx *sql.Tx, md5 string) (*apitypes.TPostInfo, error) {
+func PostByMD5(tx DBLike, md5 string) (*apitypes.TPostInfo, error) {
 	var item apitypes.TPostInfo
 	var sources string
 	query := "SELECT post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted, ARRAY(SELECT tag_name FROM tag_index INNER JOIN post_tags USING (tag_id) WHERE post_id = post_index.post_id) AS post_tags FROM post_index WHERE post_hash = $1;"
@@ -130,7 +130,7 @@ func PostByMD5(tx *sql.Tx, md5 string) (*apitypes.TPostInfo, error) {
 	return &item, nil
 }
 
-func UpdatePost(tx *sql.Tx, post apitypes.TPostInfo) (error) {
+func UpdatePost(tx DBLike, post apitypes.TPostInfo) (error) {
 	count_deltas := make(map[string]int)
 	// up-count all of the tags in the modified post
 	for _, new_tag := range post.Tags() {
