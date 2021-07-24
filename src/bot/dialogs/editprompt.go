@@ -481,7 +481,7 @@ func (this *EditPrompt) ParseArgs(ctx *gogram.MessageCtx) (bool, error) {
 	return commitnow, nil
 }
 
-func (this *EditPrompt) HandleCallback(ctx *gogram.CallbackCtx, settings storage.UpdaterSettings) {
+func (this *EditPrompt) HandleCallback(ctx *gogram.CallbackCtx) {
 	// TODO: this code mishandles settings, it should create its own subtransaction if settings is blank, but it won't.
 	switch ctx.Cmd.Command {
 	case "/reset":
