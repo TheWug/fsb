@@ -980,6 +980,7 @@ func Typos(ctx *gogram.MessageCtx) {
 			control.register = true
 			control.autofix = true
 		}
+		control.mode = MODE_READY
 	}
 
 	switch control.mode {
@@ -1137,15 +1138,22 @@ func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, pr
 	var buf bytes.Buffer
 	buf.WriteString("Possible typos:\n<code>")
 	for _, p := range results_ordered {
-		buf.WriteString(p.String())
+		buf.WriteString(html.EscapeString(p.String()))
 		buf.WriteString("\n")
+		if buf.Len() > 4000 {
+			break
+		}
 	}
 	buf.WriteString("</code>")
 
-	// progress.something
-	// ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: buf.String(), ParseMode: data.ParseHTML}}, nil)
+	if buf.PlainLen() > 4000 {
+		buf.WriteString("\nToo many results!")
+	}
+
+	progress.SetMessage(buf.String())
 
 	if control.fix {
+		progress.AppendNotice("Fixing tags...")
 		updated := 1
 		diffs := make(map[int]tags.TagDiff)
 
@@ -1185,6 +1193,7 @@ func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, pr
 			progress.SetStatus(fmt.Sprintf("(%d/%d %d: <code>%s</code>)", updated, total_posts, id, diff.APIString()))
 			updated++
 		}
+		progress.SetStatus("(done)")
 	}
 
 	if control.del {
@@ -1192,6 +1201,7 @@ func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, pr
 			err = storage.DelTagTypoByTag(tx, action.TypoData())
 			if err != nil { return err }
 		}
+		progress.AppendNotice(fmt.Sprintf("%d typo records deleted.", len(results)))
 	}
 
 	if control.register || control.unregister || control.autofix {
@@ -1199,6 +1209,7 @@ func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, pr
 			err = storage.SetTagTypoByTag(tx, action.TypoData(), control.register || control.autofix, control.autofix)
 			if err != nil { return err }
 		}
+		progress.AppendNotice(fmt.Sprintf("%d typo records updated.", len(results)))
 	}
 
 	return nil
