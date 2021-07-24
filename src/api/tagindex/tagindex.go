@@ -815,6 +815,7 @@ func NewTagsFromOldTags(oldtags []string, deltags, addtags map[string]bool) (str
 
 type Pair struct {
 	tag, fixed *types.TTagData
+	status string
 }
 
 func (p Pair) TypoData() storage.TypoData {
@@ -838,7 +839,7 @@ func (p Pair) String() string {
 		r = '?'
 	}
 
-	return fmt.Sprintf("%8d %s %s", p.tag.Count, string(r), p.tag.Name)
+	return fmt.Sprintf("%8d %s%1s %s", p.tag.Count, string(r), p.status, p.tag.Name)
 }
 
 func max(a, b int) int {
@@ -1059,7 +1060,9 @@ func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, pr
 			// in the correct list mode.
 			if !control.list_settings.no && !typo.Marked { continue }
 			if !control.list_settings.yes && typo.Marked { continue }
-			results[tag.Name] = Pair{fixed: target, tag: &alltags[x]}
+			status := "+"
+			if !typo.Marked { status = "-" }
+			results[tag.Name] = Pair{fixed: target, tag: &alltags[x], status: status}
 			continue
 		}
 
