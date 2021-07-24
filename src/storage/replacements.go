@@ -63,7 +63,7 @@ func (this *ReplacementHistory) ScanFrom(rows Scannable) error {
 	return rows.Scan(&this.Id, &this.TelegramUserId, &this.ReplacerId, &this.PostId, &this.Timestamp)
 }
 
-func AddReplacement(tx *sql.Tx, repl Replacer) (*Replacer, error) {
+func AddReplacement(tx DBLike, repl Replacer) (*Replacer, error) {
 	query := "INSERT INTO replacements (match_spec, replace_spec, autofix) VALUES ($1, $2, $3) RETURNING replace_id"
 
 	row := tx.QueryRow(query, repl.MatchSpec, repl.ReplaceSpec, repl.Autofix)
@@ -71,19 +71,19 @@ func AddReplacement(tx *sql.Tx, repl Replacer) (*Replacer, error) {
 	return &repl, err
 }
 
-func UpdateReplacement(tx *sql.Tx, repl Replacer) error {
+func UpdateReplacement(tx DBLike, repl Replacer) error {
 	query := "UPDATE replacements SET match_spec = $2, replace_spec = $3, autofix = $4 WHERE replace_id = $1"
 	_, err := tx.Exec(query, repl.Id, repl.MatchSpec, repl.ReplaceSpec, repl.Autofix)
 	return err
 }
 
-func DeleteReplacement(tx *sql.Tx, id int64) (error) {
+func DeleteReplacement(tx DBLike, id int64) (error) {
 	query := "DELETE FROM replacements WHERE replace_id = $1"
 	_, err := tx.Exec(query, id)
 	return err
 }
 
-func GetReplacements(tx *sql.Tx, after_id int64) ([]Replacer, error) {
+func GetReplacements(tx DBLike, after_id int64) ([]Replacer, error) {
 	query := "SELECT replace_id, match_spec, replace_spec, autofix FROM replacements WHERE replace_id > $1 ORDER BY replace_id LIMIT 500"
 	rows, err := tx.Query(query, after_id)
 	defer rows.Close()

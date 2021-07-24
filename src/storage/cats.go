@@ -69,7 +69,7 @@ WHERE ($1 AND marked)
 	return out_yes, out_no, err
 }
 
-func SetCatByTagNames(tx *sql.Tx, cat CatData, marked, autofix bool) error {
+func SetCatByTagNames(tx DBLike, cat CatData, marked, autofix bool) error {
 	merged, err := GetTagByName(tx, cat.Merged.Name, true)
 	if err != nil { return err }
 	cat.Merged = *merged
@@ -124,7 +124,7 @@ RETURNING cat_id, replace_id`
 	return err
 }
 
-func DeleteCatByTagNames(tx *sql.Tx, cat CatData) error {
+func DeleteCatByTagNames(tx DBLike, cat CatData) error {
 	merged, err := GetTagByName(tx, cat.Merged.Name, false)
 	if err != nil { return err }
 	if merged == nil { return nil }

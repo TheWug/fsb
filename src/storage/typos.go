@@ -2,7 +2,6 @@ package storage
 
 import (
 	"fmt"
-	"database/sql"
 
 	apitypes "api/types"
 
@@ -17,14 +16,14 @@ type TypoData struct {
 	ReplaceId *int64              `dml:"replace_id"`
 }
 
-func DelTagTypoByTag(tx *sql.Tx, typo TypoData) error {
+func DelTagTypoByTag(tx DBLike, typo TypoData) error {
         _, err := tx.Exec(`DELETE FROM replacements WHERE replace_id = (SELECT replace_id FROM typos_registered WHERE tag_typo_id = $1)`, typo.Tag.Id)
 	if err != nil { return err }
         _, err = tx.Exec(`DELETE FROM typos_registered WHERE tag_typo_id = $1`, typo.Tag.Id)
 	return err
 }
 
-func SetTagTypoByTag(tx *sql.Tx, typo TypoData, marked, autofix bool) error {
+func SetTagTypoByTag(tx DBLike, typo TypoData, marked, autofix bool) error {
 	if !marked {
 		typo.Fix = nil
 	}
@@ -67,7 +66,7 @@ RETURNING typo_id, replace_id`
 	return err
 }
 
-func GetTagTypos(tx *sql.Tx, tag string) (map[string]TypoData, error) {
+func GetTagTypos(tx DBLike, tag string) (map[string]TypoData, error) {
 	query := `
 		SELECT	typo_id, marked, replace_id,
 			a.tag_id, a.tag_name, a.tag_count, a.tag_count_full, a.tag_type, a.tag_type_locked,
