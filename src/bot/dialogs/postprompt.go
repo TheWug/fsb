@@ -12,6 +12,7 @@ import (
 	"github.com/thewug/gogram/dialog"
 
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -250,7 +251,7 @@ func (this *PostPrompt) CommitPost(user, api_key string, ctx *gogram.MessageCtx,
 	return status, nil
 }
 
-func (this *PostPrompt) Prompt(settings storage.UpdaterSettings, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt PostFormatter) (*gogram.MessageCtx) {
+func (this *PostPrompt) Prompt(tx *sql.Tx, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt PostFormatter) (*gogram.MessageCtx) {
 	var send data.SendData
 	send.Text = frmt.GenerateMessage(this)
 	send.ParseMode = data.ParseHTML
@@ -260,7 +261,7 @@ func (this *PostPrompt) Prompt(settings storage.UpdaterSettings, bot *gogram.Tel
 		if ctx != nil {
 			prompt, err := ctx.Reply(data.OMessage{SendData: send, DisableWebPagePreview: true})
 			if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
-			err = this.FirstSave(settings, prompt.Msg.Id, prompt.Msg.Chat.Id, time.Unix(prompt.Msg.Date, 0), this)
+			err = this.FirstSave(tx, prompt.Msg.Id, prompt.Msg.Chat.Id, time.Unix(prompt.Msg.Date, 0), this)
 			if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
 			return prompt
 		} else {
@@ -270,12 +271,12 @@ func (this *PostPrompt) Prompt(settings storage.UpdaterSettings, bot *gogram.Tel
 		// message already exists, update it
 		prompt, err := this.Ctx(bot).EditText(data.OMessageEdit{SendData: send, DisableWebPagePreview: true})
 		if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
-		this.Save(settings)
+		this.Save(tx)
 		return prompt
 	}
 }
 
-func (this *PostPrompt) Finalize(settings storage.UpdaterSettings, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt PostFormatter) (*gogram.MessageCtx) {
+func (this *PostPrompt) Finalize(tx *sql.Tx, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt PostFormatter) (*gogram.MessageCtx) {
 	var send data.SendData
 	send.Text = frmt.GenerateMessage(this)
 	send.ParseMode = data.ParseHTML
@@ -287,7 +288,7 @@ func (this *PostPrompt) Finalize(settings storage.UpdaterSettings, bot *gogram.T
 		prompt, err = ctx.Reply(data.OMessage{SendData: send, DisableWebPagePreview: true})
 	} else {
 		prompt, err = this.Ctx(bot).EditText(data.OMessageEdit{SendData: send, DisableWebPagePreview: true})
-		this.Delete(settings)
+		this.Delete(tx)
 	}
 
 	if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }

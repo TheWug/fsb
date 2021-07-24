@@ -212,7 +212,7 @@ func (this *EditPrompt) ID() data.DialogID {
 	return EditPromptID()
 }
 
-func (this *EditPrompt) Prompt(settings storage.UpdaterSettings, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt EditFormatter) (*gogram.MessageCtx) {
+func (this *EditPrompt) Prompt(tx *sql.Tx, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt EditFormatter) (*gogram.MessageCtx) {
 	var send data.SendData
 	send.Text = frmt.GenerateMessage(this)
 	send.ParseMode = data.ParseHTML
@@ -222,7 +222,7 @@ func (this *EditPrompt) Prompt(settings storage.UpdaterSettings, bot *gogram.Tel
 		if ctx != nil {
 			prompt, err := ctx.Reply(data.OMessage{SendData: send})
 			if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
-			err = this.FirstSave(settings, prompt.Msg.Id, prompt.Msg.Chat.Id, time.Unix(prompt.Msg.Date, 0), this)
+			err = this.FirstSave(tx, prompt.Msg.Id, prompt.Msg.Chat.Id, time.Unix(prompt.Msg.Date, 0), this)
 			if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
 			return prompt
 		} else {
@@ -232,12 +232,12 @@ func (this *EditPrompt) Prompt(settings storage.UpdaterSettings, bot *gogram.Tel
 		// message already exists, update it
 		prompt, err := this.Ctx(bot).EditText(data.OMessageEdit{SendData: send})
 		if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
-		this.Save(settings)
+		this.Save(tx)
 		return prompt
 	}
 }
 
-func (this *EditPrompt) Finalize(settings storage.UpdaterSettings, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt EditFormatter) (*gogram.MessageCtx) {
+func (this *EditPrompt) Finalize(tx *sql.Tx, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt EditFormatter) (*gogram.MessageCtx) {
 	var send data.SendData
 	send.Text = frmt.GenerateMessage(this)
 	send.ParseMode = data.ParseHTML
@@ -249,7 +249,7 @@ func (this *EditPrompt) Finalize(settings storage.UpdaterSettings, bot *gogram.T
 		prompt, err = ctx.Reply(data.OMessage{SendData: send, DisableWebPagePreview: true})
 	} else {
 		prompt, err = this.Ctx(bot).EditText(data.OMessageEdit{SendData: send, DisableWebPagePreview: true})
-		this.Delete(settings)
+		this.Delete(tx)
 	}
 
 	if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
@@ -608,8 +608,8 @@ func EditPromptID() data.DialogID {
 	return EDIT_PROMPT_ID
 }
 
-func LoadEditPrompt(settings storage.UpdaterSettings, msg_id data.MsgID, chat_id data.ChatID) (*EditPrompt, error) {
-	found, err := storage.FetchDialogPost(settings, msg_id, chat_id)
+func LoadEditPrompt(tx *sql.Tx, msg_id data.MsgID, chat_id data.ChatID) (*EditPrompt, error) {
+	found, err := storage.FetchDialogPost(tx, msg_id, chat_id)
 	if err != nil { return nil, err }
 	if found == nil { return nil, nil }
 	if found.DialogId != EditPromptID() { return nil, dialog.ErrDialogTypeMismatch }
