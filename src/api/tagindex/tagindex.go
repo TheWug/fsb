@@ -1146,7 +1146,7 @@ func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, pr
 	}
 	buf.WriteString("</code>")
 
-	if buf.PlainLen() > 4000 {
+	if buf.Len() > 4000 {
 		buf.WriteString("\nToo many results!")
 	}
 
