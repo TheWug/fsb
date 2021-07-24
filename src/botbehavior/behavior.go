@@ -465,7 +465,8 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 		ctx.Bot.ErrorLog.Println("Error reading credentials: ", err.Error())
 	}
 
-	settings, _ := storage.GetUserSettings(storage.UpdaterSettings{}, ctx.Query.From.Id)
+	var settings *storage.UserSettings
+	err = storage.DefaultTransact(func(tx *sql.Tx) error { settings, err = storage.GetUserSettings(tx, ctx.Query.From.Id); return err })
 
 	var blacklist string
 	if settings.BlacklistMode == bottypes.BLACKLIST_ON {

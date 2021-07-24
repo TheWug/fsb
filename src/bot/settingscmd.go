@@ -97,54 +97,66 @@ type SettingsState struct {
 func sptr(x string) *string { return &x }
 
 func (this *SettingsState) Handle(ctx *gogram.MessageCtx) {
-	if ctx.Msg.From == nil { return }
+	err := storage.DefaultTransact(func(tx *sql.Tx) error { return this.HandleTx(tx, ctx) })
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("Error in SettingsState.Handle: %s", err)
+	}
+}
+
+func (this *SettingsState) HandleTx(tx *sql.Tx, ctx *gogram.MessageCtx) error {
+	if ctx.Msg.From == nil { return nil }
 
 	if ctx.Cmd.Command == "/settings" {
-		settings, err := storage.GetUserSettings(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+		settings, err := storage.GetUserSettings(tx, ctx.Msg.From.Id)
 		if err != nil {
 			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Sorry! There was an error looking up your settings."}}, nil)
-			ctx.Bot.ErrorLog.Printf("Error looking up user settings for %d: %s", ctx.Msg.From.Id, err.Error())
-			return
+			return fmt.Errorf("Error looking up user settings for %d: %w", ctx.Msg.From.Id, err)
 		}
 
 		creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 		if err != nil && err != storage.ErrNoLogin {
 			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Sorry! There was an error looking up your " + api.ApiName + " account."}}, nil)
-			ctx.Bot.ErrorLog.Printf("Error looking up " + api.ApiName + " account for %d: %s", ctx.Msg.From.Id, err.Error())
-			return
+			return fmt.Errorf("Error looking up " + api.ApiName + " account for %d: %v", ctx.Msg.From.Id, err)
 		}
 
 		ctx.ReplyAsync(data.OMessage{SendData: SettingsMessage("", settings, creds.User, creds.Janitor)}, nil)
 	} else if ctx.Cmd.Command == "/delete_my_data_and_forget_me" {
 		if ctx.Cmd.Argstr == "Yes I'm sure!" {
 			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("I'll always remember you, %s!\n<i>MEMORY DELETED</i>", html.EscapeString(ctx.Msg.From.FirstName)), ParseMode: data.ParseHTML}}, nil)
-			if err := storage.DeleteUserSettings(storage.UpdaterSettings{}, ctx.Msg.From.Id); err != nil { ctx.Bot.ErrorLog.Println("Error deleting settings: ", err.Error()) }
-			if err := storage.DefaultTransact(func(tx *sql.Tx) error { return storage.DeleteUserCreds(tx, ctx.Msg.From.Id) }); err != nil { ctx.Bot.ErrorLog.Println("Error deleting credentials: ", err.Error()) }
-			if err := storage.DefaultTransact(func(tx *sql.Tx) error { return storage.DeleteUserTagRules(tx, ctx.Msg.From.Id) }); err != nil { ctx.Bot.ErrorLog.Println("Error deleting credentials: ", err.Error()) }
+			if err := storage.DeleteUserSettings(tx, ctx.Msg.From.Id); err != nil { ctx.Bot.ErrorLog.Println("Error deleting settings: ", err.Error()) }
+			if err := storage.DeleteUserCreds(tx, ctx.Msg.From.Id); err != nil { ctx.Bot.ErrorLog.Println("Error deleting credentials: ", err.Error()) }
+			if err := storage.DeleteUserTagRules(tx, ctx.Msg.From.Id); err != nil { ctx.Bot.ErrorLog.Println("Error deleting credentials: ", err.Error()) }
 		} else if len(ctx.Cmd.Argstr) == 0 || ctx.Cmd.Argstr != "Yes I'm sure!" {
 			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "<b>Forget all data and settings: are you sure?</b>\n\nIf you're sure, copy and paste the command\n<code>/delete_my_data_and_forget_me Yes I'm sure!</code>", ParseMode: data.ParseHTML}}, nil)
-			return
+			return nil
 		}
 	}
+
+	return nil
 }
 
 func (this *SettingsState) HandleCallback(ctx *gogram.CallbackCtx) {
+	err := storage.DefaultTransact(func(tx *sql.Tx) error { return this.HandleCallbackTx(tx, ctx) })
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("Error in SettingsState.HandleCallback: %s", err)
+	}
+}
+
+func (this *SettingsState) HandleCallbackTx(tx *sql.Tx, ctx *gogram.CallbackCtx) error {
 	var answer data.OCallback
 	defer func() { ctx.Answer(answer) }()
 
 	if ctx.Cmd.Command == "/settings" {
-		settings, err := storage.GetUserSettings(storage.UpdaterSettings{}, ctx.Cb.From.Id)
+		settings, err := storage.GetUserSettings(tx, ctx.Cb.From.Id)
 		if err != nil {
 			answer.Notification, answer.ShowAlert = "Sorry! There was an error looking up your settings.", true
-			ctx.Bot.ErrorLog.Printf("Error looking up user settings for %d: %s", ctx.Cb.From.Id, err.Error())
-			return
+			return fmt.Errorf("Error looking up user settings for %d: %w", ctx.Cb.From.Id, err)
 		}
 
-		creds, err := storage.GetUserCreds(nil, ctx.Cb.From.Id)
+		creds, err := storage.GetUserCreds(tx, ctx.Cb.From.Id)
 		if err != nil && err != storage.ErrNoLogin {
 			answer.Notification, answer.ShowAlert = "Sorry! There was an error looking up your " + api.ApiName + " account.", true
-			ctx.Bot.ErrorLog.Printf("Error looking up " + api.ApiName + " account for %d: %s", ctx.Cb.From.Id, err.Error())
-			return
+			return fmt.Errorf("Error looking up " + api.ApiName + " account for %d: %w", ctx.Cb.From.Id, err)
 		}
 
 		subcommand := ""
@@ -189,13 +201,14 @@ func (this *SettingsState) HandleCallback(ctx *gogram.CallbackCtx) {
 			}
 		}
 
-		err = storage.WriteUserSettings(storage.UpdaterSettings{}, settings)
+		err = storage.WriteUserSettings(tx, settings)
 		if err != nil {
 			answer.Notification, answer.ShowAlert = "Sorry! There was an error saving your settings.", true
-			ctx.Bot.ErrorLog.Printf("Error saving settings for %d: %s", ctx.Cb.From.Id, err.Error())
-			return
+			return fmt.Errorf("Error saving settings for %d: %w", ctx.Cb.From.Id, err)
 		}
 
 		gogram.NewMessageCtx(ctx.Cb.Message, false, ctx.Bot).EditText(data.OMessageEdit{SendData: SettingsMessage(subcommand, settings, creds.User, creds.Janitor)})
 	}
+
+	return nil
 }

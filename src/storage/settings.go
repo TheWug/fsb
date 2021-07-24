@@ -15,11 +15,7 @@ type UserSettings struct {
 	BlacklistMode types.BlacklistMode
 }
 
-func GetUserSettings(settings UpdaterSettings, telegram_id tgtypes.UserID) (*UserSettings, error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
-
+func GetUserSettings(tx *sql.Tx, telegram_id tgtypes.UserID) (*UserSettings, error) {
 	query := "SELECT telegram_id, age_status, rating_mode, blacklist_mode FROM user_settings WHERE telegram_id = $1"
 	row := tx.QueryRow(query, telegram_id)
 
@@ -32,30 +28,17 @@ func GetUserSettings(settings UpdaterSettings, telegram_id tgtypes.UserID) (*Use
 		return nil, err
 	}
 
-	settings.Transaction.commit = mine && (err == nil)
 	return &u, nil
 }
 
-func WriteUserSettings(settings UpdaterSettings, s *UserSettings) (error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
+func WriteUserSettings(tx *sql.Tx, s *UserSettings) (error) {
 	query := "INSERT INTO user_settings (telegram_id, age_status, rating_mode, blacklist_mode) VALUES ($1, $2, $3, $4) ON CONFLICT (telegram_id) DO UPDATE SET age_status = EXCLUDED.age_status, rating_mode = EXCLUDED.rating_mode, blacklist_mode = EXCLUDED.blacklist_mode"
 	_, err := tx.Exec(query, s.TelegramId, s.AgeStatus, s.RatingMode, s.BlacklistMode)
-
-	settings.Transaction.commit = mine && (err == nil)
 	return err
 }
 
-func DeleteUserSettings(settings UpdaterSettings, id tgtypes.UserID) (error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
+func DeleteUserSettings(tx *sql.Tx, id tgtypes.UserID) (error) {
 	query := "UPDATE user_settings SET age_status = LEAST(age_status, 0), rating_mode = 0, blacklist_mode = 0 WHERE telegram_id = $1"
 	_, err := tx.Exec(query, id)
-
-	settings.Transaction.commit = mine && (err == nil)
 	return err
 }
