@@ -29,8 +29,8 @@ func PostPromptID() data.DialogID {
 	return POST_PROMPT_ID
 }
 
-func LoadPostPrompt(settings storage.UpdaterSettings, msg_id data.MsgID, chat_id data.ChatID, user_id data.UserID, api_user string) (*PostPrompt, error) {
-	found, err := storage.FetchDialogPost(settings, msg_id, chat_id)
+func LoadPostPrompt(tx *sql.Tx, msg_id data.MsgID, chat_id data.ChatID, user_id data.UserID, api_user string) (*PostPrompt, error) {
+	found, err := storage.FetchDialogPost(tx, msg_id, chat_id)
 	if err != nil { return nil, err }
 	if found == nil { return nil, nil }
 	if found.DialogId != PostPromptID() { return nil, dialog.ErrDialogTypeMismatch }

@@ -43,27 +43,18 @@ func PrefixedTagToTypedTag(name string) (string, int) {
 	return name, apitypes.TCGeneral.Value()
 }
 
-func ClearAliasIndex(settings UpdaterSettings) (error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
+func ClearAliasIndex(tx *sql.Tx) (error) {
 	_, err := tx.Exec("TRUNCATE alias_index")
 
-	settings.Transaction.commit = mine
 	return err
 }
 
-func GetAliasesFor(tag string, ctrl EnumerateControl) (apitypes.TTagInfoArray, error) {
+func GetAliasesFor(tx *sql.Tx, tag string) (apitypes.TTagInfoArray, error) {
 	sql :=	"SELECT a.tag_id, a.tag_name, a.tag_count, a.tag_type, a.tag_type_locked FROM " +
 			"tag_index AS %s INNER JOIN " +
 			"alias_index AS b ON (%s.tag_name = b.alias_name) INNER JOIN " +
 			"tag_index AS %s ON (b.alias_target_id = %s.tag_id) " +
 		"WHERE c.tag_name = $1"
-
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
 
 	var out apitypes.TTagInfoArray
 	var t apitypes.TTagData
@@ -86,13 +77,12 @@ func GetAliasesFor(tag string, ctrl EnumerateControl) (apitypes.TTagInfoArray, e
 		out = append(out, t)
 	}
 
-	ctrl.Transaction.commit = mine
 	return out, nil
 }
 
-func GetAliasedTags() (apitypes.TTagInfoArray, error) {
+func GetAliasedTags(tx *sql.Tx) (apitypes.TTagInfoArray, error) {
 	sql := "SELECT tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM tag_index INNER JOIN alias_index ON alias_name = tag_name WHERE tag_count != 0 AND tag_name != ''"
-	rows, err := Db_pool.Query(sql)
+	rows, err := tx.Query(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -111,13 +101,9 @@ func GetAliasedTags() (apitypes.TTagInfoArray, error) {
 	return out, nil
 }
 
-func AliasUpdater(input chan apitypes.TAliasData, settings UpdaterSettings) (error) {
+func AliasUpdater(tx *sql.Tx, input chan apitypes.TAliasData) (error) {
 	defer func(){ for _ = range input {} }()
-
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
+	
 	for alias := range input {
 		sql := "DELETE FROM alias_index WHERE alias_id = $1"
 		_, err := tx.Exec(sql, alias.Id)
@@ -128,15 +114,10 @@ func AliasUpdater(input chan apitypes.TAliasData, settings UpdaterSettings) (err
 		if err != nil { return err }
 	}
 
-	settings.Transaction.commit = mine
 	return nil
 }
 
-func EnumerateAllBlits(ctrl EnumerateControl) (map[string]bool, error) {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
-
+func EnumerateAllBlits(tx *sql.Tx) (map[string]bool, error) {
 	result := make(map[string]bool)
 	sql := "SELECT tag_name, is_blit FROM blit_tag_registry INNER JOIN tag_index USING (tag_id)"
 	rows, err := tx.Query(sql)
@@ -151,15 +132,10 @@ func EnumerateAllBlits(ctrl EnumerateControl) (map[string]bool, error) {
 		result[tag_name] = is_blit
 	}
 
-	ctrl.Transaction.commit = mine
 	return result, nil
 }
 
-func EnumerateCatsExceptions(ctrl EnumerateControl) ([]string, error) {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
-
+func EnumerateCatsExceptions(tx *sql.Tx) ([]string, error) {
 	sql := "SELECT tag FROM cats_ignored"
 	rows, err := tx.Query(sql)
 	if err != nil { return nil, err }
@@ -174,39 +150,24 @@ func EnumerateCatsExceptions(ctrl EnumerateControl) ([]string, error) {
 		output = append(output, tag)
 	}
 
-	ctrl.Transaction.commit = mine
 	return output, nil
 }
 
-func SetCatsException(tag string, ctrl EnumerateControl) (error) {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return ctrl.Transaction.err }
-
+func SetCatsException(tx *sql.Tx, tag string) (error) {
 	sql := "INSERT INTO cats_ignored (tag) VALUES ($1)"
 	_, err := tx.Exec(sql, tag)
 
-	ctrl.Transaction.commit = mine
 	return err
 }
 
-func ClearCatsException(tag string, ctrl EnumerateControl) (error) {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return ctrl.Transaction.err }
-
+func ClearCatsException(tx *sql.Tx, tag string) (error) {
 	sql := "DELETE FROM cats_ignored WHERE tag = $1"
 	_, err := tx.Exec(sql, tag)
 
-	ctrl.Transaction.commit = mine
 	return err
 }
 
-func RecalculateAliasedCounts(settings UpdaterSettings) (error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
+func RecalculateAliasedCounts(tx *sql.Tx) (error) {
 	sql := 	"UPDATE tag_index " +
 			"SET tag_count = subquery.tag_count " +
 		"FROM (SELECT a.tag_id, c.tag_count " +
@@ -227,21 +188,15 @@ func RecalculateAliasedCounts(settings UpdaterSettings) (error) {
 	_, err = tx.Exec(sql)
 	if err != nil { return err }
 
-	settings.Transaction.commit = mine
 	return nil
 }
 
-func CountTags(settings UpdaterSettings, sfx chan string) (error) {
+func CountTags(tx *sql.Tx, sfx chan string) (error) {
 	status := func(s string) {
 		if sfx != nil {
 			sfx <- s
 		}
 	}
-
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
 	status(" (1/3 reset cached counts)")
 	query := "UPDATE tag_index SET tag_count = 0"
 	_, err := tx.Exec(query)
@@ -257,7 +212,6 @@ func CountTags(settings UpdaterSettings, sfx chan string) (error) {
 	_, err = tx.Exec(query)
 	if err != nil { return err }
 
-	settings.Transaction.commit = mine
 	return nil
 }
 
@@ -294,11 +248,7 @@ func (b BlitData) String() string {
 	return fmt.Sprintf("%8d %9s %s", b.Count, name_of(b.Type), b.Name)
 }
 
-func GetBlits(yes, no, wild bool, ctrl EnumerateControl) ([]BlitData, []BlitData, []BlitData, error) {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return nil, nil, nil, ctrl.Transaction.err }
-
+func GetBlits(tx *sql.Tx, yes, no, wild bool) ([]BlitData, []BlitData, []BlitData, error) {
 	var blit BlitData
 	var out_yes, out_no, out_wild []BlitData
 
@@ -325,15 +275,10 @@ func GetBlits(yes, no, wild bool, ctrl EnumerateControl) ([]BlitData, []BlitData
 		}
 	}
 
-	ctrl.Transaction.commit = mine
 	return out_yes, out_no, out_wild, nil
 }
 
-func GetMarkedAndUnmarkedBlits(ctrl EnumerateControl) ([]BlitData, error) {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
-
+func GetMarkedAndUnmarkedBlits(tx *sql.Tx) ([]BlitData, error) {
 	var blit BlitData
 	var out []BlitData
 
@@ -348,34 +293,22 @@ func GetMarkedAndUnmarkedBlits(ctrl EnumerateControl) ([]BlitData, error) {
 		out = append(out, blit)
 	}
 
-	ctrl.Transaction.commit = mine
 	return out, nil
 }
 
-func MarkBlit(id int, mark bool, ctrl EnumerateControl) (error) {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return ctrl.Transaction.err }
-
+func MarkBlit(tx *sql.Tx, id int, mark bool) (error) {
 	_, err := tx.Exec("INSERT INTO blit_tag_registry (tag_id, is_blit) VALUES ($1, $2) ON CONFLICT (tag_id) DO UPDATE SET is_blit = EXCLUDED.is_blit", id, mark)
 
-	ctrl.Transaction.commit = mine
 	return err
 }
 
 var ErrNoTag = errors.New("no corresponding tag exists")
 
-func MarkBlitByName(name string, mark bool, ctrl EnumerateControl) (error) {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return ctrl.Transaction.err }
-
+func MarkBlitByName(tx *sql.Tx, name string, mark bool) (error) {
 	out, err := tx.Exec("INSERT INTO blit_tag_registry SELECT tag_id, $2 as is_blit FROM tag_index WHERE tag_name = $1 ON CONFLICT (tag_id) DO UPDATE SET is_blit = EXCLUDED.is_blit", name, mark)
 
 	rows, err := out.RowsAffected()
 	if err != nil { return err }
-
-	ctrl.Transaction.commit = mine
 
 	if rows == 0 {
 		return ErrNoTag
@@ -384,17 +317,11 @@ func MarkBlitByName(name string, mark bool, ctrl EnumerateControl) (error) {
 	return err
 }
 
-func DeleteBlitByName(name string, ctrl EnumerateControl) (error) {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return ctrl.Transaction.err }
-
+func DeleteBlitByName(tx *sql.Tx, name string) (error) {
 	out, err := tx.Exec("DELETE FROM blit_tag_registry WHERE tag_id = (SELECT tag_id FROM tag_index WHERE tag_name = $1)", name)
 
 	rows, err := out.RowsAffected()
 	if err != nil { return err }
-
-	ctrl.Transaction.commit = mine
 
 	if rows == 0 {
 		return ErrNoTag
@@ -596,11 +523,7 @@ type PromptPostInfo struct {
 	Edit      *PostSuggestedEdit
 }
 
-func FindPromptPost(id int, settings UpdaterSettings) (*PromptPostInfo, error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
-
+func FindPromptPost(tx *sql.Tx, id int) (*PromptPostInfo, error) {
 	var x PromptPostInfo
 	query := "SELECT post_id, post_type, post_url, sample_url, post_hash, post_width, post_height, msg_id, chat_id, msg_ts, msg_captioned, edit_list_json FROM prompt_posts WHERE post_id = $1"
 	err := tx.QueryRow(query, id).Scan(&x.PostId, &x.PostType, &x.PostURL, &x.SampleURL, &x.PostMd5, &x.PostWidth, &x.PostHeight, &x.MsgId, &x.ChatId, &x.Timestamp, &x.Captioned, &x.Edit)
@@ -614,11 +537,7 @@ func FindPromptPost(id int, settings UpdaterSettings) (*PromptPostInfo, error) {
 	}
 }
 
-func FindPromptPostByMessage(chat_id tgtypes.ChatID, msg_id tgtypes.MsgID, settings UpdaterSettings) (*PromptPostInfo, error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
-
+func FindPromptPostByMessage(tx *sql.Tx, chat_id tgtypes.ChatID, msg_id tgtypes.MsgID) (*PromptPostInfo, error) {
 	var x PromptPostInfo
 	query := "SELECT post_id, post_type, post_url, sample_url, post_hash, post_width, post_height, msg_id, chat_id, msg_ts, msg_captioned, edit_list_json FROM prompt_posts WHERE chat_id = $1 AND msg_id = $2"
 	err := tx.QueryRow(query, chat_id, msg_id).Scan(&x.PostId, &x.PostType, &x.PostURL, &x.SampleURL, &x.PostMd5, &x.PostWidth, &x.PostHeight, &x.MsgId, &x.ChatId, &x.Timestamp, &x.Captioned, &x.Edit)
@@ -632,11 +551,7 @@ func FindPromptPostByMessage(chat_id tgtypes.ChatID, msg_id tgtypes.MsgID, setti
 	}
 }
 
-func FindPromptPostsOlderThan(time_ago time.Duration, settings UpdaterSettings) ([]PromptPostInfo, error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
-
+func FindPromptPostsOlderThan(tx *sql.Tx, time_ago time.Duration) ([]PromptPostInfo, error) {
 	query := "SELECT post_id, post_type, post_url, sample_url, post_hash, post_width, post_height, msg_id, chat_id, msg_ts, msg_captioned, edit_list_json FROM prompt_posts WHERE msg_ts <= NOW() - ($1 * '1 second'::interval)"
 	rows, err := tx.Query(query, time_ago.Seconds())
 	if err != nil { return nil, err }
@@ -649,15 +564,10 @@ func FindPromptPostsOlderThan(time_ago time.Duration, settings UpdaterSettings) 
 		out = append(out, x)
 	}
 
-	settings.Transaction.commit = mine
 	return out, nil
 }
 
-func SavePromptPost(id int, x *PromptPostInfo, settings UpdaterSettings) (error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
+func SavePromptPost(tx *sql.Tx, id int, x *PromptPostInfo) (error) {
 	query := "DELETE FROM prompt_posts WHERE post_id = $1"
 	_, err := tx.Exec(query, id)
 	if err != nil { return err }
@@ -668,7 +578,6 @@ func SavePromptPost(id int, x *PromptPostInfo, settings UpdaterSettings) (error)
 		if err != nil { return err }
 	}
 
-	settings.Transaction.commit = mine
 	return nil
 }
 
