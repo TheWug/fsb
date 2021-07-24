@@ -208,7 +208,7 @@ func (this UserError) Error() string {
 }
 
 func ResyncListCommand(ctx *gogram.MessageCtx) {
-	err := ResyncList(ctx, storage.UpdaterSettings{}, nil)
+	err := ResyncList(ctx, nil)
 	if err == storage.ErrNoLogin {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
@@ -221,7 +221,7 @@ func ResyncListCommand(ctx *gogram.MessageCtx) {
 	}
 }
 
-func ResyncList(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
+func ResyncList(ctx *gogram.MessageCtx, progress *ProgMessage) (error) {
 	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return err }
 
