@@ -94,7 +94,7 @@ func main() {
 	machine.AddCommand("/recountnegative", &janitor)
 	machine.AddCommand("/cats", &janitor)
 	machine.AddCommand("/blits", &janitor)
-	machine.AddCommand("/findtagtypos", &janitor)
+	machine.AddCommand("/typos", &janitor)
 	machine.AddCommand("/recounttags", &janitor)
 	machine.AddCommand("/syncposts", &janitor)
 	machine.AddCommand("/resynclist", &janitor)
