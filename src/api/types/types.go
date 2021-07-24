@@ -170,13 +170,13 @@ type TPostInfo struct {
 	TPostRelationships `json:"relationships"`
 	TPostTags          `json:"tags"`
 
-	Id            int `json:"id"`
+	Id            int    `json:"id"`
 	Description   string `json:"description"`
-	Creator_id    int `json:"uploader_id"`
-	Change        int `json:"change_seq"`
-	Fav_count     int `json:"fav_count"`
+	Creator_id    int    `json:"uploader_id"`
+	Change        int    `json:"change_seq"`
+	Fav_count     int    `json:"fav_count"`
 	Rating        string `json:"rating"`
-	Comment_count int `json:"comment_count"`
+	Comment_count int    `json:"comment_count"`
 	Sources     []string `json:"sources,omitempty"`
 
 //	Created_at    JSONTime `json:"created_at"`
