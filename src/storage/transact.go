@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 )
 
@@ -44,13 +45,13 @@ type CommitAndYield interface {
 // - If the error is nil or implements RollbackAndMask, a nil error will be returned to the caller, indicating success.
 // - Otherwise, the error will be returned to the caller.
 // - If tx.Commit (or tx.Rollback, whichever is used) fails with an error, that error will be returned instead, superceding the previous options.
-func Transact(db_connection *sql.DB, callback func(*sql.Tx) error) error {
+func Transact(db_connection *sql.DB, callback func(DBLike) error) error {
 	tx, err := db_connection.Begin()
 	if err != nil {
 		return err
 	}
 
-	err = callback(tx)
+	err = callback(dbWrapper{Queryable: tx, in_tx: true})
 
 	if err == nil {
 		err = tx.Commit()
@@ -70,6 +71,47 @@ func Transact(db_connection *sql.DB, callback func(*sql.Tx) error) error {
 	return err
 }
 
-func DefaultTransact(callback func(*sql.Tx) error) error {
+func DefaultTransact(callback func(DBLike) error) error {
 	return Transact(Db_pool, callback)
+}
+
+// broadly compatible with both *sql.DB and *sql.Tx
+type Queryable interface {
+	Exec(string, ...interface{}) (sql.Result, error)
+	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
+	Query(string, ...interface{}) (*sql.Rows, error)
+	QueryContext(context.Context, string, ...interface{}) (*sql.Rows, error)
+	QueryRow(string, ...interface{}) *sql.Row
+	QueryRowContext(context.Context, string, ...interface{}) *sql.Row
+}
+
+// a generic interface which is able to perform queries, and is aware of whether or not
+// it is within a transaction.
+type DBLike interface {
+	Exec(string, ...interface{}) (sql.Result, error)
+	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
+	Query(string, ...interface{}) (*sql.Rows, error)
+	QueryContext(context.Context, string, ...interface{}) (*sql.Rows, error)
+	QueryRow(string, ...interface{}) *sql.Row
+	QueryRowContext(context.Context, string, ...interface{}) *sql.Row
+
+	InTransaction() bool
+}
+
+type dbWrapper struct {
+	Queryable
+
+	in_tx bool
+}
+
+func (d dbWrapper) InTransaction() bool {
+	return d.in_tx
+}
+
+func NoTx(database *sql.DB) DBLike {
+	return dbWrapper{Queryable: database}
+}
+
+func DefaultNoTx() DBLike {
+	return NoTx(Db_pool)
 }
