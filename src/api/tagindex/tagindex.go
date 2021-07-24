@@ -529,12 +529,7 @@ func SyncPostsCommand(ctx *gogram.MessageCtx) {
 		}
 	}
 
-	var err error
-	settings := storage.UpdaterSettings{}
-	settings.Transaction, err = storage.NewTxBox()
-	if err != nil { log.Println(err.Error(), "newtxbox") }
-
-	err = SyncPosts(ctx, settings, aliases, recount, nil)
+	err := SyncPosts(ctx, aliases, recount, nil)
 	if err == storage.ErrNoLogin {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
@@ -542,12 +537,9 @@ func SyncPostsCommand(ctx *gogram.MessageCtx) {
 		ctx.Bot.ErrorLog.Println("Error occurred syncing posts: %s", err.Error())
 		return
 	}
-
-	settings.Transaction.MarkForCommit()
-	settings.Transaction.Finalize(true)
 }
 
-func SyncPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, aliases_too, recount_too bool, progress *ProgMessage) (error) {
+func SyncPosts(ctx *gogram.MessageCtx, aliases_too, recount_too bool, progress *ProgMessage) (error) {
 	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return err }
 
@@ -560,7 +552,7 @@ func SyncPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, aliases
 	return storage.DefaultTransact(func(tx storage.DBLike) error { return SyncPostsInternal(tx, creds.User, creds.ApiKey, aliases_too, recount_too, progress, nil) })
 }
 
-func SyncOnlyPostsInternal(tx *sql.Tx, user, api_key string, progress *ProgMessage, post_updates chan []types.TPostInfo) (error) {
+func SyncOnlyPostsInternal(tx storage.DBLike, user, api_key string, progress *ProgMessage, post_updates chan []types.TPostInfo) (error) {
 	update := func(p []types.TPostInfo) {
 		if post_updates != nil {
 			post_updates <- p
@@ -622,7 +614,7 @@ func SyncOnlyPostsInternal(tx *sql.Tx, user, api_key string, progress *ProgMessa
 	return nil
 }
 
-func SyncPostsInternal(tx *sql.Tx, user, api_key string, aliases_too, recount_too bool, progress *ProgMessage, post_updates chan []types.TPostInfo) (error) {
+func SyncPostsInternal(tx storage.DBLike, user, api_key string, aliases_too, recount_too bool, progress *ProgMessage, post_updates chan []types.TPostInfo) (error) {
 	progress.AppendNotice("Syncing activity... ")
 	settings := storage.UpdaterSettings{Transaction: storage.Wrap(tx)}
 
