@@ -990,13 +990,13 @@ func Typos(ctx *gogram.MessageCtx) {
 	progress, err := ProgressMessage2(data.OMessage{SendData: data.SendData{TargetData: data.TargetData{ChatId: ctx.Msg.Chat.Id}, ReplyToId: &ctx.Msg.Id, ParseMode: data.ParseHTML}, DisableWebPagePreview: true},
 	                                  "Checking for typos...", 3 * time.Second, ctx.Bot)
 
-	err = storage.DefaultTransact(func(tx *sql.Tx) error { return TyposInternal(tx, control, creds, progress) })
+	err = storage.DefaultTransact(func(tx storage.DBLike) error { return TyposInternal(tx, control, creds, progress) })
 	if err != nil {
 		progress.SetMessage(fmt.Sprintf("Error: %s", html.EscapeString(err.Error())))
 	}
 }
 
-func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, progress *ProgMessage) error {
+func TyposInternal(tx storage.DBLike, control TyposControl, creds storage.UserCreds, progress *ProgMessage) error {
 	defer func() { fmt.Println(recover()) }()
 	results := make(map[string]Pair)
 
