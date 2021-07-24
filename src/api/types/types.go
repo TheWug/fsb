@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/lib/pq"
+	"github.com/thewug/dml"
 )
 
 type TTagData struct {
@@ -179,6 +180,8 @@ type TPostInfo struct {
 	Comment_count int    `json:"comment_count"`
 	Sources     []string `json:"sources,omitempty"`
 
+	sources_internal string
+
 //	Created_at    JSONTime `json:"created_at"`
 //	Updated_at    JSONTime `json:"updated_at"`
 //	Author        string `json:"author"`
@@ -247,6 +250,23 @@ type TUserInfo struct {
 	LevelString     string `json:"level_string"`
 	Email           string `json:"email"` // only present when logged in, and only for your own account
 	Blacklist       string `json:"blacklisted_tags"`
+}
+
+func (this *TPostInfo) GetFields() (dml.NamedFields, error) {
+	return dml.NamedFields{
+		Names: []string{
+			"post_id", "post_change_seq", "post_rating", "post_description", "post_sources", "post_hash", "post_deleted", "post_tags",
+		},
+		Fields: []interface{}{
+			&this.Id, &this.Change, &this.Rating, &this.Description, &this.sources_internal, &this.Md5, &this.Deleted, pq.Array(&this.General),
+		},
+	}, nil
+}
+
+func (this *TPostInfo) PostScan() error {
+	this.Sources = strings.Split(this.sources_internal, "\n")
+	this.sources_internal = ""
+	return nil
 }
 
 type Scannable interface {
