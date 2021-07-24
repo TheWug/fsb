@@ -1029,11 +1029,11 @@ func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, pr
 	if target == nil { return errors.New(fmt.Sprintf("Tag doesn't exist: %s", control.start_tag)) }
 
 	alltags, err := storage.EnumerateAllTags(tx, false)
-	if err != nil { return err }
+	if err != nil { return fmt.Errorf("Error in EnumerateAllTags: %w", err) }
 	blits, err := storage.EnumerateAllBlits(storage.EnumerateControl{Transaction: storage.Wrap(tx)}) // XXX make this return yes and wild blits
-	if err != nil { return err }
+	if err != nil { return fmt.Errorf("Error in EnumerateAllBlits: %w", err) }
 	typos, err := storage.GetTagTypos(tx, control.start_tag)
-	if err != nil { return err }
+	if err != nil { return fmt.Errorf("Error in GetTagTypos: %w", err) }
 
 	if !control.no_auto {
 		control.alias = append(control.alias, control.start_tag)
@@ -1159,7 +1159,7 @@ func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, pr
 
 		for _, v := range results {
 			array, err := storage.PostsWithTag(tx, *v.tag, false)
-			if err != nil { return err }
+			if err != nil { return fmt.Errorf("Error in PostsWithTag: %w", err) }
 
 			for _, post := range array {
 				d := diffs[post.Id]
@@ -1183,11 +1183,11 @@ func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, pr
 				err = storage.MarkPostDeleted(tx, id)
 			}
 
-			if err != nil { return err }
+			if err != nil { return fmt.Errorf("Error in MarkPostDeleted: %w", err) }
 
 			if newp != nil {
 				err = storage.UpdatePost(tx, *newp)
-				if err != nil { return err }
+				if err != nil { return fmt.Errorf("Error in UpdatePost: %w", err) }
 			}
 
 			progress.SetStatus(fmt.Sprintf("(%d/%d %d: <code>%s</code>)", updated, total_posts, id, diff.APIString()))
@@ -1199,7 +1199,7 @@ func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, pr
 	if control.del {
 		for _, action := range results {
 			err = storage.DelTagTypoByTag(tx, action.TypoData())
-			if err != nil { return err }
+			if err != nil { return fmt.Errorf("Error in DelTagTypoByTag: %w", err) }
 		}
 		progress.AppendNotice(fmt.Sprintf("%d typo records deleted.", len(results)))
 	}
@@ -1207,7 +1207,7 @@ func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, pr
 	if control.register || control.unregister || control.autofix {
 		for _, action := range results {
 			err = storage.SetTagTypoByTag(tx, action.TypoData(), control.register || control.autofix, control.autofix)
-			if err != nil { return err }
+			if err != nil { return fmt.Errorf("Error in SetTagTypoByTag: %w", err) }
 		}
 		progress.AppendNotice(fmt.Sprintf("%d typo records updated.", len(results)))
 	}
