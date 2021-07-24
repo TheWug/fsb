@@ -1023,7 +1023,7 @@ func TyposInternal(tx storage.DBLike, control TyposControl, creds storage.UserCr
 
 	alltags, err := storage.EnumerateAllTags(tx, false)
 	if err != nil { return fmt.Errorf("Error in EnumerateAllTags: %w", err) }
-	blits, err := storage.EnumerateAllBlits(storage.EnumerateControl{Transaction: storage.Wrap(tx)}) // XXX make this return yes and wild blits
+	blits, err := storage.EnumerateAllBlits(tx) // XXX make this return yes and wild blits
 	if err != nil { return fmt.Errorf("Error in EnumerateAllBlits: %w", err) }
 	typos, err := storage.GetTagTypos(tx, control.start_tag)
 	if err != nil { return fmt.Errorf("Error in GetTagTypos: %w", err) }

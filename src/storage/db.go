@@ -117,7 +117,7 @@ func AliasUpdater(tx DBLike, input chan apitypes.TAliasData) (error) {
 	return nil
 }
 
-func EnumerateAllBlits(tx *sql.Tx) (map[string]bool, error) {
+func EnumerateAllBlits(tx DBLike) (map[string]bool, error) {
 	result := make(map[string]bool)
 	sql := "SELECT tag_name, is_blit FROM blit_tag_registry INNER JOIN tag_index USING (tag_id)"
 	rows, err := tx.Query(sql)
@@ -135,7 +135,7 @@ func EnumerateAllBlits(tx *sql.Tx) (map[string]bool, error) {
 	return result, nil
 }
 
-func EnumerateCatsExceptions(tx *sql.Tx) ([]string, error) {
+func EnumerateCatsExceptions(tx DBLike) ([]string, error) {
 	sql := "SELECT tag FROM cats_ignored"
 	rows, err := tx.Query(sql)
 	if err != nil { return nil, err }
@@ -153,14 +153,14 @@ func EnumerateCatsExceptions(tx *sql.Tx) ([]string, error) {
 	return output, nil
 }
 
-func SetCatsException(tx *sql.Tx, tag string) (error) {
+func SetCatsException(tx DBLike, tag string) (error) {
 	sql := "INSERT INTO cats_ignored (tag) VALUES ($1)"
 	_, err := tx.Exec(sql, tag)
 
 	return err
 }
 
-func ClearCatsException(tx *sql.Tx, tag string) (error) {
+func ClearCatsException(tx DBLike, tag string) (error) {
 	sql := "DELETE FROM cats_ignored WHERE tag = $1"
 	_, err := tx.Exec(sql, tag)
 
