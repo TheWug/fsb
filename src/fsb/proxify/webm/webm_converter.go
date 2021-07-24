@@ -12,6 +12,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -67,7 +68,7 @@ func CheckMp4ForWebm(tx *sql.Tx, result *types.TPostInfo) *data.FileID {
 // synchronous converter routine.
 func (this webmToTelegramMp4Converter) convertRoutine() {
 	for req := range this.convert_requests {
-		_ := storage.DefaultTransact(func(tx *sql.Tx) error {
+		err := storage.DefaultTransact(func(tx *sql.Tx) error {
 			// within this function, return = continue outer loop
 			// so I can use defer to process stuff at end of iteration
 			defer func() { close(req.output) }()
@@ -94,7 +95,8 @@ func (this webmToTelegramMp4Converter) convertRoutine() {
 			return nil
 		})
 
-		// TODO handle error
+		// if an error occurs, there's not a lot we can do about it, so just log it and soldier on
+		if err != nil { log.Println(err) }
 	}
 }
 
