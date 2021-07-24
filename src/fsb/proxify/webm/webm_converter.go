@@ -9,7 +9,9 @@ import (
 	"github.com/thewug/gogram/data"
 	"github.com/thewug/reqtify"
 
+	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -53,8 +55,8 @@ func GetMp4ForWebm(result *types.TPostInfo) *data.FileID {
 
 // checks if an mp4 file id is available, returning it immediately if so
 // and returning nil if not.
-func CheckMp4ForWebm(result *types.TPostInfo) *data.FileID {
-	cached, err := storage.FindCachedMp4ForWebm(result.Md5, storage.UpdaterSettings{})
+func CheckMp4ForWebm(tx *sql.Tx, result *types.TPostInfo) *data.FileID {
+	cached, err := storage.FindCachedMp4ForWebm(tx, result.Md5)
 	if err != nil {
 		converter.bot.ErrorLog.Println("Error in storage.FindCachedMp4ForWebm: ", err.Error())
 		return nil
@@ -65,50 +67,34 @@ func CheckMp4ForWebm(result *types.TPostInfo) *data.FileID {
 // synchronous converter routine.
 func (this webmToTelegramMp4Converter) convertRoutine() {
 	for req := range this.convert_requests {
-		func() {
+		_ := storage.DefaultTransact(func(tx *sql.Tx) error {
 			// within this function, return = continue outer loop
 			// so I can use defer to process stuff at end of iteration
 			defer func() { close(req.output) }()
-			var settings storage.UpdaterSettings
-			var err error
-			settings.Transaction, err = storage.NewTxBox()
-			if err != nil {
-				this.bot.ErrorLog.Println("Error opening transaction in ConvertRoutine: ", err.Error())
-				return
-			}
-			defer settings.Transaction.Finalize(true)
 
-			cached, err := storage.FindCachedMp4ForWebm(req.post.Md5, settings)
-			if err != nil {
-				this.bot.ErrorLog.Println("Error in storage.FindCachedMp4ForWebm: ", err.Error())
-				return
-			} else if cached != nil {
+			cached, err := storage.FindCachedMp4ForWebm(tx, req.post.Md5)
+			if err != nil { return fmt.Errorf("storage.FindCachedMp4ForWebm: %w", err) }
+
+			if cached != nil {
 				req.output <- cached
-				return
+				return nil
 			}
 
 			converted_file, err := this.convertFile(req.post.File_url, true)
-			if err != nil {
-				this.bot.ErrorLog.Println("Error in webm.convertFile: ", err.Error())
-				return
-			}
+			if err != nil { return fmt.Errorf("webm.convertFile: %w", err) }
 
 			cached, err = this.uploadConvertedFileToTelegram(converted_file)
-			if err != nil {
-				this.bot.ErrorLog.Println("Error in webm.uploadConvertedFileToTelegram: ", err.Error())
-				return
-			}
+			if err != nil { return fmt.Errorf("webm.uploadConvertedFileToTelegram: %w", err) }
 
 			req.output <- cached
 
-			err = storage.SaveCachedMp4ForWebm(req.post.Md5, *cached, settings)
-			if err != nil {
-				this.bot.ErrorLog.Println("Error in storage.SaveCachedMp4ForWebm: ", err.Error())
-				return
-			}
+			err = storage.SaveCachedMp4ForWebm(tx, req.post.Md5, *cached)
+			if err != nil { return fmt.Errorf("storage.SaveCachedMp4ForWebm: %w", err) }
 
-			settings.Transaction.MarkForCommit()
-		}()
+			return nil
+		})
+
+		// TODO handle error
 	}
 }
 

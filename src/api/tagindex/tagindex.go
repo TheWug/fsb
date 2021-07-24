@@ -256,7 +256,7 @@ func ResyncList(ctx *gogram.MessageCtx, progress *ProgMessage) (error) {
 }
 
 
-func ResyncListInternal(tx *sql.Tx, user, api_key string, settings storage.UpdaterSettings, file_data io.Reader, progress *ProgMessage) (error) {
+func ResyncListInternal(tx *sql.Tx, user, api_key string, file_data io.Reader, progress *ProgMessage) (error) {
 	progress.AppendNotice("Updating posts from list...")
 
 	idpipe := make(chan string)
