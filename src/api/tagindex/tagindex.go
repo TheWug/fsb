@@ -354,7 +354,7 @@ func SyncTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress
 }
 
 
-func SyncTagsInternal(tx *sql.Tx, user, api_key string, progress *ProgMessage) (error) {
+func SyncTagsInternal(tx storage.DBLike, user, api_key string, progress *ProgMessage) (error) {
 	progress.AppendNotice("Syncing tag database...")
 
 	fixed_tags := make(chan types.TTagData)
