@@ -25,7 +25,7 @@ func (creds *UserCreds) ScanFrom(row Scannable) error {
 	return row.Scan(&creds.User, &creds.ApiKey, &creds.Janitor, &creds.Blacklist, &creds.BlacklistFetched)
 }
 
-func GetUserCreds(tx *sql.Tx, id tgtypes.UserID) (UserCreds, error) {
+func GetUserCreds(tx DBLike, id tgtypes.UserID) (UserCreds, error) {
 	creds := UserCreds{TelegramId: id}
 
 	f := func(tx DBLike) error {
