@@ -305,7 +305,7 @@ func (this *AutofixState) HandleCallback(ctx *gogram.CallbackCtx) {
 				ctx.AnswerAsync(data.OCallback{Notification: "\U0001F539 Changes saved."}, nil)
 
 				if post != nil {
-					err = storage.UpdatePost(*post, settings)
+					err = storage.DefaultTransact(func(tx *sql.Tx) error { return storage.UpdatePost(tx, *post) })
 					if err != nil { ctx.Bot.ErrorLog.Println("Failed to locally update post:", err.Error()) }
 				}
 			}
@@ -685,7 +685,11 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 
 	e.OrigSources = make(map[string]int)
 
-	post_data, err := storage.PostByID(e.PostId, storage.UpdaterSettings{})
+	var post_data *apitypes.TPostInfo
+	err = storage.DefaultTransact(func(tx *sql.Tx) error {
+		post_data, err = storage.PostByID(tx, e.PostId)
+		return err
+	})
 	if post_data != nil {
 		for _, s := range post_data.Sources {
 			e.SeeSource(s)

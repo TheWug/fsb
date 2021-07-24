@@ -252,11 +252,11 @@ func ResyncList(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progre
 		defer progress.Close()
 	}
 
-	return ResyncListInternal(creds.User, creds.ApiKey, settings, file_data, progress)
+	return storage.DefaultTransact(func(tx *sql.Tx) error { return ResyncListInternal(tx, creds.User, creds.ApiKey, settings, file_data, progress) })
 }
 
 
-func ResyncListInternal(user, api_key string, settings storage.UpdaterSettings, file_data io.Reader, progress *ProgMessage) (error) {
+func ResyncListInternal(tx *sql.Tx, user, api_key string, settings storage.UpdaterSettings, file_data io.Reader, progress *ProgMessage) (error) {
 	progress.AppendNotice("Updating posts from list...")
 
 	idpipe := make(chan string)
@@ -288,7 +288,7 @@ func ResyncListInternal(user, api_key string, settings storage.UpdaterSettings, 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		err := storage.PostUpdater(fixed_posts, settings)
+		err := storage.PostUpdater(tx, fixed_posts)
 		wg.Done()
 		if err != nil { log.Println(err.Error()) }
 	}()
@@ -558,7 +558,7 @@ func SyncPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, aliases
 	return storage.DefaultTransact(func(tx *sql.Tx) error { return SyncPostsInternal(tx, creds.User, creds.ApiKey, aliases_too, recount_too, progress, nil) })
 }
 
-func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSettings, progress *ProgMessage, post_updates chan []types.TPostInfo) (error) {
+func SyncOnlyPostsInternal(tx *sql.Tx, user, api_key string, progress *ProgMessage, post_updates chan []types.TPostInfo) (error) {
 	update := func(p []types.TPostInfo) {
 		if post_updates != nil {
 			post_updates <- p
@@ -572,14 +572,14 @@ func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSetting
 	limit := 320
 	latest_change_seq := 0
 	consecutive_errors := 0
-	last, err := storage.GetMostRecentlyUpdatedPost(settings)
+	last, err := storage.GetMostRecentlyUpdatedPost(tx)
 	if err != nil { return err }
 	if last != nil { latest_change_seq = last.Change }
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		err := storage.PostUpdater(fixed_posts, settings)
+		err := storage.PostUpdater(tx, fixed_posts)
 		wg.Done()
 		if err != nil { log.Println(err.Error()) }
 	}()
@@ -624,7 +624,7 @@ func SyncPostsInternal(tx *sql.Tx, user, api_key string, aliases_too, recount_to
 	progress.AppendNotice("Syncing activity... ")
 	settings := storage.UpdaterSettings{Transaction: storage.Wrap(tx)}
 
-	if err := SyncOnlyPostsInternal(user, api_key, settings, progress, post_updates); err != nil { return err }
+	if err := SyncOnlyPostsInternal(tx, user, api_key, progress, post_updates); err != nil { return err }
 	if err := SyncTagsInternal(tx, user, api_key, progress); err != nil { return err }
 
 	if aliases_too {
@@ -636,7 +636,7 @@ func SyncPostsInternal(tx *sql.Tx, user, api_key string, aliases_too, recount_to
 	var err error
 	sfx := make(chan string)
 	go func() {
-		err = storage.ImportPostTagsFromNameToID(settings, sfx)
+		err = storage.ImportPostTagsFromNameToID(tx, sfx)
 		close(sfx)
 	}()
 
@@ -1146,7 +1146,7 @@ func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, pr
 		diffs := make(map[int]tags.TagDiff)
 
 		for _, v := range results {
-			array, err := storage.PostsWithTag(*v.tag, storage.EnumerateControl{Transaction: storage.Wrap(tx)})
+			array, err := storage.PostsWithTag(tx, *v.tag, false)
 			if err != nil { return err }
 
 			for _, post := range array {
@@ -1168,13 +1168,13 @@ func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, pr
 
 			if err == api.PostIsDeleted {
 				log.Printf("Post was deleted which we didn't know about? DB consistency? (%d)\n", id)
-				err = storage.MarkPostDeleted(id, storage.UpdaterSettings{Transaction: storage.Wrap(tx)})
+				err = storage.MarkPostDeleted(tx, id)
 			}
 
 			if err != nil { return err }
 
 			if newp != nil {
-				err = storage.UpdatePost(*newp, storage.UpdaterSettings{Transaction: storage.Wrap(tx)})
+				err = storage.UpdatePost(tx, *newp)
 				if err != nil { return err }
 			}
 
@@ -1229,10 +1229,10 @@ func RefetchDeletedPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSetting
 		defer progress.Close()
 	}
 
-	return RefetchDeletedPostsInternal(creds.User, creds.ApiKey, settings, progress)
+	return storage.DefaultTransact(func(tx *sql.Tx) error { return RefetchDeletedPostsInternal(tx, creds.User, creds.ApiKey, progress) })
 }
 
-func RefetchDeletedPostsInternal(user, api_key string, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
+func RefetchDeletedPostsInternal(tx *sql.Tx, user, api_key string, progress *ProgMessage) (error) {
 	progress.AppendNotice("Syncing deleted posts...")
 
 	fixed_posts := make(chan []int)
@@ -1240,12 +1240,13 @@ func RefetchDeletedPostsInternal(user, api_key string, settings storage.UpdaterS
 	limit := 10000
 	consecutive_errors := 0
 	latest_id := 0
-	highest_id := storage.GetHighestPostID(settings)
+	highest_id, err := storage.GetHighestPostID(tx)
+	if err != nil { return err }
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		err := storage.PostDeleter(fixed_posts, settings)
+		err := storage.PostDeleter(tx, fixed_posts)
 		wg.Done()
 		if err != nil { log.Println(err.Error()) }
 	}()
@@ -1842,10 +1843,8 @@ func CatsInternal(tx *sql.Tx, control CatsControl, creds storage.UserCreds, prog
 			triplet.tag, err = storage.GetTagByName(tx, triplet.tag.Name, false)
 			if triplet.tag == nil { continue }
 
-			posts, err := storage.PostsWithTag(*triplet.tag, storage.EnumerateControl{Transaction: storage.Wrap(tx)})
-			if err != nil {
-				return err
-			}
+			posts, err := storage.PostsWithTag(tx, *triplet.tag, false)
+			if err != nil { return err }
 
 			reason := fmt.Sprintf("Bulk retag: %s --> %s, %s (fixed concatenated tags)", triplet.tag.Name, triplet.subtag1.Name, triplet.subtag2.Name)
 			for _, p := range posts {
@@ -1858,7 +1857,7 @@ func CatsInternal(tx *sql.Tx, control CatsControl, creds storage.UserCreds, prog
 				if err != nil { return err }
 
 				if newp != nil {
-					err = storage.UpdatePost(*newp, storage.UpdaterSettings{Transaction: storage.Wrap(tx)})
+					err = storage.UpdatePost(tx, *newp)
 					if err != nil { return err }
 				}
 			}

@@ -4,7 +4,9 @@ import (
 	"storage"
 
 	"github.com/thewug/gogram/data"
+	"api/types"
 
+	"database/sql"
 	"regexp"
 	"strconv"
 	"strings"
@@ -92,7 +94,12 @@ func GetPostIDFromText(text string) int {
 	if found == NONEXISTENT_POST {
 		md5 := md5hashmatch.MatchString(text)
 		if md5 != "" {
-			post, err := storage.PostByMD5(md5, storage.UpdaterSettings{})
+			var post *types.TPostInfo
+			var err error
+			err = storage.DefaultTransact(func(tx *sql.Tx) error {
+				post, err = storage.PostByMD5(tx, md5)
+				return err
+			})
 			if post != nil && err == nil {
 				found = post.Id
 			}

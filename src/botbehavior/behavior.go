@@ -123,7 +123,7 @@ func (this *Behavior) maintenanceInternal(tx *sql.Tx, bot *gogram.TelegramBot, e
 	replace_id := int64(-1)
 	replacements, err := storage.GetReplacements(tx, replace_id)
 	if err != nil { return err }
-	actual_posts, err := storage.PostsById(updated_post_ids, storage.UpdaterSettings{Transaction: storage.Wrap(tx)})
+	actual_posts, err := storage.PostsById(tx, updated_post_ids)
 	if err != nil { return err }
 
 	type shim struct {
@@ -191,7 +191,7 @@ func (this *Behavior) maintenanceInternal(tx *sql.Tx, bot *gogram.TelegramBot, e
 				}
 
 				if post != nil {
-					err = storage.UpdatePost(*post, storage.UpdaterSettings{Transaction: storage.Wrap(tx)})
+					err = storage.UpdatePost(tx, *post)
 					if err != nil { return err }
 				}
 			}
