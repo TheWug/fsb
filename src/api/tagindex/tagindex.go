@@ -669,13 +669,13 @@ func SyncAliases(ctx *gogram.MessageCtx, progress *ProgMessage) (error) {
 		defer progress.Close()
 	}
 
-	return storage.DefaultTransact(func(tx storage.DBLike) error { return SyncAliasesInternal(creds.User, creds.ApiKey, progress) })
+	return storage.DefaultTransact(func(tx storage.DBLike) error { return SyncAliasesInternal(tx, creds.User, creds.ApiKey, progress) })
 }
 
-func SyncAliasesInternal(user, api_key string, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
+func SyncAliasesInternal(tx storage.DBLike, user, api_key string, progress *ProgMessage) (error) {
 	progress.AppendNotice("Syncing alias list...")
 
-	storage.ClearAliasIndex(settings)
+	storage.ClearAliasIndex(tx)
 
 	consecutive_errors := 0
 	page := types.After(0)
@@ -685,7 +685,7 @@ func SyncAliasesInternal(user, api_key string, settings storage.UpdaterSettings,
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		err := storage.AliasUpdater(fixed_aliases, settings)
+		err := storage.AliasUpdater(tx, fixed_aliases)
 		if err != nil { log.Println(err.Error()) }
 		wg.Done()
 	}()
