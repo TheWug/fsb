@@ -204,7 +204,13 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 		return foo
 	} else if result.File_ext == "webm" {
 		var foo interface{}
-		file_id := webm.CheckMp4ForWebm(&result)
+
+		var file_id *data.FileID
+		err := storage.DefaultTransact(func(tx storage.DBLike) error {
+			var err error
+			file_id, err = webm.CheckMp4ForWebm(tx, &result)
+			return err
+		})
 
 		if file_id != nil {
 			foo = data.TInlineQueryResultCachedAnimation{

@@ -55,13 +55,10 @@ func GetMp4ForWebm(result *types.TPostInfo) *data.FileID {
 
 // checks if an mp4 file id is available, returning it immediately if so
 // and returning nil if not.
-func CheckMp4ForWebm(tx storage.DBLike, result *types.TPostInfo) *data.FileID {
+func CheckMp4ForWebm(tx storage.DBLike, result *types.TPostInfo) (*data.FileID, error) {
 	cached, err := storage.FindCachedMp4ForWebm(tx, result.Md5)
-	if err != nil {
-		converter.bot.ErrorLog.Println("Error in storage.FindCachedMp4ForWebm: ", err.Error())
-		return nil
-	}
-	return cached
+	if err != nil { return nil, fmt.Errorf("FindCachedMp4ForWebm: %w", err) }
+	return cached, nil
 }
 
 // synchronous converter routine.
