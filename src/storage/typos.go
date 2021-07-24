@@ -87,6 +87,9 @@ func GetTagTypos(tx *sql.Tx, tag string) (map[string]TypoData, error) {
 		var data TypoData
 		var fix_tag apitypes.TTagData
 		err = dml.Scan(rows, &data, &data.Tag, &fix_tag)
+		if fix_tag.Id != 0 {
+			data.Fix = &fix_tag
+		}
 		if err != nil { return nil, err }
 		results[data.Tag.Name] = data
 	}
