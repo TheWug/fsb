@@ -68,7 +68,7 @@ func CheckMp4ForWebm(tx *sql.Tx, result *types.TPostInfo) *data.FileID {
 // synchronous converter routine.
 func (this webmToTelegramMp4Converter) convertRoutine() {
 	for req := range this.convert_requests {
-		err := storage.DefaultTransact(func(tx *sql.Tx) error {
+		err := storage.DefaultTransact(func(tx storage.DBLike) error {
 			// within this function, return = continue outer loop
 			// so I can use defer to process stuff at end of iteration
 			defer func() { close(req.output) }()
