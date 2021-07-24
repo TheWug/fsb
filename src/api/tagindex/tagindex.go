@@ -331,7 +331,7 @@ func ResyncListInternal(tx storage.DBLike, user, api_key string, file_data io.Re
 }
 
 func SyncTagsCommand(ctx *gogram.MessageCtx) {
-	err := SyncTags(ctx, storage.UpdaterSettings{}, nil)
+	err := SyncTags(ctx, nil)
 	if err == storage.ErrNoLogin {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
@@ -340,7 +340,7 @@ func SyncTagsCommand(ctx *gogram.MessageCtx) {
 	}
 }
 
-func SyncTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
+func SyncTags(ctx *gogram.MessageCtx, progress *ProgMessage) (error) {
 	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return err }
 
@@ -418,7 +418,7 @@ func RecountTagsCommand(ctx *gogram.MessageCtx) {
 		}
 	}
 
-	err := RecountTags(ctx, storage.UpdaterSettings{}, nil, real_counts, alias_counts)
+	err := RecountTags(ctx, nil, real_counts, alias_counts)
 	if err == storage.ErrNoLogin {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
