@@ -167,7 +167,7 @@ func ClearCatsException(tx *sql.Tx, tag string) (error) {
 	return err
 }
 
-func RecalculateAliasedCounts(tx *sql.Tx) (error) {
+func RecalculateAliasedCounts(tx DBLike) (error) {
 	sql := 	"UPDATE tag_index " +
 			"SET tag_count = subquery.tag_count " +
 		"FROM (SELECT a.tag_id, c.tag_count " +
@@ -551,7 +551,7 @@ func FindPromptPostByMessage(tx *sql.Tx, chat_id tgtypes.ChatID, msg_id tgtypes.
 	}
 }
 
-func FindPromptPostsOlderThan(tx *sql.Tx, time_ago time.Duration) ([]PromptPostInfo, error) {
+func FindPromptPostsOlderThan(tx DBLike, time_ago time.Duration) ([]PromptPostInfo, error) {
 	query := "SELECT post_id, post_type, post_url, sample_url, post_hash, post_width, post_height, msg_id, chat_id, msg_ts, msg_captioned, edit_list_json FROM prompt_posts WHERE msg_ts <= NOW() - ($1 * '1 second'::interval)"
 	rows, err := tx.Query(query, time_ago.Seconds())
 	if err != nil { return nil, err }

@@ -475,10 +475,10 @@ func RecountTagsInternal(tx storage.DBLike, progress *ProgMessage) (error) {
 	return err
 }
 
-func CalculateAliasedCountsInternal(settings storage.UpdaterSettings, progress *ProgMessage) (error) {
+func CalculateAliasedCountsInternal(tx storage.DBLike, progress *ProgMessage) (error) {
 	progress.AppendNotice("Mapping counts between aliased tags...")
 
-	err := storage.RecalculateAliasedCounts(settings)
+	err := storage.RecalculateAliasedCounts(tx)
 	if err != nil {
 		progress.SetStatus(fmt.Sprintf("(error: %s)", html.EscapeString(err.Error())))
 	} else {
