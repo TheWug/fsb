@@ -616,13 +616,12 @@ func SyncOnlyPostsInternal(tx storage.DBLike, user, api_key string, progress *Pr
 
 func SyncPostsInternal(tx storage.DBLike, user, api_key string, aliases_too, recount_too bool, progress *ProgMessage, post_updates chan []types.TPostInfo) (error) {
 	progress.AppendNotice("Syncing activity... ")
-	settings := storage.UpdaterSettings{Transaction: storage.Wrap(tx)}
 
 	if err := SyncOnlyPostsInternal(tx, user, api_key, progress, post_updates); err != nil { return err }
 	if err := SyncTagsInternal(tx, user, api_key, progress); err != nil { return err }
 
 	if aliases_too {
-		if err := SyncAliasesInternal(user, api_key, settings, progress); err != nil { return err }
+		if err := SyncAliasesInternal(tx, user, api_key, progress); err != nil { return err }
 	}
 
 	progress.AppendNotice("Resolving post tags...")
@@ -641,8 +640,8 @@ func SyncPostsInternal(tx storage.DBLike, user, api_key string, aliases_too, rec
 	if err != nil { return err }
 
 	if recount_too {
-		if err := RecountTagsInternal(settings, progress); err != nil { return err }
-		if err := CalculateAliasedCountsInternal(settings, progress); err != nil { return err }
+		if err := RecountTagsInternal(tx, progress); err != nil { return err }
+		if err := CalculateAliasedCountsInternal(tx, progress); err != nil { return err }
 	}
 
 	progress.SetStatus("done.")

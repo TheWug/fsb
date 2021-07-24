@@ -172,7 +172,7 @@ func UpdatePost(tx DBLike, post apitypes.TPostInfo) (error) {
 	return err
 }
 
-func ImportPostTagsFromNameToID(tx *sql.Tx, sfx chan string) (error) {
+func ImportPostTagsFromNameToID(tx DBLike, sfx chan string) (error) {
 	status := func(s string) {
 		if sfx != nil {
 			sfx <- s
