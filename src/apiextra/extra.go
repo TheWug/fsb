@@ -6,7 +6,6 @@ import (
 	"github.com/thewug/gogram/data"
 	"api/types"
 
-	"database/sql"
 	"regexp"
 	"strconv"
 	"strings"
@@ -96,7 +95,7 @@ func GetPostIDFromText(text string) int {
 		if md5 != "" {
 			var post *types.TPostInfo
 			var err error
-			err = storage.DefaultTransact(func(tx *sql.Tx) error {
+			err = storage.DefaultTransact(func(tx storage.DBLike) error {
 				post, err = storage.PostByMD5(tx, md5)
 				return err
 			})
