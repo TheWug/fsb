@@ -430,47 +430,6 @@ func (this CorrectionMode) Display() string {
 	}
 }
 
-func AddTagTypo(real_name, typo_name string, mode CorrectionMode, settings UpdaterSettings) (error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
-	query := "INSERT INTO typos_identified (tag_implied_name, tag_typo_name, mode) VALUES ($1, $2, $3)"
-	_, err := tx.Exec(query, real_name, typo_name, mode)
-	if err != nil { return err }
-
-	settings.Transaction.commit = mine
-	return nil
-}
-
-type TypoData struct {
-	Tag  apitypes.TTagData
-	Mode CorrectionMode
-}
-
-func GetTagTypos(tag string, ctrl EnumerateControl) (map[string]TypoData, error) {
-	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
-	defer ctrl.Transaction.Finalize(mine)
-	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
-
-	query := "SELECT mode, tag_id, tag_name, tag_count, tag_count_full, tag_type, tag_type_locked FROM typos_identified INNER JOIN tag_index ON tag_name = tag_typo_name WHERE tag_implied_name = $1"
-	rows, err := tx.Query(query, tag)
-	if err != nil { return nil, err }
-
-	defer rows.Close()
-
-	results := make(map[string]TypoData)
-	for rows.Next() {
-		var data TypoData
-		err = rows.Scan(&data.Mode, &data.Tag.Id, &data.Tag.Name, &data.Tag.Count, &data.Tag.FullCount, &data.Tag.Type, &data.Tag.Locked)
-		if err != nil { return nil, err }
-		results[data.Tag.Name] = data
-	}
-
-	ctrl.Transaction.commit = mine
-	return results, nil
-}
-
 type PostSuggestedEdit struct {
 	Prompt        tags.TagDiffArray      `json:"prompt"`
 	AutoFix       tags.TagDiffArray      `json:"autofix"`

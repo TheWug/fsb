@@ -13,12 +13,12 @@ import (
 )
 
 type TTagData struct {
-	Id int `json:"id"`
-	Name string `json:"name"`
-	Count int `json:"post_count"`
-	FullCount int // this field is only present in the local DB
-	Type TagCategory `json:"category"`
-	Locked *bool `json:"is_locked"`
+	Id int `json:"id" dml:"tag_id"`
+	Name string `json:"name" dml:"tag_name"`
+	Count int `json:"post_count" dml:"tag_count"`
+	FullCount int `dml:"tag_count_full"`// this field is only present in the local DB
+	Type TagCategory `json:"category" dml:"tag_type"`
+	Locked *bool `json:"is_locked" dml:"tag_type_locked"`
 
 	// created_at
 	// updated_at

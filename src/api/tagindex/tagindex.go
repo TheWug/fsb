@@ -817,8 +817,8 @@ type Pair struct {
 	tag, fixed *types.TTagData
 }
 
-func (p Pair) TypoData() storage.TypoData2 {
-	return storage.TypoData2{Tag: *p.tag, Fix: p.fixed}
+func (p Pair) TypoData() storage.TypoData {
+	return storage.TypoData{Tag: *p.tag, Fix: p.fixed}
 }
 
 func (p Pair) String() string {
@@ -1029,7 +1029,7 @@ func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, pr
 	if err != nil { return err }
 	blits, err := storage.EnumerateAllBlits(storage.EnumerateControl{Transaction: storage.Wrap(tx)}) // XXX make this return yes and wild blits
 	if err != nil { return err }
-	typos, err := storage.GetTagTypos(control.start_tag, storage.EnumerateControl{Transaction: storage.Wrap(tx)})
+	typos, err := storage.GetTagTypos(tx, control.start_tag)
 	if err != nil { return err }
 
 	if !control.no_auto {
@@ -1056,8 +1056,8 @@ func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, pr
 		if typo, is_typo := typos[tag.Name]; is_typo {
 			// if it's already a registered or deregistered typo, only show it if we're
 			// in the correct list mode.
-			if !control.list_settings.no && typo.Mode == storage.Ignore { continue }
-			if !control.list_settings.yes && typo.Mode > storage.Ignore { continue }
+			if !control.list_settings.no && !typo.Marked { continue }
+			if !control.list_settings.yes && typo.Marked { continue }
 			results[tag.Name] = Pair{fixed: target, tag: &alltags[x]}
 			continue
 		}
