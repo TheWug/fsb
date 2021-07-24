@@ -650,7 +650,7 @@ func SyncPostsInternal(tx storage.DBLike, user, api_key string, aliases_too, rec
 }
 
 func SyncAliasesCommand(ctx *gogram.MessageCtx) {
-	err := SyncAliases(ctx, storage.UpdaterSettings{}, nil)
+	err := SyncAliases(ctx, nil)
 	if err == storage.ErrNoLogin {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
@@ -659,7 +659,7 @@ func SyncAliasesCommand(ctx *gogram.MessageCtx) {
 	}
 }
 
-func SyncAliases(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
+func SyncAliases(ctx *gogram.MessageCtx, progress *ProgMessage) (error) {
 	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return err }
 
@@ -669,7 +669,7 @@ func SyncAliases(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progr
 		defer progress.Close()
 	}
 
-	return storage.DefaultTransact(func(tx storage.DBLike) error { return SyncAliasesInternal(tx, creds.User, creds.ApiKey, progress) })
+	return storage.DefaultTransact(func(tx storage.DBLike) error { return SyncAliasesInternal(creds.User, creds.ApiKey, progress) })
 }
 
 func SyncAliasesInternal(user, api_key string, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
