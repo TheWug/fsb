@@ -1101,7 +1101,7 @@ func TyposInternal(tx storage.DBLike, control TyposControl, creds storage.UserCr
 	}
 
 	// now remove any matches which are already aliased to the target tag.
-	aliases, err := storage.GetAliasesFor(control.start_tag, storage.EnumerateControl{Transaction: storage.Wrap(tx)})
+	aliases, err := storage.GetAliasesFor(tx, control.start_tag)
 	if err != nil { log.Printf("Error when searching for aliases to %s: %s", control.start_tag, err.Error()) }
 	for _, item := range aliases {
 		delete(results, item.Name)
@@ -1209,12 +1209,7 @@ func TyposInternal(tx storage.DBLike, control TyposControl, creds storage.UserCr
 }
 
 func RefetchDeletedPostsCommand(ctx *gogram.MessageCtx) {
-	var err error
-	settings := storage.UpdaterSettings{}
-	settings.Transaction, err = storage.NewTxBox()
-	if err != nil { log.Println(err.Error(), "newtxbox") }
-
-	err = RefetchDeletedPosts(ctx, settings, nil)
+	err := RefetchDeletedPosts(ctx, nil)
 	if err == storage.ErrNoLogin {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
@@ -1222,12 +1217,9 @@ func RefetchDeletedPostsCommand(ctx *gogram.MessageCtx) {
 		ctx.Bot.Log.Println("Error occurred syncing deleted posts: %s", err.Error())
 		return
 	}
-
-	settings.Transaction.MarkForCommit()
-	settings.Transaction.Finalize(true)
 }
 
-func RefetchDeletedPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progress *ProgMessage) (error) {
+func RefetchDeletedPosts(ctx *gogram.MessageCtx, progress *ProgMessage) (error) {
 	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return err }
 
@@ -1240,7 +1232,7 @@ func RefetchDeletedPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSetting
 	return storage.DefaultTransact(func(tx storage.DBLike) error { return RefetchDeletedPostsInternal(tx, creds.User, creds.ApiKey, progress) })
 }
 
-func RefetchDeletedPostsInternal(tx *sql.Tx, user, api_key string, progress *ProgMessage) (error) {
+func RefetchDeletedPostsInternal(tx storage.DBLike, user, api_key string, progress *ProgMessage) (error) {
 	progress.AppendNotice("Syncing deleted posts...")
 
 	fixed_posts := make(chan []int)

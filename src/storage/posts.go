@@ -30,7 +30,7 @@ func PostUpdater(tx DBLike, input chan apitypes.TPostInfo) (error) {
 	return nil
 }
 
-func PostDeleter(tx *sql.Tx, input chan []int) (error) {
+func PostDeleter(tx DBLike, input chan []int) (error) {
 	defer func(){ for _ = range input {} }()
 
 	for list := range input {
@@ -41,13 +41,13 @@ func PostDeleter(tx *sql.Tx, input chan []int) (error) {
 	return nil
 }
 
-func MarkPostDeleted(tx *sql.Tx, post_id int) error {
+func MarkPostDeleted(tx DBLike, post_id int) error {
 	query := "UPDATE post_index SET post_deleted = TRUE WHERE post_id = $1"
 	_, err := tx.Exec(query, post_id)
 	return err
 }
 
-func GetHighestPostID(tx *sql.Tx) (int, error) {
+func GetHighestPostID(tx DBLike) (int, error) {
 	query := "SELECT MAX(post_id) FROM post_index"
 
 	row := tx.QueryRow(query)
