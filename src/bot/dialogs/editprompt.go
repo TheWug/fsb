@@ -376,7 +376,7 @@ func (this *EditPrompt) CommitEdit(user, api_key string, ctx *gogram.MessageCtx,
 	}
 
 	if update != nil {
-		err_extra := storage.DefaultTransact(func(tx *sql.Tx) error { return storage.UpdatePost(tx, *update) })
+		err_extra := storage.DefaultTransact(func(tx storage.DBLike) error { return storage.UpdatePost(tx, *update) })
 		// don't overwrite original error since we're now past the point of no return
 		if err_extra != nil {
 			ctx.Bot.ErrorLog.Println("Error updating internal post: ", err_extra.Error())
