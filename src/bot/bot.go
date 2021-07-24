@@ -583,39 +583,34 @@ func (this *EditState) Handle(ctx *gogram.MessageCtx) {
 }
 
 func (this *EditState) HandleCallback(ctx *gogram.CallbackCtx) {
-	txbox, err := storage.NewTxBox()
-	if err != nil {
-		ctx.Bot.ErrorLog.Println("Error occurred opening transaction: ", err.Error())
-		return
-	}
-	settings := storage.UpdaterSettings{Transaction: txbox}
-	defer settings.Transaction.Finalize(true)
+	err := storage.DefaultTransact(func(tx *sql.Tx) error { return this.HandleCallbackTx(tx, ctx) })
+}
 
-	p, err := dialogs.LoadEditPrompt(settings, this.data.MsgId, this.data.ChatId)
+func (this *EditState) HandleCallbackTx(tx *sql.Tx, ctx *gogram.CallbackCtx) {
+	p, err := dialogs.LoadEditPrompt(tx, this.data.MsgId, this.data.ChatId)
 	if err != nil {
 		ctx.Bot.ErrorLog.Println("Error loading edit prompt: ", err.Error())
 		return
 	}
 
-	p.HandleCallback(ctx, settings)
+	p.HandleCallback(tx, ctx)
 
 	if p.State == dialogs.SAVED {
 		_, err := p.CommitEdit(this.data.User, this.data.ApiKey, gogram.NewMessageCtx(ctx.Cb.Message, false, ctx.Bot), settings)
 		if err == nil {
-			p.Finalize(settings, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
+			p.Finalize(tx, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
 			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F7E2 Edit submitted."}, nil)
 			ctx.SetState(nil)
 		} else {
 			ctx.AnswerAsync(data.OCallback{Notification: fmt.Sprintf("\U0001F534 %s", err.Error())}, nil)
-			p.Prompt(settings, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Cb.Message.Chat.Type != data.Private, err))
+			p.Prompt(tx, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Cb.Message.Chat.Type != data.Private, err))
 			p.State = dialogs.WAIT_MODE
 		}
 	} else if p.State == dialogs.DISCARDED {
-		p.Finalize(settings, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
+		p.Finalize(tx, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
 	} else {
-		p.Prompt(settings, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
+		p.Prompt(tx, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
 	}
-	settings.Transaction.MarkForCommit()
 }
 
 func (this *EditState) Freeform(ctx *gogram.MessageCtx) {
