@@ -1002,6 +1002,7 @@ func Typos(ctx *gogram.MessageCtx) {
 }
 
 func TyposInternal(tx *sql.Tx, control TyposControl, creds storage.UserCreds, progress *ProgMessage) error {
+	defer func() { fmt.Println(recover()) }()
 	results := make(map[string]Pair)
 
 	if control.start_tag == "" { return errors.New("You must specify a tag.") }
