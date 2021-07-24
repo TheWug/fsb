@@ -60,7 +60,7 @@ type ReplacementHistoryKey struct {
 }
 
 func (this *ReplacementHistory) ScanFrom(rows Scannable) error {
-	return rows.Scan(&this.ReplacerId, &this.PostId)
+	return rows.Scan(&this.Id, &this.TelegramUserId, &this.ReplacerId, &this.PostId, &this.Timestamp)
 }
 
 func AddReplacement(tx *sql.Tx, repl Replacer) (*Replacer, error) {
