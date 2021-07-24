@@ -43,13 +43,6 @@ func PrefixedTagToTypedTag(name string) (string, int) {
 	return name, apitypes.TCGeneral.Value()
 }
 
-type EnumerateControl struct {
-	OrderByCount bool
-	CreatePhantom bool
-	IncludeDeleted bool
-	Transaction TransactionBox
-}
-
 func ClearAliasIndex(settings UpdaterSettings) (error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)

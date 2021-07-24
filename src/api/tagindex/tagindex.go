@@ -252,7 +252,7 @@ func ResyncList(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, progre
 		defer progress.Close()
 	}
 
-	return storage.DefaultTransact(func(tx *sql.Tx) error { return ResyncListInternal(tx, creds.User, creds.ApiKey, settings, file_data, progress) })
+	return storage.DefaultTransact(func(tx *sql.Tx) error { return ResyncListInternal(tx, creds.User, creds.ApiKey, file_data, progress) })
 }
 
 
