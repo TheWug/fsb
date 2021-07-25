@@ -1115,22 +1115,18 @@ func (this *PostState) Post(ctx *gogram.MessageCtx) {
 }
 
 func (this *PostState) Cancel(ctx *gogram.MessageCtx) {
-	txbox, err := storage.NewTxBox()
+	err := storage.DefaultTransact(func(tx storage.DBLike) error {
+		p, err := dialogs.LoadPostPrompt(tx, this.data.MsgId, this.data.ChatId, ctx.Msg.From.Id, "main")
+		if err != nil { return fmt.Errorf("LoadPostPrompt: %w", err) }
+		if p != nil {
+			p.State = dialogs.DISCARDED
+			p.Finalize(tx, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, nil))
+		}
+		ctx.SetState(nil)
+	})
 	if err != nil {
-		ctx.Bot.ErrorLog.Println("Error occurred opening transaction: ", err.Error())
-		return
+		ctx.Bot.ErrorLog.Println(err)
 	}
-	settings := storage.UpdaterSettings{Transaction: txbox}
-	defer settings.Transaction.Finalize(true)
-
-	p, err := dialogs.LoadPostPrompt(settings, this.data.MsgId, this.data.ChatId, ctx.Msg.From.Id, "main")
-	if err != nil { ctx.Bot.ErrorLog.Println(err.Error()) }
-	if p != nil {
-		p.State = dialogs.DISCARDED
-		p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, nil))
-	}
-	ctx.SetState(nil)
-	settings.Transaction.MarkForCommit()
 }
 
 func (this *PostState) Freeform(ctx *gogram.MessageCtx) {
