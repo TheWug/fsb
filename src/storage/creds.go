@@ -7,7 +7,7 @@ import (
 	tgtypes "github.com/thewug/gogram/data"
 )
 
-var ErrNoLogin error = CommitAndYieldError("no stored credentials for telegram user")
+var ErrNoLogin error = NewCommitAndYield("no stored credentials for telegram user")
 
 type UserCreds struct {
 	TelegramId tgtypes.UserID
