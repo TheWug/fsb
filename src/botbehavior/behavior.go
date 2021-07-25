@@ -89,7 +89,7 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 		for maintenances := 0; true; maintenances++ {
 			_ = <- channel
 
-			err := storage.DefaultTransact(func(tx *sql.Tx) error { return this.maintenanceInternal(tx, bot, maintenances % 144 == 143) })
+			err := storage.DefaultTransact(func(tx storage.DBLike) error { return this.maintenanceInternal(tx, bot, maintenances % 144 == 143) })
 			if err != nil {
 				bot.ErrorLog.Println("Error during maintenance routine:", err)
 			}
@@ -98,7 +98,7 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 	return channel
 }
 
-func (this *Behavior) maintenanceInternal(tx *sql.Tx, bot *gogram.TelegramBot, extra_expensive bool) error {
+func (this *Behavior) maintenanceInternal(tx storage.DBLike, bot *gogram.TelegramBot, extra_expensive bool) error {
 	var err error
 
 	update_chan := make(chan []apitypes.TPostInfo)
