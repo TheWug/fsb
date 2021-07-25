@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"html"
 	"io"
-	"io/ioutil"
 	"log"
 	"strconv"
 	"strings"
@@ -1303,98 +1302,117 @@ func (ls *ListSettings) Apply(other ListSettings) {
 	}
 }
 
+type BlitsControl struct {
+	mode          int
+
+	include,
+	exclude,
+	to_delete     map[string]bool
+
+	list_settings ListSettings
+}
+
 func Blits(ctx *gogram.MessageCtx) {
 	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return }
 
-	mode := MODE_LIST
-	include, exclude, to_delete := make(map[string]bool), make(map[string]bool), make(map[string]bool)
-
-	list_settings := ListSettings{wild: true}
+	var control BlitsControl
+	control.mode = MODE_LIST
+	control.list_settings = ListSettings{wild: true}
+	control.include, control.exclude, control.to_delete = make(map[string]bool), make(map[string]bool), make(map[string]bool)
 
 	for _, token := range ctx.Cmd.Args {
 		ltoken := strings.Replace(strings.ToLower(token), "\uFE0F", "", -1)
-		if mode == MODE_EXCLUDE {
-			exclude[ltoken] = true
-		} else if mode == MODE_INCLUDE {
-			include[ltoken] = true
-		} else if mode == MODE_DELETE {
-			to_delete[ltoken] = true
+		if control.mode == MODE_EXCLUDE {
+			control.exclude[ltoken] = true
+		} else if control.mode == MODE_INCLUDE {
+			control.include[ltoken] = true
+		} else if control.mode == MODE_DELETE {
+			control.to_delete[ltoken] = true
 		} else if token == "--include" || token == "-I" {
-			mode = MODE_INCLUDE
+			control.mode = MODE_INCLUDE
 		} else if token == "--exclude" || token == "-E" {
-			mode = MODE_EXCLUDE
+			control.mode = MODE_EXCLUDE
 		} else if token == "--delete" || token == "-D" {
-			mode = MODE_DELETE
+			control.mode = MODE_DELETE
 		} else if token == "--list-wild" || token == "-w" {
-			list_settings.Apply(ListSettings{wild: true})
+			control.list_settings.Apply(ListSettings{wild: true})
 		} else if token == "--list-yes" || token == "-y" {
-			list_settings.Apply(ListSettings{yes: true})
+			control.list_settings.Apply(ListSettings{yes: true})
 		} else if token == "--list-no" || token == "-n" {
-			list_settings.Apply(ListSettings{no: true})
+			control.list_settings.Apply(ListSettings{no: true})
 		} else if token == "--list" || token == "-l" {
-			list_settings.Apply(ListSettings{yes: true, no: true})
+			control.list_settings.Apply(ListSettings{yes: true, no: true})
 		}
 	}
 
-	if mode == MODE_LIST {
-		yesblits, noblits, wildblits, err := storage.GetBlits(list_settings.yes, list_settings.no, list_settings.wild)
-		if err != nil {
-			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Whoops! " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
-			return
-		}
+	progress, err := ProgressMessage2(data.OMessage{SendData: data.SendData{TargetData: data.TargetData{ChatId: ctx.Msg.Chat.Id}, ReplyToId: &ctx.Msg.Id, ParseMode: data.ParseHTML}, DisableWebPagePreview: true},
+	                                  "", 3 * time.Second, ctx.Bot)
+
+	defer progress.Close()
+
+	err = storage.DefaultTransact(func(tx *sql.Tx) error { return BlitsInternal(tx, control, progress) })
+	if err != nil {
+		progress.SetMessage(fmt.Sprintf("Whoops! An error occurred: %s", html.EscapeString(err.Error())))
+	}
+}
+
+func BlitsInternal(tx *sql.Tx, control BlitsControl, progress *ProgMessage) error {
+	if control.mode == MODE_LIST {
+		yesblits, noblits, wildblits, err := storage.GetBlits(control.list_settings.yes, control.list_settings.no, control.list_settings.wild)
+		if err != nil { return fmt.Errorf("GetBlits: %w", err) }
 
 		var buf bytes.Buffer
 
-		buf.WriteString("== Blit List ==\n")
+		buf.WriteString("== Blit List ==\n<code>")
 		for _, b := range yesblits {
-			buf.WriteString(fmt.Sprintf("%v\n", b))
+			if buf.Len() > 4000 { break }
+			buf.WriteString(html.EscapeString(b.String()))
+			buf.WriteRune(' ')
 		}
-		buf.WriteString("\n== Marked Non-Blit List ==\n")
+		buf.WriteString("</code>\n== Marked Non-Blit List ==\n<code>")
 		for _, b := range noblits {
-			buf.WriteString(fmt.Sprintf("%v\n", b))
+			if buf.Len() > 4000 { break }
+			buf.WriteString(html.EscapeString(b.String()))
+			buf.WriteRune(' ')
 		}
-		buf.WriteString("\n== Wild Blit List ==\n")
+		buf.WriteString("</code>\n== Wild Blit List ==\n<code>")
 		for _, b := range wildblits {
-			buf.WriteString(fmt.Sprintf("%v\n", b))
+			if buf.Len() > 4000 { break }
+			buf.WriteString(html.EscapeString(b.String()))
+			buf.WriteRune(' ')
 		}
+		buf.WriteString("<code>")
 
-		ctx.Bot.Remote.SendDocumentAsync(data.ODocument{SendData: data.SendData{Text: "Blit List", ReplyToId: &ctx.Msg.Id, TargetData: data.TargetData{ChatId: ctx.Msg.Chat.Id}}, MediaData: data.MediaData{File: ioutil.NopCloser(&buf), FileName: "blitlist.txt"}}, nil)
-		return
+		progress.SetMessage(buf.String())
+		return nil
 	}
 
 	var bad_tags []string
-	for tag, _ := range include {
+	for tag, _ := range control.include {
 		err := storage.MarkBlitByName(tag, true, ctrl)
 		if err == storage.ErrNoTag {
 			bad_tags = append(bad_tags, tag)
-		} else if err != nil {
-			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Whoops! " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
-			return
-		}
+		} else if err != nil { return fmt.Errorf("MarkBlitByName: %w", err) }
 	}
-	for tag, _ := range exclude {
+	for tag, _ := range control.exclude {
 		err := storage.MarkBlitByName(tag, false, ctrl)
 		if err == storage.ErrNoTag {
 			bad_tags = append(bad_tags, tag)
-		} else if err != nil {
-			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Whoops! " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
-			return
-		}
+		} else if err != nil { return fmt.Errorf("MarkBlitByName: %w", err) }
 	}
-	for tag, _ := range to_delete {
+	for tag, _ := range control.to_delete {
 		err := storage.DeleteBlitByName(tag, ctrl)
-		if err != nil {
-			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Whoops! " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
-			return
-		}
+		if err != nil { return fmt.Errorf("DeleteBlitByName: %w", err) }
 	}
 
 	if bad_tags == nil {
-		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "All blit changes completed successfully.", ParseMode: data.ParseHTML}}, nil)
+		progress.AppendNotice(fmt.Sprintf("%d blit updates saved.", len(control.include) + len(control.exclude) + len(control.to_delete)))
 	} else {
-		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("The following blits failed to update properly (perhaps they correspond to tags which do not exist?)\n%s", strings.Join(bad_tags, " ")), ParseMode: data.ParseHTML}}, nil)
+		progress.AppendNotice(fmt.Sprintf("The following blits failed to update properly (perhaps they correspond to tags which do not exist?)\n<code>%s</code>", html.EscapeString(strings.Join(bad_tags, " "))))
 	}
+
+	return nil
 }
 
 func GetAllWildCats(tagMap map[string]*types.TTagData, blitMap map[string]*storage.BlitData, ratio int, with_empty, with_typed bool) []Triplet { // also needs blits
