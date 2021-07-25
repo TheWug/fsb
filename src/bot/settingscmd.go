@@ -97,13 +97,13 @@ type SettingsState struct {
 func sptr(x string) *string { return &x }
 
 func (this *SettingsState) Handle(ctx *gogram.MessageCtx) {
-	err := storage.DefaultTransact(func(tx *sql.Tx) error { return this.HandleTx(tx, ctx) })
+	err := storage.DefaultTransact(func(tx storage.DBLike) error { return this.HandleTx(tx, ctx) })
 	if err != nil {
 		ctx.Bot.ErrorLog.Println("Error in SettingsState.Handle: %s", err)
 	}
 }
 
-func (this *SettingsState) HandleTx(tx *sql.Tx, ctx *gogram.MessageCtx) error {
+func (this *SettingsState) HandleTx(tx storage.DBLike, ctx *gogram.MessageCtx) error {
 	if ctx.Msg.From == nil { return nil }
 
 	if ctx.Cmd.Command == "/settings" {
@@ -136,13 +136,13 @@ func (this *SettingsState) HandleTx(tx *sql.Tx, ctx *gogram.MessageCtx) error {
 }
 
 func (this *SettingsState) HandleCallback(ctx *gogram.CallbackCtx) {
-	err := storage.DefaultTransact(func(tx *sql.Tx) error { return this.HandleCallbackTx(tx, ctx) })
+	err := storage.DefaultTransact(func(tx storage.DBLike) error { return this.HandleCallbackTx(tx, ctx) })
 	if err != nil {
 		ctx.Bot.ErrorLog.Println("Error in SettingsState.HandleCallback: %s", err)
 	}
 }
 
-func (this *SettingsState) HandleCallbackTx(tx *sql.Tx, ctx *gogram.CallbackCtx) error {
+func (this *SettingsState) HandleCallbackTx(tx storage.DBLike, ctx *gogram.CallbackCtx) error {
 	var answer data.OCallback
 	defer func() { ctx.Answer(answer) }()
 
