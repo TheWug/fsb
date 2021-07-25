@@ -241,60 +241,45 @@ func (this *AutofixState) Handle(ctx *gogram.MessageCtx) {
 }
 
 func (this *AutofixState) HandleCallback(ctx *gogram.CallbackCtx) {
-	go func() {
-		defer ctx.AnswerAsync(data.OCallback{}, nil) // non-specific acknowledge if we return without answering explicitly
-		// don't bother with any callbacks that are so old their message is no longer available
-		if ctx.MsgCtx == nil { return }
+	err := storage.DefaultTransact(func(tx storage.DBLike) error { return this.HandleCallbackTx(tx, ctx) })
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("Error in SettingsState.HandleCallback:", err)
+	}
+}
 
-		var err error
-		settings := storage.UpdaterSettings{}
-		settings.Transaction, err = storage.NewTxBox()
-		if err != nil {
-			ctx.Bot.Log.Println("Error in maintenance loop:", err.Error())
-			return
-		}
-		defer settings.Transaction.Finalize(true)
+func (this *AutofixState) HandleCallbackTx(tx storage.DBLike, ctx *gogram.CallbackCtx) error {
+	defer ctx.AnswerAsync(data.OCallback{}, nil) // non-specific acknowledge if we return without answering explicitly
+	// don't bother with any callbacks that are so old their message is no longer available
+	if ctx.MsgCtx == nil { return nil }
 
-		creds, err := storage.GetUserCreds(nil, ctx.Cb.From.Id)
-		if err == storage.ErrNoLogin {
-			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F512 You need to login to do that!\n(use /login, in PM)", ShowAlert: true}, nil)
-			return
-		}
+	creds, err := storage.GetUserCreds(nil, ctx.Cb.From.Id)
+	if err == storage.ErrNoLogin {
+		ctx.AnswerAsync(data.OCallback{Notification: "\U0001F512 You need to login to do that!\n(use /login, in PM)", ShowAlert: true}, nil)
+		return nil
+	}
 
-		if !creds.Janitor {
-			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F512 Sorry, this feature is currently limited to janitors.", ShowAlert: true}, nil)
-			return
-		}
+	if !creds.Janitor {
+		ctx.AnswerAsync(data.OCallback{Notification: "\U0001F512 Sorry, this feature is currently limited to janitors.", ShowAlert: true}, nil)
+		return nil
+	}
 
-		post_info, err := storage.FindPromptPostByMessage(ctx.MsgCtx.Msg.Chat.Id, ctx.MsgCtx.Msg.Id, storage.UpdaterSettings{})
-		if post_info == nil { return }
+	post_info, err := storage.FindPromptPostByMessage(tx, ctx.MsgCtx.Msg.Chat.Id, ctx.MsgCtx.Msg.Id)
+	if post_info == nil { return nil }
 
-		// handle toggling possible edits on and off
-		if ctx.Cmd.Command == "/af-toggle" && len(ctx.Cmd.Args) == 3 {
-			set := (ctx.Cmd.Args[2] == "1")
-			if ctx.Cmd.Args[0] == "everything" {
-				if set {
-					post_info.Edit.SelectAll()
-				} else {
-					post_info.Edit.DeselectAll()
-				}
-			} else if ctx.Cmd.Args[0] == "autofix" || ctx.Cmd.Args[0] == "prompt" {
-				index, err := strconv.Atoi(ctx.Cmd.Args[1])
-				if err != nil { return } // this should only happen if users are spoofing callback data, so ignore it.
-				if set {
-					post_info.Edit.Select(ctx.Cmd.Args[0], index)
-				} else {
-					post_info.Edit.Deselect(ctx.Cmd.Args[0], index)
-				}
+	// handle toggling possible edits on and off
+	if ctx.Cmd.Command == "/af-toggle" && len(ctx.Cmd.Args) == 3 {
+		set := (ctx.Cmd.Args[2] == "1")
+		if ctx.Cmd.Args[0] == "everything" {
+			if set {
+				post_info.Edit.SelectAll()
+			} else {
+				post_info.Edit.DeselectAll()
 			}
-			err = storage.SavePromptPost(post_info.PostId, post_info, settings)
-			this.Behavior.PromptPost(ctx.Bot, post_info, post_info.PostId, nil, nil)
-		} else if ctx.Cmd.Command == "/af-commit" {
-			diff := post_info.Edit.GetChangeToApply()
-
-			if diff.IsZero() {
-				ctx.AnswerAsync(data.OCallback{Notification: "\u2139 No changes to apply."}, nil)
-				this.Behavior.DismissPromptPost(ctx.Bot, post_info, diff, settings)
+		} else if ctx.Cmd.Args[0] == "autofix" || ctx.Cmd.Args[0] == "prompt" {
+			index, err := strconv.Atoi(ctx.Cmd.Args[1])
+			if err != nil { return fmt.Errorf("possibly spoofed callback data: %w", err) } // this should only happen if users are spoofing callback data, so ignore it.
+			if set {
+				post_info.Edit.Select(ctx.Cmd.Args[0], index)
 			} else {
 				post_info.Edit.Deselect(ctx.Cmd.Args[0], index)
 			}
@@ -315,26 +300,25 @@ func (this *AutofixState) HandleCallback(ctx *gogram.CallbackCtx) {
 				return err
 			}
 
-				post_info.Edit.Apply()
-				this.Behavior.DismissPromptPost(ctx.Bot, post_info, diff, settings)
-				ctx.AnswerAsync(data.OCallback{Notification: "\U0001F539 Changes saved."}, nil)
+			post_info.Edit.Apply()
+			this.Behavior.DismissPromptPost(tx, ctx.Bot, post_info, diff)
+			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F539 Changes saved."}, nil)
 
-				if post != nil {
-					err = storage.DefaultTransact(func(tx *sql.Tx) error { return storage.UpdatePost(tx, *post) })
-					if err != nil { ctx.Bot.ErrorLog.Println("Failed to locally update post:", err.Error()) }
+			if post != nil {
+				err = storage.UpdatePost(tx, *post)
+				if err != nil {
+					ctx.Bot.ErrorLog.Println("Failed to locally update post:", err.Error())
+					return err
 				}
 			}
-		} else if ctx.Cmd.Command == "/af-dismiss" {
-			err = this.Behavior.DismissPromptPost(ctx.Bot, post_info, tags.TagDiff{}, settings)
-			if err != nil {
-				if err != nil { ctx.Bot.ErrorLog.Println("Failed to dismiss prompt post:", err.Error()) }
-				return
-			}
-			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F539 Dismissed without changes."}, nil)
 		}
-
-		settings.Transaction.MarkForCommit()
-	}()
+	} else if ctx.Cmd.Command == "/af-dismiss" {
+		err = this.Behavior.DismissPromptPost(tx, ctx.Bot, post_info, tags.TagDiff{})
+		if err != nil { return fmt.Errorf("DismissPrimptPost: %w", err) }
+		ctx.AnswerAsync(data.OCallback{Notification: "\U0001F539 Dismissed without changes."}, nil)
+	}
+	
+	return nil
 }
 
 type lookup_votes struct {
