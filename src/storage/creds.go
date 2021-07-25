@@ -47,7 +47,7 @@ func GetUserCreds(tx DBLike, id tgtypes.UserID) (UserCreds, error) {
 	return creds, err
 }
 
-func WriteUserCreds(tx *sql.Tx, creds UserCreds) (error) {
+func WriteUserCreds(tx DBLike, creds UserCreds) (error) {
 	query := `
 INSERT INTO remote_user_credentials (telegram_id, api_user, api_key, api_blacklist, api_blacklist_last_updated)
 VALUES ($1, $2, $3, $4, $5)
@@ -61,27 +61,27 @@ SET	api_user = EXCLUDED.api_user,
 	return err
 }
 
-func DeleteUserCreds(tx *sql.Tx, id tgtypes.UserID) (error) {
+func DeleteUserCreds(tx DBLike, id tgtypes.UserID) (error) {
 	query := "DELETE FROM remote_user_credentials WHERE telegram_id = $1"
 	_, err := tx.Exec(query, id)
 	return err
 }
 
-func WriteUserTagRules(tx *sql.Tx, id tgtypes.UserID, name, rules string) (error) {
+func WriteUserTagRules(tx DBLike, id tgtypes.UserID, name, rules string) (error) {
 	_, err := tx.Exec("DELETE FROM user_tagrules WHERE telegram_id = $1 AND name = $2", id, name)
 	if (err != nil) { return err }
 	_, err = tx.Exec("INSERT INTO user_tagrules (telegram_id, name, rules) VALUES ($1, $2, $3)", id, name, rules)
 	return err
 }
 
-func GetUserTagRules(tx *sql.Tx, id tgtypes.UserID, name string) (string, error) {
+func GetUserTagRules(tx DBLike, id tgtypes.UserID, name string) (string, error) {
 	row := tx.QueryRow("SELECT rules FROM user_tagrules WHERE telegram_id = $1 AND name = $2", id, name)
 	var rules string
 	err := row.Scan(&rules)
 	return rules, err
 }
 
-func DeleteUserTagRules(tx *sql.Tx, id tgtypes.UserID) (error) {
+func DeleteUserTagRules(tx DBLike, id tgtypes.UserID) (error) {
 	_, err := tx.Exec("DELETE FROM user_tagrules WHERE telegram_id = $1", id)
 	return err
 }
