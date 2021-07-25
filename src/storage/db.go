@@ -248,7 +248,7 @@ func (b BlitData) String() string {
 	return fmt.Sprintf("%8d %9s %s", b.Count, name_of(b.Type), b.Name)
 }
 
-func GetBlits(tx *sql.Tx, yes, no, wild bool) ([]BlitData, []BlitData, []BlitData, error) {
+func GetBlits(tx DBLike, yes, no, wild bool) ([]BlitData, []BlitData, []BlitData, error) {
 	var blit BlitData
 	var out_yes, out_no, out_wild []BlitData
 
@@ -304,7 +304,7 @@ func MarkBlit(tx *sql.Tx, id int, mark bool) (error) {
 
 var ErrNoTag = errors.New("no corresponding tag exists")
 
-func MarkBlitByName(tx *sql.Tx, name string, mark bool) (error) {
+func MarkBlitByName(tx DBLike, name string, mark bool) (error) {
 	out, err := tx.Exec("INSERT INTO blit_tag_registry SELECT tag_id, $2 as is_blit FROM tag_index WHERE tag_name = $1 ON CONFLICT (tag_id) DO UPDATE SET is_blit = EXCLUDED.is_blit", name, mark)
 
 	rows, err := out.RowsAffected()
@@ -317,7 +317,7 @@ func MarkBlitByName(tx *sql.Tx, name string, mark bool) (error) {
 	return err
 }
 
-func DeleteBlitByName(tx *sql.Tx, name string) (error) {
+func DeleteBlitByName(tx DBLike, name string) (error) {
 	out, err := tx.Exec("DELETE FROM blit_tag_registry WHERE tag_id = (SELECT tag_id FROM tag_index WHERE tag_name = $1)", name)
 
 	rows, err := out.RowsAffected()

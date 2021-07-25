@@ -1351,15 +1351,15 @@ func Blits(ctx *gogram.MessageCtx) {
 
 	defer progress.Close()
 
-	err = storage.DefaultTransact(func(tx *sql.Tx) error { return BlitsInternal(tx, control, progress) })
+	err = storage.DefaultTransact(func(tx storage.DBLike) error { return BlitsInternal(tx, control, progress) })
 	if err != nil {
 		progress.SetMessage(fmt.Sprintf("Whoops! An error occurred: %s", html.EscapeString(err.Error())))
 	}
 }
 
-func BlitsInternal(tx *sql.Tx, control BlitsControl, progress *ProgMessage) error {
+func BlitsInternal(tx storage.DBLike, control BlitsControl, progress *ProgMessage) error {
 	if control.mode == MODE_LIST {
-		yesblits, noblits, wildblits, err := storage.GetBlits(control.list_settings.yes, control.list_settings.no, control.list_settings.wild)
+		yesblits, noblits, wildblits, err := storage.GetBlits(tx, control.list_settings.yes, control.list_settings.no, control.list_settings.wild)
 		if err != nil { return fmt.Errorf("GetBlits: %w", err) }
 
 		var buf bytes.Buffer
@@ -1390,19 +1390,19 @@ func BlitsInternal(tx *sql.Tx, control BlitsControl, progress *ProgMessage) erro
 
 	var bad_tags []string
 	for tag, _ := range control.include {
-		err := storage.MarkBlitByName(tag, true, ctrl)
+		err := storage.MarkBlitByName(tx, tag, true)
 		if err == storage.ErrNoTag {
 			bad_tags = append(bad_tags, tag)
 		} else if err != nil { return fmt.Errorf("MarkBlitByName: %w", err) }
 	}
 	for tag, _ := range control.exclude {
-		err := storage.MarkBlitByName(tag, false, ctrl)
+		err := storage.MarkBlitByName(tx, tag, false)
 		if err == storage.ErrNoTag {
 			bad_tags = append(bad_tags, tag)
 		} else if err != nil { return fmt.Errorf("MarkBlitByName: %w", err) }
 	}
 	for tag, _ := range control.to_delete {
-		err := storage.DeleteBlitByName(tag, ctrl)
+		err := storage.DeleteBlitByName(tx, tag)
 		if err != nil { return fmt.Errorf("DeleteBlitByName: %w", err) }
 	}
 
