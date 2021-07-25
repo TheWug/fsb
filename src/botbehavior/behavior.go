@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"database/sql"
 )
 
 func ShowHelp() {
@@ -459,7 +458,7 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 	}
 
 	var settings *storage.UserSettings
-	err = storage.DefaultTransact(func(tx *sql.Tx) error { settings, err = storage.GetUserSettings(tx, ctx.Query.From.Id); return err })
+	err = storage.DefaultTransact(func(tx storage.DBLike) error { settings, err = storage.GetUserSettings(tx, ctx.Query.From.Id); return err })
 
 	var blacklist string
 	if settings.BlacklistMode == bottypes.BLACKLIST_ON {
@@ -471,7 +470,7 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 			} else if err != nil {
 				ctx.Bot.ErrorLog.Println("Error testing login: ", err.Error())
 			}
-			err = storage.DefaultTransact(func(tx *sql.Tx) error { return storage.WriteUserCreds(tx, creds) })
+			err = storage.DefaultTransact(func(tx storage.DBLike) error { return storage.WriteUserCreds(tx, creds) })
 			if err != nil {
 				ctx.Bot.ErrorLog.Println("Error writing credentials: ", err.Error())
 			}
