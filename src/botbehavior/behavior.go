@@ -198,11 +198,11 @@ func (this *Behavior) maintenanceInternal(tx storage.DBLike, bot *gogram.Telegra
 		}
 
 		// generate a prompt post, or find an existing one and edit it
-		post_info, err := storage.FindPromptPost(id, storage.UpdaterSettings{Transaction: storage.Wrap(tx)})
+		post_info, err := storage.FindPromptPost(tx, id)
 		if err != nil { return err }
 		post := updated_posts[id]
 		post_info = this.PromptPost(bot, post_info, id, &post, edit)
-		err = storage.SavePromptPost(id, post_info, storage.UpdaterSettings{Transaction: storage.Wrap(tx)})
+		err = storage.SavePromptPost(tx, id, post_info)
 		if err != nil { return err }
 	}
 

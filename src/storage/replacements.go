@@ -2,7 +2,6 @@ package storage
 
 import (
 	"time"
-	"database/sql"
 
 	"api/tags"
 
@@ -102,7 +101,7 @@ func GetReplacements(tx DBLike, after_id int64) ([]Replacer, error) {
 	return out, nil
 }
 
-func GetReplacementHistorySince(tx *sql.Tx, post_ids []int, since time.Time) (map[ReplacementHistoryKey]ReplacementHistory, error) {
+func GetReplacementHistorySince(tx DBLike, post_ids []int, since time.Time) (map[ReplacementHistoryKey]ReplacementHistory, error) {
 	query := "SELECT action_id, telegram_user_id, replace_id, post_id, action_ts FROM replacement_actions WHERE post_id = ANY($1::int[]) AND action_ts > $2"
 	rows, err := tx.Query(query, pq.Array(post_ids), since)
 	if err != nil { return nil, err }
@@ -121,7 +120,7 @@ func GetReplacementHistorySince(tx *sql.Tx, post_ids []int, since time.Time) (ma
 	return out, nil
 }
 
-func AddReplacementHistory(tx *sql.Tx, event *ReplacementHistory) error {
+func AddReplacementHistory(tx DBLike, event *ReplacementHistory) error {
 	query := "INSERT INTO replacement_actions (action_id, telegram_user_id, replace_id, post_id, action_ts) VALUES (default, $1, $2, $3, $4) RETURNING action_id"
 	row := tx.QueryRow(query, event.TelegramUserId, event.ReplacerId, event.PostId, event.Timestamp)
 	err := row.Scan(event.Id)

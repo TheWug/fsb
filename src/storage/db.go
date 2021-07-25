@@ -523,7 +523,7 @@ type PromptPostInfo struct {
 	Edit      *PostSuggestedEdit
 }
 
-func FindPromptPost(tx *sql.Tx, id int) (*PromptPostInfo, error) {
+func FindPromptPost(tx DBLike, id int) (*PromptPostInfo, error) {
 	var x PromptPostInfo
 	query := "SELECT post_id, post_type, post_url, sample_url, post_hash, post_width, post_height, msg_id, chat_id, msg_ts, msg_captioned, edit_list_json FROM prompt_posts WHERE post_id = $1"
 	err := tx.QueryRow(query, id).Scan(&x.PostId, &x.PostType, &x.PostURL, &x.SampleURL, &x.PostMd5, &x.PostWidth, &x.PostHeight, &x.MsgId, &x.ChatId, &x.Timestamp, &x.Captioned, &x.Edit)
@@ -537,7 +537,7 @@ func FindPromptPost(tx *sql.Tx, id int) (*PromptPostInfo, error) {
 	}
 }
 
-func FindPromptPostByMessage(tx *sql.Tx, chat_id tgtypes.ChatID, msg_id tgtypes.MsgID) (*PromptPostInfo, error) {
+func FindPromptPostByMessage(tx DBLike, chat_id tgtypes.ChatID, msg_id tgtypes.MsgID) (*PromptPostInfo, error) {
 	var x PromptPostInfo
 	query := "SELECT post_id, post_type, post_url, sample_url, post_hash, post_width, post_height, msg_id, chat_id, msg_ts, msg_captioned, edit_list_json FROM prompt_posts WHERE chat_id = $1 AND msg_id = $2"
 	err := tx.QueryRow(query, chat_id, msg_id).Scan(&x.PostId, &x.PostType, &x.PostURL, &x.SampleURL, &x.PostMd5, &x.PostWidth, &x.PostHeight, &x.MsgId, &x.ChatId, &x.Timestamp, &x.Captioned, &x.Edit)
@@ -567,7 +567,7 @@ func FindPromptPostsOlderThan(tx DBLike, time_ago time.Duration) ([]PromptPostIn
 	return out, nil
 }
 
-func SavePromptPost(tx *sql.Tx, id int, x *PromptPostInfo) (error) {
+func SavePromptPost(tx DBLike, id int, x *PromptPostInfo) (error) {
 	query := "DELETE FROM prompt_posts WHERE post_id = $1"
 	_, err := tx.Exec(query, id)
 	if err != nil { return err }
