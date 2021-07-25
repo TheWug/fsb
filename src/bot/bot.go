@@ -646,43 +646,43 @@ func (this *EditState) Cancel(ctx *gogram.MessageCtx) {
 }
 
 func (this *EditState) Edit(ctx *gogram.MessageCtx) {
-	var e dialogs.EditPrompt
+	err := storage.DefaultTransact(func(tx storage.DBLike) error {
+		var e dialogs.EditPrompt
 
-	if ctx.Msg.From == nil { return }
+		if ctx.Msg.From == nil { return nil }
 
-	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
-	if err != nil {
-		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to use this command!"}}, nil)
-		if err != storage.ErrNoLogin {
-			ctx.Bot.ErrorLog.Println("Error while checking credentials: ", err.Error())
+		creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
+		if err != nil {
+			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to use this command!"}}, nil)
+			if err != storage.ErrNoLogin {
+				ctx.Bot.ErrorLog.Println("Error while checking credentials: ", err.Error())
+				err = nil
+			} else {
+				err = fmt.Errorf("GetUserCreds: %w", err)
+			}
+			return err
 		}
-		return
-	}
 
-	savenow, err := e.ParseArgs(ctx)
-	if err != nil {
-		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: err.Error()}}, nil)
-		return
-	}
-
-	if e.PostId <= 0 {
-		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Sorry, I can't figure out which post you're talking about!\n\nYou can reply to a message with a post URL, or you can pass an ID or a link directly."}}, nil)
-		return
-	}
-
-	e.OrigSources = make(map[string]int)
-
-	var post_data *apitypes.TPostInfo
-	err = storage.DefaultTransact(func(tx *sql.Tx) error {
-		post_data, err = storage.PostByID(tx, e.PostId)
-		return err
-	})
-	if post_data != nil {
-		for _, s := range post_data.Sources {
-			e.SeeSource(s)
-			e.OrigSources[s] = 1
+		savenow, err := e.ParseArgs(ctx)
+		if err != nil {
+			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: err.Error()}}, nil)
+			return nil
 		}
-	}
+
+		if e.PostId <= 0 {
+			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Sorry, I can't figure out which post you're talking about!\n\nYou can reply to a message with a post URL, or you can pass an ID or a link directly."}}, nil)
+			return nil
+		}
+
+		e.OrigSources = make(map[string]int)
+
+		post_data, err := storage.PostByID(tx, e.PostId)
+		if post_data != nil {
+			for _, s := range post_data.Sources {
+				e.SeeSource(s)
+				e.OrigSources[s] = 1
+			}
+		}
 
 		savestate := func(prompt *gogram.MessageCtx) {
 			ctx.SetState(EditStateFactoryWithData(nil, this.StateBasePersistent, esp{
@@ -703,12 +703,14 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 				savestate(e.Prompt(tx, ctx.Bot, ctx, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, err)))
 			}
 		} else {
-			e.State = dialogs.SAVED
-			savestate(e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, err)))
+			e.ResetState()
+			savestate(e.Prompt(tx, ctx.Bot, ctx, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, nil)))
 		}
-	} else {
-		e.ResetState()
-		savestate(e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, nil)))
+		
+		return nil
+	})
+	if err != nil {
+		ctx.Bot.ErrorLog.Println(err)
 	}
 }
 
@@ -720,22 +722,29 @@ type LoginState struct {
 }
 
 func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
+	err := storage.DefaultTransact(func(tx storage.DBLike) error { return this.HandleTx(tx, ctx) })
+	if err != nil {
+		ctx.Bot.ErrorLog.Println(fmt.Errorf("LoginState.HandleTx: %w", err))
+	}
+}
+
+func (this *LoginState) HandleTx(tx storage.DBLike, ctx *gogram.MessageCtx) error {
 	if ctx.Msg.From == nil {
-		return
+		return nil
 	}
 	if ctx.Cmd.Command == "/cancel" {
 		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Command cancelled."}}, nil)
 		ctx.SetState(nil)
-		return
+		return nil
 	} else if ctx.Msg.Chat.Type != "private" && ctx.Cmd.Command == "/login" {
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You should only use this command in private, to protect the security of your account.\n\nIf you accidentally posted your API key publicly, <a href=\"https://" + api.Endpoint + "/users/home\">open your account settings</a> and go to \"Manage API Access\" to revoke it.", ParseMode: data.ParseHTML}}, nil)
 		ctx.SetState(nil)
-		return
+		return nil
 	} else if ctx.Cmd.Command == "/logout" {
 		storage.WriteUserCreds(nil, storage.UserCreds{TelegramId: ctx.Msg.From.Id})
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You are now logged out."}}, nil)
 		ctx.SetState(nil)
-		return
+		return nil
 	} else if ctx.Cmd.Command == "/login" || ctx.Cmd.Command == "" {
 		if ctx.GetState() == nil {
 			this = &LoginState{}
@@ -760,6 +769,9 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 						Blacklist: user.Blacklist,
 						BlacklistFetched: time.Now(),
 					})
+					if err != nil {
+						return fmt.Errorf("WriteUserCreds: %w", err)
+					}
 					ctx.SetState(nil)
 				} else if err != nil {
 					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("An error occurred when testing if you were logged in! (%s)", err.Error())}}, nil)
@@ -770,7 +782,7 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 					this.user = ""
 					this.apikey = ""
 				}
-				return
+				return nil
 			}
 		}
 
@@ -788,7 +800,7 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 				ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Please send your " + api.ApiName + " API Key.\n\nYour api key can be found <a href=\"https://" + api.Endpoint + "/users/%d/api_key\">in your account settings</a>. It is used to allow bots and services (such as me!) to access site features on your behalf. Do not share it in public.", account.Id), ParseMode: data.ParseHTML}}, nil)
 			}
 		}
-		return
+		return nil
 	} else if ctx.Cmd.Command == "/sync" {
 		creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 		if err == storage.ErrNoLogin {
@@ -796,8 +808,7 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 			return nil
 		} else if err != nil {
 			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "An error occurred! Try again later."}}, nil)
-			ctx.Bot.ErrorLog.Println("An error occurred looking up user credentials: ", err.Error())
-			return
+			return fmt.Errorf("GetUserCreds: %w", err)
 		}
 		user, success, err := api.TestLogin(creds.User, creds.ApiKey)
 		if err != nil {
@@ -805,19 +816,20 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 			return fmt.Errorf("api.TestLogin: %w", err)
 		} else if !success {
 			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Your API key is invalid or has expired, please update it."}}, nil)
-			return
+			return nil
 		}
 		creds.Blacklist = user.Blacklist
 		creds.BlacklistFetched = time.Now()
-		err = storage.DefaultTransact(func(tx *sql.Tx) error { return storage.WriteUserCreds(tx, creds) })
+		err = storage.WriteUserCreds(tx, creds)
 		if err != nil {
 			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "An error occurred while saving your settings! Try again later."}}, nil)
-			ctx.Bot.ErrorLog.Println("An error occurred saving user creds: ", err.Error())
-			return
+			return fmt.Errorf("WriteUserCreds: %w", err)
 		}
 
 		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Successfully resync'd your " + api.ApiName + " account settings."}}, nil)
 	}
+	
+	return nil
 }
 
 type TagRuleState struct {
