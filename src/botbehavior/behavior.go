@@ -401,21 +401,14 @@ func (this *Behavior) DismissPromptPost(tx storage.DBLike, bot *gogram.TelegramB
 	return storage.SavePromptPost(tx, post_info.PostId, nil)
 }
 
-func (this *Behavior) ClearPromptPostsOlderThan(bot *gogram.TelegramBot, time_ago time.Duration) error {
-	var err error
-	var settings storage.UpdaterSettings
-	settings.Transaction, err = storage.NewTxBox()
-	if err != nil { return err }
-	defer settings.Transaction.Finalize(true)
-
-	post_infos, err := storage.FindPromptPostsOlderThan(time_ago, settings)
+func (this *Behavior) ClearPromptPostsOlderThan(tx storage.DBLike, bot *gogram.TelegramBot, time_ago time.Duration) error {
+	post_infos, err := storage.FindPromptPostsOlderThan(tx, time_ago)
 	if err != nil { return err }
 
 	for _, post_info := range post_infos {
-		this.DismissPromptPost(bot, &post_info, tags.TagDiff{}, settings)
+		this.DismissPromptPost(tx, bot, &post_info, tags.TagDiff{})
 	}
 
-	settings.Transaction.MarkForCommit()
 	return nil
 }
 
