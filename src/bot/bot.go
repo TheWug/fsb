@@ -23,7 +23,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"database/sql"
 )
 
 const (
@@ -1048,35 +1047,31 @@ func (this *PostState) Handle(ctx *gogram.MessageCtx) {
 }
 
 func (this *PostState) Post(ctx *gogram.MessageCtx) {
-	var p dialogs.PostPrompt
+	err := storage.DefaultTransact(func(tx storage.DBLike) error {
+		var p dialogs.PostPrompt
 
-	if ctx.Msg.From == nil { return }
+		if ctx.Msg.From == nil { return nil }
 
-	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
-	if err != nil {
-		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to use this command!"}}, nil)
-		if err != storage.ErrNoLogin {
-			ctx.Bot.ErrorLog.Println("Error while checking credentials: ", err.Error())
+		creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
+		if err != nil {
+			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to use this command!"}}, nil)
+			if err != storage.ErrNoLogin {
+				return fmt.Errorf("GetUserCreds: %w", err)
+			}
+			return nil
 		}
-		return
-	}
 
-	postnow, err := p.ParseArgs(ctx)
-	if err != nil {
-		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: err.Error()}}, nil)
-		return
-	}
+		postnow, err := p.ParseArgs(ctx)
+		if err != nil {
+			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: err.Error()}}, nil)
+			return nil
+		}
 
-	var tagrules string
-	err = storage.DefaultTransact(func(tx *sql.Tx) error {
-		var err error
-		tagrules, err = storage.GetUserTagRules(tx, ctx.Msg.From.Id, "main")
-		return err
-	})
-	if err != nil {
-		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Couldn't load your tag rules for some reason."}}, nil)
-		return
-	}
+		tagrules, err := storage.GetUserTagRules(tx, ctx.Msg.From.Id, "main")
+		if err != nil {
+			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Couldn't load your tag rules for some reason."}}, nil)
+			return fmt.Errorf("GetUserTagRules: %w", err)
+		}
 
 		savestate := func(prompt *gogram.MessageCtx) {
 			p.TagWizard.SetNewRulesFromString(tagrules)
@@ -1108,22 +1103,14 @@ func (this *PostState) Post(ctx *gogram.MessageCtx) {
 				}
 			}
 		} else {
-			upload_result, err := p.CommitPost(creds.User, creds.ApiKey, ctx, storage.UpdaterSettings{})
-			if err == nil && upload_result != nil && upload_result.Success {
-				p.State = dialogs.SAVED
-				p.Finalize(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, upload_result))
-			} else if err != nil {
-				p.State = dialogs.SAVED
-				savestate(p.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, nil)))
-			} else if upload_result != nil && !upload_result.Success {
-				if upload_result.Reason == nil { upload_result.Reason = new(string) }
-				p.State = dialogs.SAVED
-				savestate(p.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, upload_result)))
-			}
+			p.ResetState()
+			savestate(p.Prompt(tx, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, nil)))
 		}
-	} else {
-		p.ResetState()
-		savestate(p.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, nil)))
+
+		return nil
+	})
+	if err != nil {
+		ctx.Bot.ErrorLog.Println(err)
 	}
 }
 
