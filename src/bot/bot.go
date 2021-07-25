@@ -624,6 +624,9 @@ func (this *EditState) Freeform(ctx *gogram.MessageCtx) {
 		p.Prompt(tx, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, nil))
 		return nil
 	})
+	if err != nil {
+		ctx.Bot.ErrorLog.Println(err)
+	}
 }
 
 func (this *EditState) Cancel(ctx *gogram.MessageCtx) {
@@ -637,6 +640,9 @@ func (this *EditState) Cancel(ctx *gogram.MessageCtx) {
 		ctx.SetState(nil)
 		return nil
 	})
+	if err != nil {
+		ctx.Bot.ErrorLog.Println(err)
+	}
 }
 
 func (this *EditState) Edit(ctx *gogram.MessageCtx) {
