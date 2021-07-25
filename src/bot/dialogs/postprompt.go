@@ -12,7 +12,6 @@ import (
 	"github.com/thewug/gogram/dialog"
 
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -251,7 +250,7 @@ func (this *PostPrompt) CommitPost(user, api_key string, ctx *gogram.MessageCtx)
 	return status, nil
 }
 
-func (this *PostPrompt) Prompt(tx *sql.Tx, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt PostFormatter) (*gogram.MessageCtx) {
+func (this *PostPrompt) Prompt(tx storage.DBLike, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt PostFormatter) (*gogram.MessageCtx) {
 	var send data.SendData
 	send.Text = frmt.GenerateMessage(this)
 	send.ParseMode = data.ParseHTML
@@ -276,7 +275,7 @@ func (this *PostPrompt) Prompt(tx *sql.Tx, bot *gogram.TelegramBot, ctx *gogram.
 	}
 }
 
-func (this *PostPrompt) Finalize(tx *sql.Tx, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt PostFormatter) (*gogram.MessageCtx) {
+func (this *PostPrompt) Finalize(tx storage.DBLike, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt PostFormatter) (*gogram.MessageCtx) {
 	var send data.SendData
 	send.Text = frmt.GenerateMessage(this)
 	send.ParseMode = data.ParseHTML

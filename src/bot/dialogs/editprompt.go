@@ -14,7 +14,6 @@ import (
 
 	"bytes"
 	"encoding/json"
-	"database/sql"
 	"errors"
 	"fmt"
 	"html"
@@ -212,7 +211,7 @@ func (this *EditPrompt) ID() data.DialogID {
 	return EditPromptID()
 }
 
-func (this *EditPrompt) Prompt(tx *sql.Tx, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt EditFormatter) (*gogram.MessageCtx) {
+func (this *EditPrompt) Prompt(tx storage.DBLike, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt EditFormatter) (*gogram.MessageCtx) {
 	var send data.SendData
 	send.Text = frmt.GenerateMessage(this)
 	send.ParseMode = data.ParseHTML
@@ -237,7 +236,7 @@ func (this *EditPrompt) Prompt(tx *sql.Tx, bot *gogram.TelegramBot, ctx *gogram.
 	}
 }
 
-func (this *EditPrompt) Finalize(tx *sql.Tx, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt EditFormatter) (*gogram.MessageCtx) {
+func (this *EditPrompt) Finalize(tx storage.DBLike, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt EditFormatter) (*gogram.MessageCtx) {
 	var send data.SendData
 	send.Text = frmt.GenerateMessage(this)
 	send.ParseMode = data.ParseHTML
