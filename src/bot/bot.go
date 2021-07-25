@@ -317,7 +317,7 @@ func (this *AutofixState) HandleCallbackTx(tx storage.DBLike, ctx *gogram.Callba
 		if err != nil { return fmt.Errorf("DismissPrimptPost: %w", err) }
 		ctx.AnswerAsync(data.OCallback{Notification: "\U0001F539 Dismissed without changes."}, nil)
 	}
-	
+
 	return nil
 }
 
@@ -610,7 +610,7 @@ func (this *EditState) HandleCallbackTx(tx storage.DBLike, ctx *gogram.CallbackC
 	} else {
 		p.Prompt(tx, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
 	}
-	
+
 	return nil
 }
 
@@ -706,7 +706,7 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 			e.ResetState()
 			savestate(e.Prompt(tx, ctx.Bot, ctx, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, nil)))
 		}
-		
+
 		return nil
 	})
 	if err != nil {
@@ -828,7 +828,7 @@ func (this *LoginState) HandleTx(tx storage.DBLike, ctx *gogram.MessageCtx) erro
 
 		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Successfully resync'd your " + api.ApiName + " account settings."}}, nil)
 	}
-	
+
 	return nil
 }
 
@@ -920,7 +920,7 @@ func (this *TagRuleState) HandleTx(tx storage.DBLike, ctx *gogram.MessageCtx) er
 		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Set new tag rules."}}, nil)
 		ctx.SetState(nil)
 	}
-	
+
 	return nil
 }
 
@@ -956,44 +956,44 @@ func (this *PostState) WriteUserTagRules(tx storage.DBLike, my_id data.UserID, t
 }
 
 func (this *PostState) HandleCallback(ctx *gogram.CallbackCtx) {
-	txbox, err := storage.NewTxBox()
+	err := storage.DefaultTransact(func(tx storage.DBLike) error { return this.HandleCallbackTx(tx, ctx) })
 	if err != nil {
-		ctx.Bot.ErrorLog.Println("Error occurred opening transaction: ", err.Error())
-		return
+		ctx.Bot.ErrorLog.Println(fmt.Errorf("PostState.HandleCallbackTx: %w", err))
 	}
-	settings := storage.UpdaterSettings{Transaction: txbox}
-	defer settings.Transaction.Finalize(true)
+}
 
-	p, err := dialogs.LoadPostPrompt(settings, this.data.MsgId, this.data.ChatId, ctx.Cb.From.Id, "upload")
+func (this *PostState) HandleCallbackTx(tx storage.DBLike, ctx *gogram.CallbackCtx) error {
+	p, err := dialogs.LoadPostPrompt(tx, this.data.MsgId, this.data.ChatId, ctx.Cb.From.Id, "upload")
 	if err != nil {
-		ctx.Bot.ErrorLog.Println("Error loading edit prompt: ", err.Error())
-		return
+		return fmt.Errorf("LoadEditPrompt: %w", err)
 	}
 
-	p.HandleCallback(ctx, settings)
+	p.HandleCallback(ctx)
 
 	if p.State == dialogs.SAVED {
-		upload_result, err := p.CommitPost(this.data.User, this.data.ApiKey, gogram.NewMessageCtx(ctx.Cb.Message, false, ctx.Bot), settings)
+		upload_result, err := p.CommitPost(this.data.User, this.data.ApiKey, gogram.NewMessageCtx(ctx.Cb.Message, false, ctx.Bot))
 		if err == nil && upload_result != nil && upload_result.Success {
-			p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Cb.Message.Chat.Type != data.Private, upload_result))
+			p.Finalize(tx, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Cb.Message.Chat.Type != data.Private, upload_result))
 			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F7E2 Edit submitted."}, nil)
 			ctx.SetState(nil)
 		} else if err != nil {
 			ctx.AnswerAsync(data.OCallback{Notification: fmt.Sprintf("\U0001F534 %s", err.Error())}, nil)
-			p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
+			p.Prompt(tx, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
 			p.State = dialogs.WAIT_MODE
+			return fmt.Errorf("p.CommitPost: %w", err)
 		} else if upload_result != nil && !upload_result.Success {
 			if upload_result.Reason == nil { upload_result.Reason = new(string) }
 			ctx.AnswerAsync(data.OCallback{Notification: fmt.Sprintf("\U0001F534 Error: %s", *upload_result.Reason)}, nil)
-			p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Cb.Message.Chat.Type != data.Private, upload_result))
+			p.Prompt(tx, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Cb.Message.Chat.Type != data.Private, upload_result))
 			p.State = dialogs.WAIT_MODE
 		}
 	} else if p.State == dialogs.DISCARDED {
-		p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
+		p.Finalize(tx, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
 	} else {
-		p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
+		p.Prompt(tx, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
 	}
-	settings.Transaction.MarkForCommit()
+
+	return nil
 }
 
 func (this *PostState) Handle(ctx *gogram.MessageCtx) {
