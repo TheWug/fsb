@@ -582,15 +582,15 @@ func (this *EditState) Handle(ctx *gogram.MessageCtx) {
 }
 
 func (this *EditState) HandleCallback(ctx *gogram.CallbackCtx) {
-	err := storage.DefaultTransact(func(tx *sql.Tx) error { return this.HandleCallbackTx(tx, ctx) })
+	err := storage.DefaultTransact(func(tx storage.DBLike) error { return this.HandleCallbackTx(tx, ctx) })
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("Error in EditState.HandleCallbackTx:", err)
+	}
 }
 
-func (this *EditState) HandleCallbackTx(tx *sql.Tx, ctx *gogram.CallbackCtx) {
+func (this *EditState) HandleCallbackTx(tx storage.DBLike, ctx *gogram.CallbackCtx) error {
 	p, err := dialogs.LoadEditPrompt(tx, this.data.MsgId, this.data.ChatId)
-	if err != nil {
-		ctx.Bot.ErrorLog.Println("Error loading edit prompt: ", err.Error())
-		return
-	}
+	if err != nil { fmt.Errorf("LoadEditPrompt: %w", err) }
 
 	p.HandleCallback(tx, ctx)
 
@@ -610,6 +610,8 @@ func (this *EditState) HandleCallbackTx(tx *sql.Tx, ctx *gogram.CallbackCtx) {
 	} else {
 		p.Prompt(tx, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
 	}
+	
+	return nil
 }
 
 func (this *EditState) Freeform(ctx *gogram.MessageCtx) {

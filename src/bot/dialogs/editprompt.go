@@ -608,7 +608,7 @@ func EditPromptID() data.DialogID {
 	return EDIT_PROMPT_ID
 }
 
-func LoadEditPrompt(tx *sql.Tx, msg_id data.MsgID, chat_id data.ChatID) (*EditPrompt, error) {
+func LoadEditPrompt(tx storage.DBLike, msg_id data.MsgID, chat_id data.ChatID) (*EditPrompt, error) {
 	found, err := storage.FetchDialogPost(tx, msg_id, chat_id)
 	if err != nil { return nil, err }
 	if found == nil { return nil, nil }

@@ -4,7 +4,6 @@ import (
 	tgtypes "github.com/thewug/gogram/data"
 
 	"time"
-	"database/sql"
 )
 
 type DialogPost struct {
@@ -15,21 +14,21 @@ type DialogPost struct {
 	DialogData []byte
 }
 
-func WriteDialogPost(tx *sql.Tx, dialog_id tgtypes.DialogID, msg_id tgtypes.MsgID, chat_id tgtypes.ChatID, json string, msg_ts time.Time) error {
+func WriteDialogPost(tx DBLike, dialog_id tgtypes.DialogID, msg_id tgtypes.MsgID, chat_id tgtypes.ChatID, json string, msg_ts time.Time) error {
 	sql := "INSERT INTO dialog_posts (dialog_id, msg_id, chat_id, dialog_data, msg_ts) VALUES ($1, $2, $3, $4, $5) ON CONFLICT ON CONSTRAINT dialog_posts_pkey DO UPDATE SET dialog_data = EXCLUDED.dialog_data"
 
 	_, err := tx.Exec(sql, dialog_id, msg_id, chat_id, json, msg_ts)
 	return err
 }
 
-func EraseDialogPost(tx *sql.Tx, msg_id tgtypes.MsgID, chat_id tgtypes.ChatID) error {
+func EraseDialogPost(tx DBLike, msg_id tgtypes.MsgID, chat_id tgtypes.ChatID) error {
 	sql := "DELETE FROM dialog_posts WHERE msg_id = $1 AND chat_id = $2"
 
 	_, err := tx.Exec(sql, msg_id, chat_id)
 	return err
 }
 
-func FetchDialogPost(tx *sql.Tx, msg_id tgtypes.MsgID, chat_id tgtypes.ChatID) (*DialogPost, error) {
+func FetchDialogPost(tx DBLike, msg_id tgtypes.MsgID, chat_id tgtypes.ChatID) (*DialogPost, error) {
 	sql := "SELECT chat_id, msg_id, msg_ts, dialog_id, dialog_data FROM dialog_posts WHERE msg_id = $1 AND chat_id = $2"
 	row := tx.QueryRow(sql, msg_id, chat_id)
 
