@@ -400,15 +400,18 @@ func (this *Behavior) DismissPromptPost(tx storage.DBLike, bot *gogram.TelegramB
 	return storage.SavePromptPost(tx, post_info.PostId, nil)
 }
 
-func (this *Behavior) ClearPromptPostsOlderThan(tx storage.DBLike, bot *gogram.TelegramBot, time_ago time.Duration) error {
-	post_infos, err := storage.FindPromptPostsOlderThan(tx, time_ago)
-	if err != nil { return err }
+func (this *Behavior) ClearPromptPostsOlderThan(bot *gogram.TelegramBot, time_ago time.Duration) error {
+	return storage.DefaultTransact(func(tx storage.DBLike) error {
+		post_infos, err := storage.FindPromptPostsOlderThan(tx, time_ago)
+		if err != nil { return err }
 
-	for _, post_info := range post_infos {
-		this.DismissPromptPost(tx, bot, &post_info, tags.TagDiff{})
-	}
+		for _, post_info := range post_infos {
+			err = this.DismissPromptPost(tx, bot, &post_info, tags.TagDiff{})
+			if err != nil { return err }
+		}
 
-	return nil
+		return nil
+	})
 }
 
 type QuerySettings struct {

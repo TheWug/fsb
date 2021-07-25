@@ -229,7 +229,10 @@ func (this *AutofixState) GetInterval() int64 {
 func (this *AutofixState) DoMaintenance(bot *gogram.TelegramBot) {
 	go func() {
 		// clear prompt_post table of entries that are older than 24 hours
-		this.Behavior.ClearPromptPostsOlderThan(bot, time.Hour * 24)
+		err := this.Behavior.ClearPromptPostsOlderThan(bot, time.Hour * 24)
+		if err != nil {
+			bot.ErrorLog.Println("ClearPromptPostsOlderThan:", err)
+		}
 	}()
 }
 
