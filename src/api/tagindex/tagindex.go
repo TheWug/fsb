@@ -1371,21 +1371,21 @@ func BlitsInternal(tx storage.DBLike, control BlitsControl, progress *ProgMessag
 		for _, b := range yesblits {
 			if buf.Len() > 4000 { break }
 			buf.WriteString(html.EscapeString(b.String()))
-			buf.WriteRune(' ')
+			buf.WriteRune('\n')
 		}
 		buf.WriteString("</code>\n== Marked Non-Blit List ==\n<code>")
 		for _, b := range noblits {
 			if buf.Len() > 4000 { break }
 			buf.WriteString(html.EscapeString(b.String()))
-			buf.WriteRune(' ')
+			buf.WriteRune('\n')
 		}
 		buf.WriteString("</code>\n== Wild Blit List ==\n<code>")
 		for _, b := range wildblits {
 			if buf.Len() > 4000 { break }
 			buf.WriteString(html.EscapeString(b.String()))
-			buf.WriteRune(' ')
+			buf.WriteRune('\n')
 		}
-		buf.WriteString("<code>")
+		buf.WriteString("</code>")
 
 		progress.SetMessage(buf.String())
 		return nil
