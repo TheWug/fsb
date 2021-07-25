@@ -1697,13 +1697,13 @@ func Concatenations(ctx *gogram.MessageCtx) {
 
 	defer progress.Close()
 
-	err = storage.DefaultTransact(func(tx *sql.Tx) error { return CatsInternal(tx, control, creds, progress) })
+	err = storage.DefaultTransact(func(tx storage.DBLike) error { return CatsInternal(tx, control, creds, progress) })
 	if err != nil {
 		progress.SetMessage(fmt.Sprintf("Whoops! An error occurred: %s", html.EscapeString(err.Error())))
 	}
 }
 
-func CatsInternal(tx *sql.Tx, control CatsControl, creds storage.UserCreds, progress *ProgMessage) error {
+func CatsInternal(tx storage.DBLike, control CatsControl, creds storage.UserCreds, progress *ProgMessage) error {
 	var err error
 
 	if control.mode == MODE_LIST {
