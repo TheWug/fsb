@@ -375,7 +375,7 @@ func (this *Behavior) PromptPost(bot *gogram.TelegramBot, post_info *storage.Pro
 	return post_info
 }
 
-func (this *Behavior) DismissPromptPost(bot *gogram.TelegramBot, post_info *storage.PromptPostInfo, diff tags.TagDiff, settings storage.UpdaterSettings) error {
+func (this *Behavior) DismissPromptPost(tx storage.DBLike, bot *gogram.TelegramBot, post_info *storage.PromptPostInfo, diff tags.TagDiff) error {
 	if post_info == nil { return nil }
 
 	bot.Remote.DeleteMessageAsync(data.ODelete{SourceChatId: post_info.ChatId, SourceMessageId: post_info.MsgId}, nil)
@@ -398,7 +398,7 @@ func (this *Behavior) DismissPromptPost(bot *gogram.TelegramBot, post_info *stor
 		bot.Remote.SendMessageAsync(data.OMessage{SendData: data.SendData{TargetData: data.TargetData{ChatId: post_info.ChatId}, Text: message, ParseMode: data.ParseHTML, DisableNotification: true}, DisableWebPagePreview: true}, nil)
 	}
 
-	return storage.SavePromptPost(post_info.PostId, nil, settings)
+	return storage.SavePromptPost(tx, post_info.PostId, nil)
 }
 
 func (this *Behavior) ClearPromptPostsOlderThan(bot *gogram.TelegramBot, time_ago time.Duration) error {
