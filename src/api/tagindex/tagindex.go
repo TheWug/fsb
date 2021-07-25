@@ -31,7 +31,7 @@ type ProgMessage struct {
 	status, notice string
 	previous string
 	active string
-	running bool
+	running, initd bool
 
 	// shared fields
 	text_updates chan string
@@ -86,6 +86,8 @@ func (this *ProgMessage) run() {
 // if our target message is different from the last one we wrote,
 // trigger an update. otherwise, reset the timer to wait for a change.
 func (this *ProgMessage) update() {
+	initd := this.initd
+	this.initd = true
 	if this.target != this.actual {
 		if this.Ctx == nil {
 			this.InitialMessage.Text = this.target
@@ -94,9 +96,9 @@ func (this *ProgMessage) update() {
 			if this.Ctx == nil {
 				this.err = err
 				if this.err == nil { this.err = errors.New("ProgMessage:update(): MessageCallback() returned nil") }
-				this.initialized.Done()
+				if !initd { this.initialized.Done() }
 			} else {
-				this.initialized.Done()
+				if !initd { this.initialized.Done() }
 				this.actual = this.target
 			}
 		} else {
@@ -110,6 +112,7 @@ func (this *ProgMessage) update() {
 		}
 		this.updater = time.NewTimer(this.UpdateInterval).C
 	} else {
+		if !initd { this.initialized.Done() }
 		this.updater = nil
 	}
 }
