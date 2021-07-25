@@ -24,7 +24,6 @@ import (
 	"time"
 	"unicode/utf8"
 	"sort"
-	"database/sql"
 )
 
 type ProgMessage struct {
@@ -447,6 +446,7 @@ func RecountTags(ctx *gogram.MessageCtx, progress *ProgMessage, real_counts, ali
 			err = CalculateAliasedCountsInternal(tx, progress)
 			if err != nil { return err }
 		}
+		return nil
 	})
 
 	return nil
@@ -1720,7 +1720,7 @@ func CatsInternal(tx storage.DBLike, control CatsControl, creds storage.UserCred
 			// fetch blits the same way
 			var blits_yes, blits_wild []storage.BlitData
 			if !control.with_blits {
-				blits_yes, _, blits_wild, err = storage.GetBlits(true, false, true, storage.EnumerateControl{Transaction: storage.Wrap(tx)})
+				blits_yes, _, blits_wild, err = storage.GetBlits(tx, true, false, true)
 				if err != nil { return err }
 			}
 

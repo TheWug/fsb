@@ -23,7 +23,7 @@ func (c CatData) String() string {
 	}
 }
 
-func GetCats(tx *sql.Tx, yes, no bool) ([]CatData, []CatData, error) {
+func GetCats(tx DBLike, yes, no bool) ([]CatData, []CatData, error) {
 	query :=
 `SELECT cat_id, marked,
     a.tag_id, a.tag_name, a.tag_type, a.tag_count,
