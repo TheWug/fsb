@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"html"
 	"strconv"
-	"database/sql"
 )
 
 const SETTINGS = "/settings"
