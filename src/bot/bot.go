@@ -592,10 +592,10 @@ func (this *EditState) HandleCallbackTx(tx storage.DBLike, ctx *gogram.CallbackC
 	p, err := dialogs.LoadEditPrompt(tx, this.data.MsgId, this.data.ChatId)
 	if err != nil { fmt.Errorf("LoadEditPrompt: %w", err) }
 
-	p.HandleCallback(tx, ctx)
+	p.HandleCallback(ctx)
 
 	if p.State == dialogs.SAVED {
-		_, err := p.CommitEdit(this.data.User, this.data.ApiKey, gogram.NewMessageCtx(ctx.Cb.Message, false, ctx.Bot), settings)
+		_, err := p.CommitEdit(tx, this.data.User, this.data.ApiKey, gogram.NewMessageCtx(ctx.Cb.Message, false, ctx.Bot))
 		if err == nil {
 			p.Finalize(tx, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
 			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F7E2 Edit submitted."}, nil)
@@ -615,24 +615,15 @@ func (this *EditState) HandleCallbackTx(tx storage.DBLike, ctx *gogram.CallbackC
 }
 
 func (this *EditState) Freeform(ctx *gogram.MessageCtx) {
-	txbox, err := storage.NewTxBox()
-	if err != nil {
-		ctx.Bot.ErrorLog.Println("Error occurred opening transaction: ", err.Error())
-		return
-	}
-	settings := storage.UpdaterSettings{Transaction: txbox}
-	defer settings.Transaction.Finalize(true)
+	err := storage.DefaultTransact(func(tx storage.DBLike) error {
+		p, err := dialogs.LoadEditPrompt(tx, this.data.MsgId, this.data.ChatId)
+		if err != nil { return fmt.Errorf("LoadEditPrompt: %w", err) }
 
-	p, err := dialogs.LoadEditPrompt(settings, this.data.MsgId, this.data.ChatId)
-	if err != nil {
-		ctx.Bot.ErrorLog.Println("Error occurred loading edit prompt: ", err.Error())
-		return
-	}
+		p.HandleFreeform(ctx)
 
-	p.HandleFreeform(ctx)
-
-	p.Prompt(settings, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, nil))
-	settings.Transaction.MarkForCommit()
+		p.Prompt(tx, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, nil))
+		return nil
+	})
 }
 
 func (this *EditState) Cancel(ctx *gogram.MessageCtx) {

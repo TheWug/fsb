@@ -355,7 +355,7 @@ func (this *EditPrompt) PostStatus(b *bytes.Buffer) {
 	}
 }
 
-func (this *EditPrompt) CommitEdit(user, api_key string, ctx *gogram.MessageCtx) (*types.TPostInfo, error) {
+func (this *EditPrompt) CommitEdit(tx storage.DBLike, user, api_key string, ctx *gogram.MessageCtx) (*types.TPostInfo, error) {
 	if this.IsNoop() {
 		return nil, errors.New("This edit is a no-op.")
 	}
@@ -375,7 +375,7 @@ func (this *EditPrompt) CommitEdit(user, api_key string, ctx *gogram.MessageCtx)
 	}
 
 	if update != nil {
-		err_extra := storage.DefaultTransact(func(tx storage.DBLike) error { return storage.UpdatePost(tx, *update) })
+		err_extra := storage.UpdatePost(tx, *update)
 		// don't overwrite original error since we're now past the point of no return
 		if err_extra != nil {
 			ctx.Bot.ErrorLog.Println("Error updating internal post: ", err_extra.Error())
