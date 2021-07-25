@@ -627,22 +627,16 @@ func (this *EditState) Freeform(ctx *gogram.MessageCtx) {
 }
 
 func (this *EditState) Cancel(ctx *gogram.MessageCtx) {
-	txbox, err := storage.NewTxBox()
-	if err != nil {
-		ctx.Bot.ErrorLog.Println("Error occurred opening transaction: ", err.Error())
-		return
-	}
-	settings := storage.UpdaterSettings{Transaction: txbox}
-	defer settings.Transaction.Finalize(true)
-
-	p, err := dialogs.LoadEditPrompt(settings, this.data.MsgId, this.data.ChatId)
-	if err != nil { ctx.Bot.ErrorLog.Println(err.Error()) }
-	if p != nil {
-		p.State = dialogs.DISCARDED
-		p.Finalize(settings, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, nil))
-	}
-	ctx.SetState(nil)
-	settings.Transaction.MarkForCommit()
+	err := storage.DefaultTransact(func(tx storage.DBLike) error {
+		p, err := dialogs.LoadEditPrompt(tx, this.data.MsgId, this.data.ChatId)
+		if err != nil { return fmt.Errorf("LoadEditPrompt: %w", err) }
+		if p != nil {
+			p.State = dialogs.DISCARDED
+			p.Finalize(tx, ctx.Bot, nil, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, nil))
+		}
+		ctx.SetState(nil)
+		return nil
+	})
 }
 
 func (this *EditState) Edit(ctx *gogram.MessageCtx) {
