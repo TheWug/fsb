@@ -840,13 +840,19 @@ type TagRuleState struct {
 }
 
 func (this *TagRuleState) Handle(ctx *gogram.MessageCtx) {
+	err := storage.DefaultTransact(func(tx storage.DBLike) error { return this.HandleTx(tx, ctx) })
+	if err != nil {
+		ctx.Bot.ErrorLog.Println(fmt.Errorf("TagRuleState.HandleTx: %w", err))
+	}
+}
+func (this *TagRuleState) HandleTx(tx storage.DBLike, ctx *gogram.MessageCtx) error {
 	if ctx.Msg.From == nil {
-		return
+		return nil
 	}
 	if ctx.Cmd.Command == "/cancel" {
 		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Command cancelled."}}, nil)
 		ctx.SetState(nil)
-		return
+		return nil
 	}
 
 	if ctx.GetState() == nil {
@@ -864,31 +870,31 @@ func (this *TagRuleState) Handle(ctx *gogram.MessageCtx) {
 	if doc != nil {
 		if doc.FileName == nil {
 			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "File is missing name."}}, nil)
-			return
+			return nil
 		}
 		if !strings.HasSuffix(*doc.FileName, ".txt") {
 			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("<i>%s</i> isn't a plain text file.", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
-			return
+			return nil
 		}
 		file, err := ctx.Bot.Remote.GetFile(data.OGetFile{Id: doc.Id})
 		if err != nil || file == nil || file.FilePath == nil {
 			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while fetching <i>%s</i>, try sending it again?", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
-			return
+			return fmt.Errorf("telegram.GetFile: %w", err)
 		}
 		file_data, err := ctx.Bot.Remote.DownloadFile(data.OFile{FilePath: *file.FilePath})
 		if err != nil || file_data == nil {
 			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while downloading <i>%s</i>, try sending it again?", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
-			return
+			return fmt.Errorf("telegram.DownloadFile: %w", err)
 		}
 		b, err := ioutil.ReadAll(file_data)
 		if err != nil || b == nil {
 			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while reading <i>%s</i>, try sending it again?", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
-			return
+			return fmt.Errorf("ioutil.ReadAll: %w", err)
 		}
 
 		if len(b) > 102400 {
 			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("<i>%s</i> is too large (100kB max), edit and try again.", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
-			return
+			return nil
 		}
 		this.tagwizardrules = string(b)
 	}
@@ -906,10 +912,16 @@ func (this *TagRuleState) Handle(ctx *gogram.MessageCtx) {
 
 	if this.tagwizardrules != "" && this.tagrulename != "" {
 		this.tagwizardrules = strings.Replace(this.tagwizardrules, "\r", "", -1) // pesky windows carriage returns
-		_ = storage.DefaultTransact(func(tx *sql.Tx) error { return storage.WriteUserTagRules(tx, ctx.Msg.From.Id, this.tagrulename, this.tagwizardrules) })
+		err := storage.WriteUserTagRules(tx, ctx.Msg.From.Id, this.tagrulename, this.tagwizardrules)
+		if err != nil {
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Error setting rules, try again later."}}, nil)
+			return fmt.Errorf("WriteUserTagRules: %w", err)
+		}
 		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Set new tag rules."}}, nil)
 		ctx.SetState(nil)
 	}
+	
+	return nil
 }
 
 type psp struct {
