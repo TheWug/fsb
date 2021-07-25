@@ -951,8 +951,8 @@ func PostStateFactoryWithData(jstr []byte, sbp persist.StateBasePersistent, data
 	return &p
 }
 
-func (this *PostState) WriteUserTagRules(my_id data.UserID, tagrules, name string) {
-	_ = storage.DefaultTransact(func(tx *sql.Tx) error { return storage.WriteUserTagRules(tx, my_id, name, tagrules) })
+func (this *PostState) WriteUserTagRules(tx storage.DBLike, my_id data.UserID, tagrules, name string) error {
+	return storage.WriteUserTagRules(tx, my_id, name, tagrules)
 }
 
 func (this *PostState) HandleCallback(ctx *gogram.CallbackCtx) {
