@@ -1,0 +1,9 @@
+github.com/DATA-DOG/go-sqlmock v1.5.0/go.mod h1:f/Ixk793poVmq4qj/V1dPUg2JEAKC73Q5eFN3EC/SaM=
+github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 h1:Z9n2FFNUXsshfwJMBgNA0RU6/i7WVaAegv3PtuIHPMs=
+github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51/go.mod h1:CzGEWj7cYgsdH8dAjBGEr58BoE7ScuLd+fwFZ44+/x8=
+github.com/lib/pq v1.10.2 h1:AqzbZs4ZoCBp+GtejcpCpcxM3zlSMx29dXbUSeVtJb8=
+github.com/lib/pq v1.10.2/go.mod h1:AlVN5x4E4T544tWzH6hKfbfQvm3HdbOxrmggDNAPY9o=
+github.com/thewug/dml v0.0.0-20210725230048-b9a5991ea54a h1:2kc2tikrnKzlXWDU9Ggi+N3BJawl0CNCC/wL3/dPerU=
+github.com/thewug/dml v0.0.0-20210725230048-b9a5991ea54a/go.mod h1:ds4Nlz0Voknf0Ew/JEX0ROvUbQ+xb7clt4e9148A8CM=
+github.com/thewug/reqtify v0.0.0-20201109043318-8ad07a73cbbc h1:Kx5RbOtxOlq+fELx9+0VvKcSZC3CF1mkF0mnB7G8Rww=
+github.com/thewug/reqtify v0.0.0-20201109043318-8ad07a73cbbc/go.mod h1:AMdOvyISVx/OKHQFIGbGrMd2xdHDin8/Nr2QJ9MyfJc=
