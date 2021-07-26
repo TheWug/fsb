@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"bot/types"
+	"github.com/thewug/fsb/pkg/bot/types"
 
 	tgtypes "github.com/thewug/gogram/data"
 

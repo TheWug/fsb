@@ -1,7 +1,7 @@
 package storage
 
 import (
-	apitypes "api/types"
+	apitypes "github.com/thewug/fsb/pkg/api/types"
 	
 	"database/sql"
 	"errors"

@@ -1,7 +1,7 @@
 package types
 
 import (
-	"api/tags"
+	"github.com/thewug/fsb/pkg/api/tags"
 
 	"encoding/json"
 	"errors"

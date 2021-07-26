@@ -1,14 +1,14 @@
 package bot
 
 import (
-	"bot/dialogs"
-	"botbehavior"
-	"api"
-	"api/tagindex"
-	"api/tags"
-	apitypes "api/types"
-	"apiextra"
-	"storage"
+	"github.com/thewug/fsb/pkg/bot/dialogs"
+	"github.com/thewug/fsb/pkg/botbehavior"
+	"github.com/thewug/fsb/pkg/api"
+	"github.com/thewug/fsb/pkg/api/tagindex"
+	"github.com/thewug/fsb/pkg/api/tags"
+	apitypes "github.com/thewug/fsb/pkg/api/types"
+	"github.com/thewug/fsb/pkg/apiextra"
+	"github.com/thewug/fsb/pkg/storage"
 
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"

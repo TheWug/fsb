@@ -1,9 +1,9 @@
-package bot
+package cmd
 
 import (
-	"storage"
-	"bot/types"
-	"api"
+	"github.com/thewug/fsb/pkg/storage"
+	"github.com/thewug/fsb/pkg/bot/types"
+	"github.com/thewug/fsb/pkg/api"
 
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"

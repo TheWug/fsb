@@ -1,11 +1,13 @@
 package main
 
 import (
-	"bot"
-	"botbehavior"
-	"botbehavior/settings"
-	"fsb/proxify/webm"
-	"storage"
+	"github.com/thewug/fsb/pkg/bot"
+	"github.com/thewug/fsb/pkg/botbehavior"
+	"github.com/thewug/fsb/pkg/botbehavior/settings"
+	"github.com/thewug/fsb/pkg/fsb/proxify/webm"
+	"github.com/thewug/fsb/pkg/storage"
+
+	"github.com/thewug/fsb/cmd"
 
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/persist"
@@ -69,14 +71,14 @@ func main() {
 	p := persist.InitStatePersistence(storage.Db_pool, "state_persistence")
 
 	help := bot.HelpState{StateBase: gogram.StateBase{StateMachine: machine}}
-	start := bot.StartState{StateBase: gogram.StateBase{StateMachine: machine}}
-	settingscmd := bot.SettingsState{StateBase: gogram.StateBase{StateMachine: machine}}
+	start := cmd.StartState{StateBase: gogram.StateBase{StateMachine: machine}}
+	settingscmd := cmd.SettingsState{StateBase: gogram.StateBase{StateMachine: machine}}
 	login := bot.LoginState{StateBase: gogram.StateBase{StateMachine: machine}}
 	janitor := bot.JanitorState{StateBase: gogram.StateBase{StateMachine: machine}}
 	votes := bot.VoteState{StateBase: gogram.StateBase{StateMachine: machine}}
 	tagrules := bot.TagRuleState{StateBase: gogram.StateBase{StateMachine: machine}}
 	operator := bot.OperatorState{StateBase: gogram.StateBase{StateMachine: machine}, Behavior: &behavior}
-	manage := bot.ManageState{StateBase: gogram.StateBase{StateMachine: machine}, Behavior: &behavior}
+	manage := cmd.ManageState{StateBase: gogram.StateBase{StateMachine: machine}, Behavior: &behavior}
 	autofix := bot.AutofixState{StateBase: gogram.StateBase{StateMachine: machine}, Behavior: &behavior}
 	post := bot.PostState{StateBasePersistent: persist.Register(p, machine, "post", bot.PostStateFactory)}
 	edit := bot.EditState{StateBasePersistent: persist.Register(p, machine, "edit", bot.EditStateFactory)}

@@ -3,7 +3,7 @@ package storage
 import (
 	"time"
 
-	"api/tags"
+	"github.com/thewug/fsb/pkg/api/tags"
 
 	"github.com/lib/pq"
 	tgdata "github.com/thewug/gogram/data"

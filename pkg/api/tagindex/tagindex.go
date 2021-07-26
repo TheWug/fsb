@@ -1,12 +1,12 @@
 package tagindex
 
 import (
-	"api"
-	"api/tags"
-	"api/types"
+	"github.com/thewug/fsb/pkg/api"
+	"github.com/thewug/fsb/pkg/api/tags"
+	"github.com/thewug/fsb/pkg/api/types"
 
-	"storage"
-	"wordset"
+	"github.com/thewug/fsb/pkg/storage"
+	"github.com/thewug/fsb/pkg/wordset"
 
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"

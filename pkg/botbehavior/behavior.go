@@ -1,16 +1,16 @@
 package botbehavior
 
 import (
-	"botbehavior/settings"
-	bottypes "bot/types"
-	"api"
-	"api/tags"
-	"api/tagindex"
-	apitypes "api/types"
-	"apiextra"
-	"fsb/errorlog"
-	"fsb/proxify"
-	"storage"
+	"github.com/thewug/fsb/pkg/botbehavior/settings"
+	bottypes "github.com/thewug/fsb/pkg/bot/types"
+	"github.com/thewug/fsb/pkg/api"
+	"github.com/thewug/fsb/pkg/api/tags"
+	"github.com/thewug/fsb/pkg/api/tagindex"
+	apitypes "github.com/thewug/fsb/pkg/api/types"
+	"github.com/thewug/fsb/pkg/apiextra"
+	"github.com/thewug/fsb/pkg/fsb/errorlog"
+	"github.com/thewug/fsb/pkg/fsb/proxify"
+	"github.com/thewug/fsb/pkg/storage"
 
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"

@@ -1,4 +1,4 @@
-package bot
+package cmd
 
 import (
 	"github.com/thewug/gogram"

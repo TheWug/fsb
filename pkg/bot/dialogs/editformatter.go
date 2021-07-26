@@ -1,8 +1,8 @@
 package dialogs
 
 import (
-	"api"
-	"api/tags"
+	"github.com/thewug/fsb/pkg/api"
+	"github.com/thewug/fsb/pkg/api/tags"
 
 	"github.com/thewug/gogram/data"
 

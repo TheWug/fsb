@@ -1,9 +1,9 @@
 package webm
 
 import (
-	"botbehavior/settings"
-	"api/types"
-	"storage"
+	"github.com/thewug/fsb/pkg/botbehavior/settings"
+	"github.com/thewug/fsb/pkg/api/types"
+	"github.com/thewug/fsb/pkg/storage"
 
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"

@@ -1,7 +1,7 @@
 package wizard
 
 import (
-	"api/tags"
+	"github.com/thewug/fsb/pkg/api/tags"
 
 	"github.com/thewug/gogram/data"
 	"github.com/kballard/go-shellquote"

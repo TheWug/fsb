@@ -1,11 +1,11 @@
 package proxify
 
 import (
-	"botbehavior/settings"
-	"api"
-	"api/types"
-	"fsb/proxify/webm"
-	"storage"
+	"github.com/thewug/fsb/pkg/botbehavior/settings"
+	"github.com/thewug/fsb/pkg/api"
+	"github.com/thewug/fsb/pkg/api/types"
+	"github.com/thewug/fsb/pkg/fsb/proxify/webm"
+	"github.com/thewug/fsb/pkg/storage"
 
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"

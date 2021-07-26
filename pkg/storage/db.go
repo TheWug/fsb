@@ -1,8 +1,8 @@
 package storage
 
 import (
-	"api/tags"
-	apitypes "api/types"
+	"github.com/thewug/fsb/pkg/api/tags"
+	apitypes "github.com/thewug/fsb/pkg/api/types"
 
 	_ "github.com/lib/pq"
 	tgtypes "github.com/thewug/gogram/data"

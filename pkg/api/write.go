@@ -1,8 +1,8 @@
 package api
 
 import (
-	"api/tags"
-	"api/types"
+	"github.com/thewug/fsb/pkg/api/tags"
+	"github.com/thewug/fsb/pkg/api/types"
 
 	"github.com/thewug/reqtify"
 

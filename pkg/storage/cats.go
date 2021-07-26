@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"database/sql"
 
-	apitypes "api/types"
+	apitypes "github.com/thewug/fsb/pkg/api/types"
 )
 
 type CatData struct {

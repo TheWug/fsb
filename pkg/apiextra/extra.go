@@ -1,10 +1,10 @@
 package apiextra
 
 import (
-	"storage"
+	"github.com/thewug/fsb/pkg/storage"
 
 	"github.com/thewug/gogram/data"
-	"api/types"
+	"github.com/thewug/fsb/pkg/api/types"
 
 	"regexp"
 	"strconv"

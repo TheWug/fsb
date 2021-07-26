@@ -1,7 +1,7 @@
 package api
 
 import (
-	"api/types"
+	"github.com/thewug/fsb/pkg/api/types"
 
 	"errors"
 	"fmt"

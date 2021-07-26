@@ -1,12 +1,12 @@
 package dialogs
 
 import (
-	"storage"
+	"github.com/thewug/fsb/pkg/storage"
 
-	"api"
-	"api/tags"
-	"api/types"
-	"apiextra"
+	"github.com/thewug/fsb/pkg/api"
+	"github.com/thewug/fsb/pkg/api/tags"
+	"github.com/thewug/fsb/pkg/api/types"
+	"github.com/thewug/fsb/pkg/apiextra"
 
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"

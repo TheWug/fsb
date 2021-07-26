@@ -3,7 +3,7 @@ package storage
 import (
 	"fmt"
 
-	apitypes "api/types"
+	apitypes "github.com/thewug/fsb/pkg/api/types"
 
 	"github.com/thewug/dml"
 )

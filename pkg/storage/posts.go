@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"strings"
 
-	apitypes "api/types"
+	apitypes "github.com/thewug/fsb/pkg/api/types"
 	"github.com/lib/pq"
 
 	"github.com/thewug/dml"

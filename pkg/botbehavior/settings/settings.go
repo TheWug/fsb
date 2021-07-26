@@ -1,7 +1,9 @@
 package settings
 
 import (
-	"storage"
+	"github.com/thewug/fsb/pkg/storage"
+
+	"github.com/thewug/fsb/pkg/api"
 
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"

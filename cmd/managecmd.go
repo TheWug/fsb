@@ -1,7 +1,7 @@
-package bot
+package cmd
 
 import (
-	"botbehavior"
+	"github.com/thewug/fsb/pkg/botbehavior"
 
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"
