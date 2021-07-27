@@ -69,7 +69,7 @@ func TestTagStatus(t *testing.T) {
 
 	for _, x := range pairs {
 		t.Run(x.name, func(t *testing.T) {
-			status := diff.TagStatus(x.find)
+			status := diff.Status(x.find)
 			if status != x.expected {
 				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.expected, status)
 			}
