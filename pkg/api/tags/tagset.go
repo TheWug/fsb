@@ -55,3 +55,7 @@ func (this *TagSet) ApplyDiff(diff TagDiff) {
 		this.Clear(tag)
 	}
 }
+
+func (this *TagSet) Merge(other TagSet) {
+	this.StringSet.Merge(other.StringSet)
+}

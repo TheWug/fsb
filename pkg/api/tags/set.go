@@ -137,3 +137,11 @@ func (this *StringSet) ApplyDiff(diff StringDiff) {
 		this.Clear(tag)
 	}
 }
+
+func (this *StringSet) Merge(other StringSet) {
+	for tag, v := range other.Data {
+		if v {
+			this.Data[tag] = true
+		}
+	}
+}
