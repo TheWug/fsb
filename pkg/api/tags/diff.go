@@ -10,6 +10,7 @@ import (
 type DiffMembership int
 const AddsTag DiffMembership = 1
 const NotPresent DiffMembership = 0
+const ResetsTag DiffMembership = 0
 const RemovesTag DiffMembership = -1
 
 type StringDiff struct {
