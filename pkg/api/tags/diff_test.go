@@ -5,7 +5,7 @@ import (
 	"reflect"
 )
 
-func TestEqual(t *testing.T) {
+func TestStringDiff_Equal(t *testing.T) {
 	var pairs = []struct {
 		name string
 		compares bool
@@ -46,7 +46,7 @@ func TestEqual(t *testing.T) {
 	}
 }
 
-func TestClear(t *testing.T) {
+func TestStringDiff_Clear(t *testing.T) {
 	diff := StringDiff{AddList:map[string]bool{"tag1":true, "tag2":true}, RemoveList:map[string]bool{"tag3":true}}
 	diff.Clear()
 	if !diff.Equal(StringDiff{}) {
@@ -54,7 +54,7 @@ func TestClear(t *testing.T) {
 	}
 }
 
-func TestTagStatus(t *testing.T) {
+func TestStringDiff_Status(t *testing.T) {
 	diff := StringDiff{AddList:map[string]bool{"tag1":true, "tag2":true}, RemoveList:map[string]bool{"tag3":true}}
 
 	var pairs = []struct {
@@ -77,7 +77,7 @@ func TestTagStatus(t *testing.T) {
 	}
 }
 
-func TestAdd(t *testing.T) {
+func TestStringDiff_Add(t *testing.T) {
 	var pairs = []struct {
 		name, add string
 		before, after StringDiff
@@ -106,7 +106,7 @@ func TestAdd(t *testing.T) {
 	}
 }
 
-func TestRemove(t *testing.T) {
+func TestStringDiff_Remove(t *testing.T) {
 	var pairs = []struct {
 		name, remove string
 		before, after StringDiff
@@ -135,7 +135,7 @@ func TestRemove(t *testing.T) {
 	}
 }
 
-func TestReset(t *testing.T) {
+func TestStringDiff_Reset(t *testing.T) {
 	var pairs = []struct {
 		name, reset string
 		before, after StringDiff
@@ -161,7 +161,7 @@ func TestReset(t *testing.T) {
 	}
 }
 
-func TestApply(t *testing.T) {
+func TestStringDiff_Apply(t *testing.T) {
 	var pairs = []struct {
 		name, apply string
 		before, after StringDiff
@@ -190,7 +190,7 @@ func TestApply(t *testing.T) {
 	}
 }
 
-func TestApplyStringWithDelimiter(t *testing.T) {
+func TestStringDiff_ApplyStringWithDelimiter(t *testing.T) {
 	var pairs = []struct {
 		name, apply, delim string
 		before, after StringDiff
@@ -216,7 +216,7 @@ func TestApplyStringWithDelimiter(t *testing.T) {
 	}
 }
 
-func TestApplyArray(t *testing.T) {
+func TestStringDiff_ApplyArray(t *testing.T) {
 	var pairs = []struct {
 		name string
 		apply []string
@@ -240,7 +240,7 @@ func TestApplyArray(t *testing.T) {
 	}
 }
 
-func TestApplyStringsWithDelimiter(t *testing.T) {
+func TestStringDiff_ApplyStringsWithDelimiter(t *testing.T) {
 	var pairs = []struct {
 		name, add, remove, reset, delim string
 		before, after StringDiff
@@ -266,7 +266,7 @@ func TestApplyStringsWithDelimiter(t *testing.T) {
 	}
 }
 
-func TestApplyArrays(t *testing.T) {
+func TestStringDiff_ApplyArrays(t *testing.T) {
 	var pairs = []struct {
 		name string
 		add, remove, reset []string
@@ -290,7 +290,7 @@ func TestApplyArrays(t *testing.T) {
 	}
 }
 
-func TestIsZero(t *testing.T) {
+func TestStringDiff_IsZero(t *testing.T) {
 	var pairs = []struct {
 		name string
 		zero bool
@@ -317,7 +317,7 @@ func TestIsZero(t *testing.T) {
 	}
 }
 
-func TestLen(t *testing.T) {
+func TestStringDiff_Len(t *testing.T) {
 	var pairs = []struct {
 		name string
 		length int
@@ -341,7 +341,7 @@ func TestLen(t *testing.T) {
 	}
 }
 
-func TestStringWithDelimiter(t *testing.T) {
+func TestStringDiff_StringWithDelimiter(t *testing.T) {
 	var pairs = []struct {
 		name, delim, expected string
 		test StringDiff
@@ -366,7 +366,7 @@ func TestStringWithDelimiter(t *testing.T) {
 	}
 }
 
-func TestArray(t *testing.T) {
+func TestStringDiff_Array(t *testing.T) {
 	var pairs = []struct {
 		name string
 		expected []string
@@ -390,7 +390,7 @@ func TestArray(t *testing.T) {
 	}
 }
 
-func TestDifference(t *testing.T) {
+func TestStringDiff_Difference(t *testing.T) {
 	var pairs = []struct {
 		name string
 		first, second, answer StringDiff
@@ -423,7 +423,7 @@ func TestDifference(t *testing.T) {
 	}
 }
 
-func TestUnion(t *testing.T) {
+func TestStringDiff_Union(t *testing.T) {
 	var pairs = []struct {
 		name string
 		first, second, answer StringDiff
@@ -456,7 +456,7 @@ func TestUnion(t *testing.T) {
 	}
 }
 
-func TestInvert(t *testing.T) {
+func TestStringDiff_Invert(t *testing.T) {
 	var pairs = []struct {
 		name string
 		first, answer StringDiff
@@ -479,7 +479,7 @@ func TestInvert(t *testing.T) {
 	}
 }
 
-func TestFlatten(t *testing.T) {
+func TestStringDiff_Flatten(t *testing.T) {
 	var pairs = []struct {
 		name string
 		stack StringDiffArray
@@ -510,7 +510,7 @@ func TestFlatten(t *testing.T) {
 	}
 }
 
-func TestStringDiffFromStringWithDelimiter(t *testing.T) {
+func TestStringDiff_FromStringWithDelimiter(t *testing.T) {
 	var pairs = []struct {
 		name, test, delim string
 		expected StringDiff
@@ -531,7 +531,7 @@ func TestStringDiffFromStringWithDelimiter(t *testing.T) {
 	}
 }
 
-func TestStringDiffFromStringsWithDelimiter(t *testing.T) {
+func TestStringDiff_FromStringsWithDelimiter(t *testing.T) {
 	var pairs = []struct {
 		name string
 		add, remove string
@@ -554,7 +554,7 @@ func TestStringDiffFromStringsWithDelimiter(t *testing.T) {
 	}
 }
 
-func TestStringDiffFromArray(t *testing.T) {
+func TestStringDiff_FromArray(t *testing.T) {
 	var pairs = []struct {
 		name string
 		array []string
@@ -576,7 +576,7 @@ func TestStringDiffFromArray(t *testing.T) {
 	}
 }
 
-func TestStringDiffFromArrays(t *testing.T) {
+func TestStringDiff_FromArrays(t *testing.T) {
 	var pairs = []struct {
 		name string
 		add, remove []string
