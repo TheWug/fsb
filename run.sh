@@ -3,7 +3,7 @@
 # http://stackoverflow.com/questions/59895/can-a-bash-script-tell-which-directory-it-is-stored-in
 cd "$( dirname "${BASH_SOURCE[0]}" )"
 
-if GOROOT= GOPATH=$(pwd) /usr/bin/go install fsb;
+if go build ./daemon/fsb;
 then
 	true;
 else
@@ -14,6 +14,6 @@ fi;
 echo -e "\033[0;32m==========  BUILD SUCCEED!  ===========\033[0m"
 killall fsb 
 
-./bin/fsb "$(echo ~/.fsb.json)" 2> ./err.log &
+./fsb "$(echo ~/.fsb.json)" 2> ./err.log &
 disown
 tail -f knottybot.log err.log
