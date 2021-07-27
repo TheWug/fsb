@@ -105,19 +105,7 @@ func (this *StringSet) ToggleArray(tags []string) {
 // toggles each tag in an array, deselecting them if they are currently selected and vice versa.
 // accepts tags prefixed with either + or -, which overrides toggling behavior (the prefix always signals the end state)
 func (this *StringSet) ToggleStringWithDelimiter(tags, delim string) {
-	for _, t := range strings.Split(tags, delim) {
-		tag := t
-		prefix := ""
-		if strings.HasPrefix(t, "-") || strings.HasPrefix(t, "+") { prefix = t[0:1]; tag = t[1:] }
-
-		if prefix == "-" {
-			this.Clear(tag)
-		} else if prefix == "+" || this.Status(tag) == NotPresent {
-			this.Set(tag)
-		} else {
-			this.Clear(tag)
-		}
-	}
+	this.ToggleArray(strings.Split(tags, delim))
 }
 
 // Emits the string set as a single string with the specified delimiter.
