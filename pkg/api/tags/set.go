@@ -68,7 +68,11 @@ func (this StringSet) Clone() (StringSet) {
 // applies each tag in an array.
 // accepts tags prefixed with -.
 func (this *StringSet) ApplyArray(tags []string) {
-	for _, t := range tags { this.Apply(t) }
+	for _, t := range tags {
+		if t == "" { continue }
+
+		this.Apply(t)
+	}
 }
 
 // applies each token in a string with specified delimiter.
