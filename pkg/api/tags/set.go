@@ -87,7 +87,10 @@ func (this *StringSet) ToggleArray(tags []string) {
 	for _, t := range tags {
 		tag := t
 		prefix := ""
+
 		if strings.HasPrefix(t, "-") || strings.HasPrefix(t, "+") { prefix = t[0:1]; tag = t[1:] }
+
+		if t == "" { continue }
 
 		if prefix == "-" {
 			this.Clear(tag)
