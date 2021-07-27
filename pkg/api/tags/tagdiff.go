@@ -82,13 +82,13 @@ func (this TagDiff) Union(other TagDiff) TagDiff {
 // AddedSet produces an ALIAS to the tags added by this TagDiff.  Changes
 // made to one will reflect upon the other.
 func (this TagDiff) AddedSet() TagSet {
-	return TagSet{StringSet{Data: this.AddList}}
+	return TagSet{this.StringDiff.AddedSet()}
 }
 
 // RemovedSet produces an ALIAS to the tags removed by this TagDiff.  Changes
 // made to one will reflect upon the other.
 func (this TagDiff) RemovedSet() TagSet {
-	return TagSet{StringSet{Data: this.RemoveList}}
+	return TagSet{this.StringDiff.RemovedSet()}
 }
 
 // Flatten sequentially applies every operation from a TagDiffArray as though
