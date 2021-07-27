@@ -14,17 +14,17 @@ func TestTagSetEqual(t *testing.T) {
 			TagSet{},
 			TagSet{}},
 		{"nil to empty", true,
-			TagSet{Tags: map[string]bool{}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{}}},
 			TagSet{}},
 		{"empty to nonempty", false,
 			TagSet{},
-			TagSet{Tags: map[string]bool{"new string":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"new string":true}}}},
 		{"same", true,
-			TagSet{Tags: map[string]bool{"new string":true, "old string":true}},
-			TagSet{Tags: map[string]bool{"old string":true, "new string":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"new string":true, "old string":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"old string":true, "new string":true}}}},
 		{"different", false,
-			TagSet{Tags: map[string]bool{"string 1":true}},
-			TagSet{Tags: map[string]bool{"string 2":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"string 1":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"string 2":true}}}},
 	}
 
 	for _, x := range pairs {
@@ -44,24 +44,24 @@ func TestSetTag(t *testing.T) {
 	}{
 		{"empty with space", "new tag",
 			TagSet{},
-			TagSet{Tags: map[string]bool{"new tag":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"new tag":true}}}},
 		{"empty", "newtag",
 			TagSet{},
-			TagSet{Tags: map[string]bool{"newtag":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"newtag":true}}}},
 		{"prefixed", "-newtag",
 			TagSet{},
-			TagSet{Tags: map[string]bool{"-newtag":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"-newtag":true}}}},
 		{"nonempty", "newtag",
-			TagSet{Tags: map[string]bool{"existing":true}},
-			TagSet{Tags: map[string]bool{"existing":true, "newtag":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"existing":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"existing":true, "newtag":true}}}},
 		{"duplicate", "duplicate",
-			TagSet{Tags: map[string]bool{"duplicate":true}},
-			TagSet{Tags: map[string]bool{"duplicate":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"duplicate":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"duplicate":true}}}},
 	}
 
 	for _, x := range pairs {
 		t.Run(x.name, func(t *testing.T) {
-			x.before.SetTag(x.add)
+			x.before.Set(x.add)
 			if !x.before.Equal(x.after) {
 				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.after, x.before)
 			}
@@ -79,19 +79,19 @@ func TestClearTag(t *testing.T) {
 			TagSet{},
 			TagSet{}},
 		{"applicable", "tag",
-			TagSet{Tags: map[string]bool{"tag":true}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"tag":true}}},
 			TagSet{}},
 		{"not applicable", "tag",
-			TagSet{Tags: map[string]bool{"othertag":true}},
-			TagSet{Tags: map[string]bool{"othertag":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"othertag":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"othertag":true}}}},
 		{"prefixed", "-tag",
-			TagSet{Tags: map[string]bool{"-tag":true}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"-tag":true}}},
 			TagSet{}},
 	}
 
 	for _, x := range pairs {
 		t.Run(x.name, func(t *testing.T) {
-			x.before.ClearTag(x.remove)
+			x.before.Clear(x.remove)
 			if !x.before.Equal(x.after) {
 				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.after, x.before)
 			}
@@ -107,30 +107,30 @@ func TestApplyTag(t *testing.T) {
 	}{
 		{"empty add", "tag",
 			TagSet{},
-			TagSet{Tags: map[string]bool{"tag":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"tag":true}}}},
 		{"empty remove", "-tag",
 			TagSet{},
 			TagSet{}},
 		{"extra add", "tag",
-			TagSet{Tags: map[string]bool{"extra":true}},
-			TagSet{Tags: map[string]bool{"extra":true, "tag":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"extra":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"extra":true, "tag":true}}}},
 		{"extra remove", "-tag",
-			TagSet{Tags: map[string]bool{"extra":true, "tag":true}},
-			TagSet{Tags: map[string]bool{"extra":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"extra":true, "tag":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"extra":true}}}},
 		{"duplicate add", "tag",
-			TagSet{Tags: map[string]bool{"tag":true}},
-			TagSet{Tags: map[string]bool{"tag":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"tag":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"tag":true}}}},
 		{"applicable remove", "-tag",
-			TagSet{Tags: map[string]bool{"tag":true}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"tag":true}}},
 			TagSet{}},
 		{"wildcard remove", "-tag_*",
-			TagSet{Tags: map[string]bool{"tag_a":true, "tag_b":true}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"tag_a":true, "tag_b":true}}},
 			TagSet{}},
 	}
 
 	for _, x := range pairs {
 		t.Run(x.name, func(t *testing.T) {
-			x.before.ApplyTag(x.tag)
+			x.before.Apply(x.tag)
 			if !x.before.Equal(x.after) {
 				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.after, x.before)
 			}
@@ -142,22 +142,22 @@ func TestIsSet(t *testing.T) {
 	var pairs = []struct {
 		name string
 		tag string
-		expected bool
+		expected DiffMembership
 		set TagSet
 	}{
-		{"empty", "tag", false,
+		{"empty", "tag", NotPresent,
 			TagSet{}},
-		{"nonmember", "tag", false,
-			TagSet{Tags: map[string]bool{"other":true}}},
-		{"member", "tag", true,
-			TagSet{Tags: map[string]bool{"tag":true}}},
+		{"nonmember", "tag", NotPresent,
+			TagSet{StringSet: StringSet{Data: map[string]bool{"other":true}}}},
+		{"member", "tag", AddsTag,
+			TagSet{StringSet: StringSet{Data: map[string]bool{"tag":true}}}},
 	}
 
 	for _, x := range pairs {
 		t.Run(x.name, func(t *testing.T) {
-			has := x.set.IsSet(x.tag)
+			has := x.set.Status(x.tag)
 			if has != x.expected {
-				t.Errorf("\nExpected: %t\nActual:   %t\n", x.expected, has)
+				t.Errorf("\nExpected: %d\nActual:   %d\n", x.expected, has)
 			}
 		})
 	}
@@ -166,23 +166,23 @@ func TestIsSet(t *testing.T) {
 func TestMergeTags(t *testing.T) {
 	var pairs = []struct {
 		name string
-		merge []string
+		merge TagSet
 		start, end TagSet
 	}{
-		{"empty", []string{},
+		{"empty", TagSet{},
 			TagSet{},
 			TagSet{}},
-		{"identity", []string{"member"},
-			TagSet{Tags: map[string]bool{"member":true}},
-			TagSet{Tags: map[string]bool{"member":true}}},
-		{"normal", []string{"bar", "-foo", "derp"},
-			TagSet{Tags: map[string]bool{"foo":true}},
-			TagSet{Tags: map[string]bool{"derp":true, "bar":true}}},
+		{"identity", TagSet{StringSet: StringSet{Data: map[string]bool{"member":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"member":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"member":true}}}},
+		{"normal", TagSet{StringSet: StringSet{Data: map[string]bool{"bar":true, "no":false}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"foo":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"foo":true, "bar":true}}}},
 	}
 
 	for _, x := range pairs {
 		t.Run(x.name, func(t *testing.T) {
-			x.start.MergeTags(x.merge)
+			x.start.Merge(x.merge)
 			if !x.start.Equal(x.end) {
 				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.end, x.start)
 			}
@@ -200,32 +200,32 @@ func TestToggleTags(t *testing.T) {
 			TagSet{},
 			TagSet{}},
 		{"identity", []string{},
-			TagSet{Tags: map[string]bool{"foo":true}},
-			TagSet{Tags: map[string]bool{"foo":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"foo":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"foo":true}}}},
 		{"on", []string{"new"},
-			TagSet{Tags: map[string]bool{"member":true}},
-			TagSet{Tags: map[string]bool{"member":true, "new":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"member":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"member":true, "new":true}}}},
 		{"off", []string{"old"},
-			TagSet{Tags: map[string]bool{"member":true, "old":true}},
-			TagSet{Tags: map[string]bool{"member":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"member":true, "old":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"member":true}}}},
 		{"plus present", []string{"+member"},
-			TagSet{Tags: map[string]bool{"member":true, "old":true}},
-			TagSet{Tags: map[string]bool{"member":true, "old":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"member":true, "old":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"member":true, "old":true}}}},
 		{"plus missing", []string{"+member"},
-			TagSet{Tags: map[string]bool{"old":true}},
-			TagSet{Tags: map[string]bool{"old":true, "member":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"old":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"old":true, "member":true}}}},
 		{"minus present", []string{"-member"},
-			TagSet{Tags: map[string]bool{"member":true, "old":true}},
-			TagSet{Tags: map[string]bool{"old":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"member":true, "old":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"old":true}}}},
 		{"minus missing", []string{"-member"},
-			TagSet{Tags: map[string]bool{"old":true}},
-			TagSet{Tags: map[string]bool{"old":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"old":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"old":true}}}},
 		
 	}
 
 	for _, x := range pairs {
 		t.Run(x.name, func(t *testing.T) {
-			x.start.ToggleTags(x.toggle)
+			x.start.ToggleArray(x.toggle)
 			if !x.start.Equal(x.end) {
 				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.end, x.start)
 			}
@@ -241,9 +241,9 @@ func TestTagSetString(t *testing.T) {
 		{"empty", "",
 			TagSet{}},
 		{"weird", "+foo -bar",
-			TagSet{Tags: map[string]bool{"+foo":true, "-bar":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"+foo":true, "-bar":true}}}},
 		{"normal", "bar foo",
-			TagSet{Tags: map[string]bool{"foo":true, "bar":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"foo":true, "bar":true}}}},
 		
 	}
 
@@ -266,7 +266,7 @@ func TestTagSetLen(t *testing.T) {
 		{"empty", 0,
 			TagSet{}},
 		{"4", 4,
-			TagSet{Tags: map[string]bool{"a":true, "aa":true, "aaa":true, "aaaa":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"a":true, "aa":true, "aaa":true, "aaaa":true}}}},
 	}
 
 	for _, x := range pairs {
@@ -280,7 +280,7 @@ func TestTagSetLen(t *testing.T) {
 }
 
 func TestTagSetReset(t *testing.T) {
-	set := TagSet{Tags: map[string]bool{"foobar":true}}
+	set := TagSet{StringSet: StringSet{Data: map[string]bool{"foobar":true}}}
 	set.Reset()
 	if !set.Equal(TagSet{}) {
 		t.Errorf("\nExpected: %+v\nActual:   %+v\n", TagSet{}, set)
@@ -295,15 +295,15 @@ func TestRating(t *testing.T) {
 		{"empty", "",
 			TagSet{}},
 		{"no rating", "",
-			TagSet{Tags: map[string]bool{"a":true, "foo":true, "bar":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"a":true, "foo":true, "bar":true}}}},
 		{"s", "safe",
-			TagSet{Tags: map[string]bool{"rating:safe":true, "foo":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"rating:safe":true, "foo":true}}}},
 		{"q", "questionable",
-			TagSet{Tags: map[string]bool{"bar":true, "rating:q":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"bar":true, "rating:q":true}}}},
 		{"e", "explicit",
-			TagSet{Tags: map[string]bool{"rating:enormouspenis":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"rating:enormouspenis":true}}}},
 		{"overload", "explicit",
-			TagSet{Tags: map[string]bool{"rating:E":true, "rating:quonk":true, "rating:silly":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"rating:E":true, "rating:quonk":true, "rating:silly":true}}}},
 	}
 
 	for _, x := range pairs {
@@ -328,17 +328,17 @@ func TestApplyDiff(t *testing.T) {
 			TagDiff{},
 			TagSet{}},
 		{"identity",
-			TagSet{Tags: map[string]bool{"foo":true, "bar":true}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"foo":true, "bar":true}}},
 			TagDiff{},
-			TagSet{Tags: map[string]bool{"foo":true, "bar":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"foo":true, "bar":true}}}},
 		{"mixed remove",
-			TagSet{Tags: map[string]bool{"foo":true, "bar":true}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"foo":true, "bar":true}}},
 			TagDiff{StringDiff: StringDiff{RemoveList: map[string]bool{"bar":true, "baz":true}}},
-			TagSet{Tags: map[string]bool{"foo":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"foo":true}}}},
 		{"mixed add",
-			TagSet{Tags: map[string]bool{"foo":true, "bar":true}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"foo":true, "bar":true}}},
 			TagDiff{StringDiff: StringDiff{AddList: map[string]bool{"bar":true, "baz":true}}},
-			TagSet{Tags: map[string]bool{"foo":true, "bar":true, "baz":true}}},
+			TagSet{StringSet: StringSet{Data: map[string]bool{"foo":true, "bar":true, "baz":true}}}},
 	}
 
 	for _, x := range pairs {
