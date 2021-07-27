@@ -4,7 +4,25 @@ import (
 	"testing"
 )
 
-func TestTagSet_Equal(t *testing.T) {
+func TestTagSet(t *testing.T) {
+	t.Run("Equal", Equal)
+	t.Run("Set", Set)
+	t.Run("Clear", Clear)
+	t.Run("Apply", Apply)
+	t.Run("Status", Status)
+	t.Run("Merge", Merge)
+	t.Run("ToggleArray", ToggleArray)
+	t.Run("String", String)
+	t.Run("Len", Len)
+	t.Run("Reset", Reset)
+	t.Run("Rating", Rating)
+	t.Run("ApplyDiff", ApplyDiff)
+	t.Run("Clone", Clone)
+	t.Run("ToggleString", ToggleString)
+	t.Run("ApplyString", ApplyString)
+}
+
+func Equal(t *testing.T) {
 	var pairs = []struct {
 		name string
 		expected bool
@@ -36,7 +54,7 @@ func TestTagSet_Equal(t *testing.T) {
 	}
 }
 
-func TestTagSet_Set(t *testing.T) {
+func Set(t *testing.T) {
 	var pairs = []struct {
 		name string
 		add string
@@ -69,7 +87,7 @@ func TestTagSet_Set(t *testing.T) {
 	}
 }
 
-func TestTagSet_Clear(t *testing.T) {
+func Clear(t *testing.T) {
 	var pairs = []struct {
 		name string
 		remove string
@@ -99,7 +117,7 @@ func TestTagSet_Clear(t *testing.T) {
 	}
 }
 
-func TestTagSet_Apply(t *testing.T) {
+func Apply(t *testing.T) {
 	var pairs = []struct {
 		name string
 		tag string
@@ -138,7 +156,7 @@ func TestTagSet_Apply(t *testing.T) {
 	}
 }
 
-func TestTagSet_Status(t *testing.T) {
+func Status(t *testing.T) {
 	var pairs = []struct {
 		name string
 		tag string
@@ -163,7 +181,7 @@ func TestTagSet_Status(t *testing.T) {
 	}
 }
 
-func TestTagSet_Merge(t *testing.T) {
+func Merge(t *testing.T) {
 	var pairs = []struct {
 		name string
 		merge TagSet
@@ -190,7 +208,7 @@ func TestTagSet_Merge(t *testing.T) {
 	}
 }
 
-func TestTagSet_ToggleArray(t *testing.T) {
+func ToggleArray(t *testing.T) {
 	var pairs = []struct {
 		name string
 		toggle []string
@@ -233,7 +251,7 @@ func TestTagSet_ToggleArray(t *testing.T) {
 	}
 }
 
-func TestTagSet_String(t *testing.T) {
+func String(t *testing.T) {
 	var pairs = []struct {
 		name, expected string
 		start TagSet
@@ -257,7 +275,7 @@ func TestTagSet_String(t *testing.T) {
 	}
 }
 
-func TestTagSet_Len(t *testing.T) {
+func Len(t *testing.T) {
 	var pairs = []struct {
 		name string
 		count int
@@ -279,7 +297,7 @@ func TestTagSet_Len(t *testing.T) {
 	}
 }
 
-func TestTagSet_Reset(t *testing.T) {
+func Reset(t *testing.T) {
 	set := TagSet{StringSet: StringSet{Data: map[string]bool{"foobar":true}}}
 	set.Reset()
 	if !set.Equal(TagSet{}) {
@@ -287,7 +305,7 @@ func TestTagSet_Reset(t *testing.T) {
 	}
 }
 
-func TestTagSet_Rating(t *testing.T) {
+func Rating(t *testing.T) {
 	var pairs = []struct {
 		name, rating string
 		value TagSet
@@ -316,7 +334,7 @@ func TestTagSet_Rating(t *testing.T) {
 	}
 }
 
-func TestTagSet_ApplyDiff(t *testing.T) {
+func ApplyDiff(t *testing.T) {
 	var pairs = []struct {
 		name string
 		in TagSet
@@ -351,7 +369,7 @@ func TestTagSet_ApplyDiff(t *testing.T) {
 	}
 }
 
-func TestTagSet_Clone(t *testing.T) {
+func Clone(t *testing.T) {
 	testcases := map[string]struct{
 		in TagSet
 	}{
@@ -368,6 +386,48 @@ func TestTagSet_Clone(t *testing.T) {
 			out.Set("previously-unset")
 			if v.in.Equal(out) {
 				t.Errorf("Clone performed a shallow copy!")
+			}
+		})
+	}
+}
+
+func ToggleString(t *testing.T) {
+	testcases := map[string]struct{
+		in TagSet
+		out TagSet
+		toggle string
+	}{
+		"empty":  {},
+		"simple 1":  {TagSet{StringSet{nil}}, TagSet{StringSet{map[string]bool{"foo":true, "baz":true}}}, "foo -bar +baz"},
+		"simple 2":  {TagSet{StringSet{map[string]bool{"foo":true, "baz":true, "bar":true}}}, TagSet{StringSet{map[string]bool{"baz":true}}}, "foo -bar +baz"},
+	}
+
+	for k, v := range testcases {
+		t.Run(k, func(t *testing.T) {
+			v.in.ToggleString(v.toggle)
+			if !v.in.Equal(v.out) {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", v.out, v.in)
+			}
+		})
+	}
+}
+
+func ApplyString(t *testing.T) {
+	testcases := map[string]struct{
+		in TagSet
+		out TagSet
+		toggle string
+	}{
+		"empty":  {},
+		"simple 1":  {TagSet{StringSet{nil}}, TagSet{StringSet{map[string]bool{"foo":true, "baz":true}}}, "foo -bar baz"},
+		"simple 2":  {TagSet{StringSet{map[string]bool{"foo":true, "baz":true, "bar":true}}}, TagSet{StringSet{map[string]bool{"foo":true, "baz":true}}}, "foo -bar baz"},
+	}
+
+	for k, v := range testcases {
+		t.Run(k, func(t *testing.T) {
+			v.in.ApplyString(v.toggle)
+			if !v.in.Equal(v.out) {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", v.out, v.in)
 			}
 		})
 	}

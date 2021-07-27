@@ -73,6 +73,7 @@ func TestTagDiff(t *testing.T) {
 	t.Run("Union", Union)
 	t.Run("Invert", Invert)
 	t.Run("Flatten", Flatten)
+	t.Run("AddedSet", AddedRemovedSet)
 }
 
 func Difference(t *testing.T) {
@@ -195,7 +196,28 @@ func Flatten(t *testing.T) {
 	}
 }
 
-func TestTagDiffFromString(t *testing.T) {
+func AddedRemovedSet(t *testing.T) {
+	testcases := map[string]struct {
+		diff TagDiff
+		added, removed TagSet
+	}{
+		"normal": {TagDiff{StringDiff: StringDiff{AddList:map[string]bool{"foo":true, "bar":true}, RemoveList:map[string]bool{"minus":true, "exclude":true}}},
+				TagSet{StringSet: StringSet{Data:map[string]bool{"foo":true, "bar":true}}},
+				TagSet{StringSet: StringSet{Data:map[string]bool{"minus":true, "exclude":true}}}},
+	}
+
+	for k, v := range testcases {
+		t.Run(k, func(t *testing.T) {
+			added := v.diff.AddedSet()
+			removed := v.diff.RemovedSet()
+
+			if !added.Equal(v.added) { t.Errorf("Expected: %+v\nActual: %+v\n", v.added, added) }
+			if !removed.Equal(v.removed) { t.Errorf("Expected: %+v\nActual: %+v\n", v.removed, removed) }
+		})
+	}
+}
+
+func TestTagDiff_FromString(t *testing.T) {
 	var pairs = []struct {
 		name, test string
 		expected TagDiff
@@ -216,7 +238,7 @@ func TestTagDiffFromString(t *testing.T) {
 	}
 }
 
-func TestTagDiffFromStrings(t *testing.T) {
+func TestTagDiff_FromStrings(t *testing.T) {
 	var pairs = []struct {
 		name string
 		add, remove string
@@ -238,7 +260,7 @@ func TestTagDiffFromStrings(t *testing.T) {
 	}
 }
 
-func TestTagDiffFromStringWithDelimiter(t *testing.T) {
+func TestTagDiff_FromStringWithDelimiter(t *testing.T) {
 	var pairs = []struct {
 		name, test, delim string
 		expected TagDiff
@@ -259,7 +281,7 @@ func TestTagDiffFromStringWithDelimiter(t *testing.T) {
 	}
 }
 
-func TestTagDiffFromStringsWithDelimiter(t *testing.T) {
+func TestTagDiff_FromStringsWithDelimiter(t *testing.T) {
 	var pairs = []struct {
 		name string
 		add, remove string
@@ -282,7 +304,7 @@ func TestTagDiffFromStringsWithDelimiter(t *testing.T) {
 	}
 }
 
-func TestTagDiffFromArray(t *testing.T) {
+func TestTagDiff_FromArray(t *testing.T) {
 	var pairs = []struct {
 		name string
 		array []string
@@ -304,7 +326,7 @@ func TestTagDiffFromArray(t *testing.T) {
 	}
 }
 
-func TestTagDiffFromArrays(t *testing.T) {
+func TestTagDiff_FromArrays(t *testing.T) {
 	var pairs = []struct {
 		name string
 		add, remove []string
@@ -322,27 +344,6 @@ func TestTagDiffFromArrays(t *testing.T) {
 			if !diff.Equal(x.expected) {
 				t.Errorf("\nExpected: %+v\nActual:   %+v\n", x.expected, diff)
 			}
-		})
-	}
-}
-
-func TestTagDiffAddedRemovedSet(t *testing.T) {
-	testcases := map[string]struct {
-		diff TagDiff
-		added, removed TagSet
-	}{
-		"normal": {TagDiff{StringDiff: StringDiff{AddList:map[string]bool{"foo":true, "bar":true}, RemoveList:map[string]bool{"minus":true, "exclude":true}}},
-				TagSet{StringSet: StringSet{Data:map[string]bool{"foo":true, "bar":true}}},
-				TagSet{StringSet: StringSet{Data:map[string]bool{"minus":true, "exclude":true}}}},
-	}
-
-	for k, v := range testcases {
-		t.Run(k, func(t *testing.T) {
-			added := v.diff.AddedSet()
-			removed := v.diff.RemovedSet()
-
-			if !added.Equal(v.added) { t.Errorf("Expected: %+v\nActual: %+v\n", v.added, added) }
-			if !removed.Equal(v.removed) { t.Errorf("Expected: %+v\nActual: %+v\n", v.removed, removed) }
 		})
 	}
 }
