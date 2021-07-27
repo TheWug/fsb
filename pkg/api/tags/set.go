@@ -78,7 +78,7 @@ func (this *StringSet) ApplyArray(tags []string) {
 // applies each token in a string with specified delimiter.
 // accepts strings prefixed with -.
 func (this *StringSet) ApplyStringWithDelimiter(tags, delim string) {
-	for _, t := range strings.Split(tags, delim) { this.Apply(t) }
+	this.ApplyArray(strings.Split(tags, delim))
 }
 
 // toggles each tag in an array, deselecting them if they are currently selected and vice versa.
