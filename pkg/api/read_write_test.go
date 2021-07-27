@@ -12,10 +12,12 @@ import (
 	"sync"
 	"net/http"
 	"net/url"
-	"api/types"
 	"reflect"
 	"io/ioutil"
 	"errors"
+
+	"github.com/thewug/fsb/pkg/api/types"
+	"github.com/thewug/fsb/pkg/api/tags"
 )
 
 var apiMock *mock.ReqtifierMock
@@ -175,6 +177,7 @@ func TestTestLogin(t *testing.T) {
 		expectedRequest reqtify.RequestImpl
 		expectedOutput bool
 		expectedError error
+		expectedSelf *types.TUserInfo
 	}{
 		{"Snergal", "testpassword",
 			http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`[{"id":292290,"name":"Snergal","email":"this is an email"}]`))},
@@ -184,7 +187,8 @@ func TestTestLogin(t *testing.T) {
 				BasicUser: "Snergal", BasicPassword: "testpassword",
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
 			true,
-			nil},
+			nil,
+			&types.TUserInfo{Id: 292290, Name: "Snergal", Email: "this is an email"}},
 		{"Snergal", "testpassword",
 			http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`[{"id":292290,"name":"Snergal","email":"this is an email"}]`))},
 			errors.New("endpoint failed"),
@@ -193,7 +197,8 @@ func TestTestLogin(t *testing.T) {
 				BasicUser: "Snergal", BasicPassword: "testpassword",
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
 			false,
-			errors.New("endpoint failed")},
+			errors.New("endpoint failed"),
+			nil},
 		{"Snergal", "testpassword",
 			http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`[]`))},
 			nil,
@@ -202,6 +207,7 @@ func TestTestLogin(t *testing.T) {
 				BasicUser: "Snergal", BasicPassword: "testpassword",
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
 			false,
+			nil,
 			nil},
 		{"Snergal", "testpassword",
 			http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`[{"id":292290,"name":"Snergal"}]`))},
@@ -211,7 +217,8 @@ func TestTestLogin(t *testing.T) {
 				BasicUser: "Snergal", BasicPassword: "testpassword",
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
 			false,
-			nil},
+			nil,
+			&types.TUserInfo{Id: 292290, Name: "Snergal"}},
 		{"Snergal", "testpassword",
 			http.Response{Status: "401 Testing", StatusCode: 401, Body: ioutil.NopCloser(strings.NewReader(`[{"id":292290,"name":"Snerg","email":"this is an email"}]`))},
 			nil,
@@ -220,7 +227,8 @@ func TestTestLogin(t *testing.T) {
 				BasicUser: "Snergal", BasicPassword: "testpassword",
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
 			false,
-			errors.New("Got non-matching user?")},
+			errors.New("Got non-matching user?"),
+			nil},
 		{"Snergal", "testpassword",
 			http.Response{Status: "401 Testing", StatusCode: 401, Body: ioutil.NopCloser(strings.NewReader(`[{"id":292290,"name":"Snergal","email":"this is an email"}, {"id":292291,"name":"Snergle"}]`))},
 			nil,
@@ -229,7 +237,8 @@ func TestTestLogin(t *testing.T) {
 				BasicUser: "Snergal", BasicPassword: "testpassword",
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
 			false,
-			errors.New("Got wrong number of users?")},
+			errors.New("Got wrong number of users?"),
+			nil},
 		{"Snergal", "testpassword",
 			http.Response{Status: "401 Testing", StatusCode: 401, Body: ioutil.NopCloser(strings.NewReader(`{"success": false,"message": "SessionLoader::AuthenticationFailure","code": null}`))},
 			nil,
@@ -238,16 +247,18 @@ func TestTestLogin(t *testing.T) {
 				BasicUser: "Snergal", BasicPassword: "testpassword",
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
 			false,
+			nil,
 			nil},
 	}
 
 	for _, x := range tuples {
 		var loggedIn bool
 		var err error
+		var self *types.TUserInfo
 
 		wg.Add(1)
 		go func() {
-			loggedIn, err = TestLogin(x.user, x.apikey)
+			self, loggedIn, err = TestLogin(x.user, x.apikey)
 			wg.Done()
 		}()
 
@@ -261,11 +272,14 @@ func TestTestLogin(t *testing.T) {
 		}
 
 		wg.Wait()
+		if !reflect.DeepEqual(err, x.expectedError) {
+			t.Errorf("Discrepancy in error!\nActual: %+v\nExpected: %+v\n", err, x.expectedError)
+		}
 		if loggedIn != x.expectedOutput {
 			t.Errorf("Discrepancy in loggedIn!\nActual: %+v\nExpected: %+v\n", loggedIn, x.expectedOutput)
 		}
-		if !reflect.DeepEqual(err, x.expectedError) {
-			t.Errorf("Discrepancy in error!\nActual: %+v\nExpected: %+v\n", err, x.expectedError)
+		if !reflect.DeepEqual(self, x.expectedSelf) {
+			t.Errorf("Discrepancy in self!\nActual: %+v\nExpected: %+v\n", self, x.expectedSelf)
 		}
 	}
 }
@@ -624,7 +638,9 @@ func TestUploadFile(t *testing.T) {
 
 	var tuples = []struct{
 		file_data io.Reader
-		upload_url, tags, rating, source, description string
+		upload_url string
+		tags tags.TagSet
+		rating, source, description string
 		parent *int
 		user, apikey string
 		response *http.Response
@@ -633,44 +649,44 @@ func TestUploadFile(t *testing.T) {
 		expectedOutput *UploadCallResult
 		expectedError error
 	}{
-		{strings.NewReader("file data"), "", "foo bar", "e", "source", "description", nil,
+		{strings.NewReader("file data"), "", tags.TagSet{tags.StringSet{map[string]bool{"afoo":true, "bar":true}}}, "e", "source", "description", nil,
 			"testuser", "testpassword",
 			&http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"success":true,"location":"url"}`))},
 			nil,
 			reqtify.RequestImpl{URLPath: "/uploads.json", Verb: reqtify.POST,
 				BasicUser: "testuser", BasicPassword: "testpassword",
-				FormParams: url.Values{"upload[source]":[]string{"source"}, "upload[description]":[]string{"description"}, "upload[tag_string]":[]string{"foo bar"}, "upload[rating]":[]string{"e"}},
+				FormParams: url.Values{"upload[source]":[]string{"source"}, "upload[description]":[]string{"description"}, "upload[tag_string]":[]string{"afoo bar"}, "upload[rating]":[]string{"e"}},
 				FormFiles: map[string][]reqtify.FormFile{"upload[file]": []reqtify.FormFile{reqtify.FormFile{Name: "post.file", Data: strings.NewReader("file data")}}},
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
 			&UploadCallResult{Success: true, Location: sptr("url"), Status: "200 Testing", StatusCode: 200},
 			nil},
-		{nil, "upload from url", "foo bar", "e", "source", "description", new(int),
+		{nil, "upload from url", tags.TagSet{tags.StringSet{map[string]bool{"afoo":true, "bar":true}}}, "e", "source", "description", new(int),
 			"testuser", "testpassword",
 			&http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"success":true,"location":"url"}`))},
 			nil,
 			reqtify.RequestImpl{URLPath: "/uploads.json", Verb: reqtify.POST,
 				BasicUser: "testuser", BasicPassword: "testpassword",
-				FormParams: url.Values{"upload[source]":[]string{"source"}, "upload[direct_url]":[]string{"upload from url"}, "upload[description]":[]string{"description"}, "upload[tag_string]":[]string{"foo bar"}, "upload[rating]":[]string{"e"}, "upload[parent_id]":[]string{"0"}},
+				FormParams: url.Values{"upload[source]":[]string{"source"}, "upload[direct_url]":[]string{"upload from url"}, "upload[description]":[]string{"description"}, "upload[tag_string]":[]string{"afoo bar"}, "upload[rating]":[]string{"e"}, "upload[parent_id]":[]string{"0"}},
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
 			&UploadCallResult{Success: true, Location: sptr("url"), Status: "200 Testing", StatusCode: 200},
 			nil},
-		{nil, "upload from url", "foo bar", "e", "source", "description", new(int),
+		{nil, "upload from url", tags.TagSet{tags.StringSet{map[string]bool{"afoo":true, "bar":true}}}, "e", "source", "description", new(int),
 			"testuser", "testpassword",
 			nil,
 			errors.New("failure"),
 			reqtify.RequestImpl{URLPath: "/uploads.json", Verb: reqtify.POST,
 				BasicUser: "testuser", BasicPassword: "testpassword",
-				FormParams: url.Values{"upload[source]":[]string{"source"}, "upload[direct_url]":[]string{"upload from url"}, "upload[description]":[]string{"description"}, "upload[tag_string]":[]string{"foo bar"}, "upload[rating]":[]string{"e"}, "upload[parent_id]":[]string{"0"}},
+				FormParams: url.Values{"upload[source]":[]string{"source"}, "upload[direct_url]":[]string{"upload from url"}, "upload[description]":[]string{"description"}, "upload[tag_string]":[]string{"afoo bar"}, "upload[rating]":[]string{"e"}, "upload[parent_id]":[]string{"0"}},
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
 			&UploadCallResult{},
 			errors.New("failure")},
-		{nil, "upload from url", "foo bar", "e", "source", "description", new(int),
+		{nil, "upload from url", tags.TagSet{tags.StringSet{map[string]bool{"afoo":true, "bar":true}}}, "e", "source", "description", new(int),
 			"testuser", "testpassword",
 			&http.Response{Status: "401 Testing", StatusCode: 401, Body: ioutil.NopCloser(strings.NewReader(`{"success":false,"reason":"fail"}`))},
 			nil,
 			reqtify.RequestImpl{URLPath: "/uploads.json", Verb: reqtify.POST,
 				BasicUser: "testuser", BasicPassword: "testpassword",
-				FormParams: url.Values{"upload[source]":[]string{"source"}, "upload[direct_url]":[]string{"upload from url"}, "upload[description]":[]string{"description"}, "upload[tag_string]":[]string{"foo bar"}, "upload[rating]":[]string{"e"}, "upload[parent_id]":[]string{"0"}},
+				FormParams: url.Values{"upload[source]":[]string{"source"}, "upload[direct_url]":[]string{"upload from url"}, "upload[description]":[]string{"description"}, "upload[tag_string]":[]string{"afoo bar"}, "upload[rating]":[]string{"e"}, "upload[parent_id]":[]string{"0"}},
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
 			&UploadCallResult{Success: false, Reason: sptr("fail"), Status: "401 Testing", StatusCode: 401},
 			nil},
