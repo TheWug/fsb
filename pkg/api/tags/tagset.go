@@ -48,12 +48,7 @@ func (this *TagSet) Rating() (string) {
 
 // apply a tag diff to the tag set.
 func (this *TagSet) ApplyDiff(diff TagDiff) {
-	for tag, _ := range diff.AddList {
-		this.Set(tag)
-	}
-	for tag, _ := range diff.RemoveList {
-		this.Clear(tag)
-	}
+	this.StringSet.ApplyDiff(diff.StringDiff)
 }
 
 func (this *TagSet) Merge(other TagSet) {
