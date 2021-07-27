@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestWildcardMatch(t *testing.T) {
+func Test_WildcardMatch(t *testing.T) {
 	var pairs = []struct{
 		wildcard, test string
 		shouldMatch bool
@@ -16,6 +16,7 @@ func TestWildcardMatch(t *testing.T) {
 		{"middle_*_match", "middle_asdf_badend", false},
 		{"middle_*_match", "middle_asdf_match_but_theres_more", false},
 		{"exact_match", "exact_match", true},
+		{"beginning_match", "non_beginning_match", false},
 	}
 
 	for _, x := range pairs {
