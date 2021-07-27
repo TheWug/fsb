@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestTagSetEqual(t *testing.T) {
+func TestTagSet_Equal(t *testing.T) {
 	var pairs = []struct {
 		name string
 		expected bool
@@ -36,7 +36,7 @@ func TestTagSetEqual(t *testing.T) {
 	}
 }
 
-func TestSetTag(t *testing.T) {
+func TestTagSet_Set(t *testing.T) {
 	var pairs = []struct {
 		name string
 		add string
@@ -69,7 +69,7 @@ func TestSetTag(t *testing.T) {
 	}
 }
 
-func TestClearTag(t *testing.T) {
+func TestTagSet_Clear(t *testing.T) {
 	var pairs = []struct {
 		name string
 		remove string
@@ -99,7 +99,7 @@ func TestClearTag(t *testing.T) {
 	}
 }
 
-func TestApplyTag(t *testing.T) {
+func TestTagSet_Apply(t *testing.T) {
 	var pairs = []struct {
 		name string
 		tag string
@@ -138,7 +138,7 @@ func TestApplyTag(t *testing.T) {
 	}
 }
 
-func TestIsSet(t *testing.T) {
+func TestTagSet_Status(t *testing.T) {
 	var pairs = []struct {
 		name string
 		tag string
@@ -163,7 +163,7 @@ func TestIsSet(t *testing.T) {
 	}
 }
 
-func TestMergeTags(t *testing.T) {
+func TestTagSet_Merge(t *testing.T) {
 	var pairs = []struct {
 		name string
 		merge TagSet
@@ -190,7 +190,7 @@ func TestMergeTags(t *testing.T) {
 	}
 }
 
-func TestToggleTags(t *testing.T) {
+func TestTagSet_ToggleArray(t *testing.T) {
 	var pairs = []struct {
 		name string
 		toggle []string
@@ -233,7 +233,7 @@ func TestToggleTags(t *testing.T) {
 	}
 }
 
-func TestTagSetString(t *testing.T) {
+func TestTagSet_String(t *testing.T) {
 	var pairs = []struct {
 		name, expected string
 		start TagSet
@@ -257,7 +257,7 @@ func TestTagSetString(t *testing.T) {
 	}
 }
 
-func TestTagSetLen(t *testing.T) {
+func TestTagSet_Len(t *testing.T) {
 	var pairs = []struct {
 		name string
 		count int
@@ -279,7 +279,7 @@ func TestTagSetLen(t *testing.T) {
 	}
 }
 
-func TestTagSetReset(t *testing.T) {
+func TestTagSet_Reset(t *testing.T) {
 	set := TagSet{StringSet: StringSet{Data: map[string]bool{"foobar":true}}}
 	set.Reset()
 	if !set.Equal(TagSet{}) {
@@ -287,7 +287,7 @@ func TestTagSetReset(t *testing.T) {
 	}
 }
 
-func TestRating(t *testing.T) {
+func TestTagSet_Rating(t *testing.T) {
 	var pairs = []struct {
 		name, rating string
 		value TagSet
@@ -316,7 +316,7 @@ func TestRating(t *testing.T) {
 	}
 }
 
-func TestApplyDiff(t *testing.T) {
+func TestTagSet_ApplyDiff(t *testing.T) {
 	var pairs = []struct {
 		name string
 		in TagSet
