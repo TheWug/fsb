@@ -350,3 +350,25 @@ func TestApplyDiff(t *testing.T) {
 		})
 	}
 }
+
+func TestTagSet_Clone(t *testing.T) {
+	testcases := map[string]struct{
+		in TagSet
+	}{
+		"empty":  {},
+		"normal": {TagSet{StringSet{Data: map[string]bool{"foo":true, "bar":true}}}},
+	}
+
+	for k, v := range testcases {
+		t.Run(k, func(t *testing.T) {
+			out := v.in.Clone()
+			if !v.in.Equal(out) {
+				t.Errorf("\nExpected: %+v\nActual:   %+v\n", out, v.in)
+			}
+			out.Set("previously-unset")
+			if v.in.Equal(out) {
+				t.Errorf("Clone performed a shallow copy!")
+			}
+		})
+	}
+}
