@@ -63,3 +63,34 @@ func Test_SanitizeRatingForEdit(t *testing.T) {
 		})
 	}
 }
+
+func Test_LocationToURLWithRating(t *testing.T) {
+	testcases := map[string]struct{
+		inputLocation string
+		inputRating types.PostRating
+		outputLinkWithRating string
+		outputLinkWithoutRating string
+	}{
+		"safe": {"/posts/123456", types.Safe, "https://" + Endpoint + "/posts/123456", "https://" + FilteredEndpoint + "/posts/123456"},
+		"questionable": {"/posts/123456", types.Questionable, "https://" + Endpoint + "/posts/123456", "https://" + FilteredEndpoint + "/posts/123456"},
+		"explicit": {"/posts/123456", types.Explicit, "https://" + Endpoint + "/posts/123456", "https://" + FilteredEndpoint + "/posts/123456"},
+	}
+
+	t.Run("LocationToURL", func(t *testing.T) {
+		for k, v := range testcases {
+			t.Run(k, func(t *testing.T) {
+				out := LocationToURL(v.inputLocation)
+				if out != v.outputLinkWithoutRating { t.Errorf("Unexpected output: got %v, expected %v", out, v.outputLinkWithoutRating) }
+			})
+		}
+	})
+
+	t.Run("LocationToURLWithRating", func(t *testing.T) {
+		for k, v := range testcases {
+			t.Run(k, func(t *testing.T) {
+				out := LocationToURLWithRating(v.inputLocation, v.inputRating)
+				if out != v.outputLinkWithRating { t.Errorf("Unexpected output: got %v, expected %v", out, v.outputLinkWithRating) }
+			})
+		}
+	})
+}
