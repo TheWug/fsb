@@ -433,3 +433,25 @@ func (this *TPostListing) UnmarshalJSON(b []byte) (error) {
 	}
 	return errors.New(fmt.Sprintf("Couldn't figure out how to parse json response (%v) (%v)", err1, err2))
 }
+
+type TSinglePostListing struct {
+	Post TPostInfo `json:"post"`
+}
+
+func (this *TSinglePostListing) UnmarshalJSON(b []byte) (error) {
+
+	type TPostListingAlt TSinglePostListing
+	var temp TPostListingAlt
+	err1 := json.Unmarshal(b, &temp)
+	if err1 == nil && temp.Post.Id == 0 { err1 = errors.New("failed to read a valid post") }
+	if err1 == nil {
+		*this = TSinglePostListing(temp)
+		return nil
+	}
+	err2 := json.Unmarshal(b, &this.Post)
+	if err2 == nil && temp.Post.Id == 0 { err2 = errors.New("failed to read a valid post") }
+	if err2 == nil {
+		return nil
+	}
+	return errors.New(fmt.Sprintf("Couldn't figure out how to parse json response (%v) (%v)", err1, err2))
+}
