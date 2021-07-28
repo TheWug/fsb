@@ -60,18 +60,30 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func CompareRequests(req1, req2 reqtify.RequestImpl) bool {
-	b :=	req1.URLPath == req2.URLPath &&
-		req1.Verb == req2.Verb &&
-		req1.BasicUser == req2.BasicUser &&
-		req1.BasicPassword == req2.BasicPassword &&
-		(len(req1.QueryParams) == 0 && len(req2.QueryParams) == 0 || reflect.DeepEqual(req1.QueryParams, req2.QueryParams)) &&
-		(len(req1.FormParams) == 0 && len(req2.FormParams) == 0 || reflect.DeepEqual(req1.FormParams, req2.FormParams)) &&
-		(len(req1.AutoParams) == 0 && len(req2.AutoParams) == 0 || reflect.DeepEqual(req1.AutoParams, req2.AutoParams)) &&
-		(len(req1.Headers) == 0 && len(req2.Headers) == 0 || reflect.DeepEqual(req1.Headers, req2.Headers)) &&
-		(len(req1.Cookies) == 0 && len(req2.Cookies) == 0 || reflect.DeepEqual(req1.Cookies, req2.Cookies))
-
-	if !b { return false }
+func CompareRequests(t *testing.T, req1, req2 reqtify.RequestImpl) bool {
+	urleq := req1.URLPath == req2.URLPath
+	verbeq := req1.Verb == req2.Verb
+	usereq := req1.BasicUser == req2.BasicUser
+	pwdeq :=req1.BasicPassword == req2.BasicPassword
+	queryeq := (len(req1.QueryParams) == 0 && len(req2.QueryParams) == 0 || reflect.DeepEqual(req1.QueryParams, req2.QueryParams))
+	formeq := (len(req1.FormParams) == 0 && len(req2.FormParams) == 0 || reflect.DeepEqual(req1.FormParams, req2.FormParams))
+	autoeq := (len(req1.AutoParams) == 0 && len(req2.AutoParams) == 0 || reflect.DeepEqual(req1.AutoParams, req2.AutoParams))
+	headeq :=(len(req1.Headers) == 0 && len(req2.Headers) == 0 || reflect.DeepEqual(req1.Headers, req2.Headers))
+	cookieeq :=(len(req1.Cookies) == 0 && len(req2.Cookies) == 0 || reflect.DeepEqual(req1.Cookies, req2.Cookies))
+	
+	if !urleq { t.Errorf("Request URL not equal") }
+	if !verbeq { t.Errorf("Request Verb not equal") }
+	if !usereq { t.Errorf("Request User not equal") }
+	if !pwdeq { t.Errorf("Request Password not equal") }
+	if !queryeq { t.Errorf("Request Query not equal") }
+	if !formeq { t.Errorf("Request Form not equal") }
+	if !autoeq { t.Errorf("Request Auto not equal") }
+	if !headeq { t.Errorf("Request Headers not equal") }
+	if !cookieeq { t.Errorf("Request Cookies not equal") }
+	
+	if !urleq || !verbeq || !usereq || !pwdeq || !queryeq || !formeq || !autoeq || !headeq || !cookieeq {
+		return false
+	}
 
 	// okay, b is true, so now do the complicated comparisons. read the contents of the file readers and compare them, and
 	// compare the types of the response handlers (since there's no way for the objects to be the same, as long as they are
@@ -84,7 +96,10 @@ func CompareRequests(req1, req2 reqtify.RequestImpl) bool {
 	for _, x2 := range req2.Response {
 		resp2 = append(resp2, reflect.TypeOf(x2))
 	}
-	if !reflect.DeepEqual(resp1, resp2) { return false }
+	if !reflect.DeepEqual(resp1, resp2) {
+		t.Errorf("Request Response Object Types not similar")
+		return false
+	}
 
 	var file1, file2 []struct{
 		key, name string
@@ -100,7 +115,10 @@ func CompareRequests(req1, req2 reqtify.RequestImpl) bool {
 			file2 = append(file2, struct{key, name string; data []byte}{key: k, name: x2.Name, data: func(b[]byte, e error) []byte { return b }(ioutil.ReadAll(x2.Data))})
 		}
 	}
-	if !reflect.DeepEqual(file1, file2) { return false}
+	if !reflect.DeepEqual(file1, file2) {
+		t.Errorf("Request Form Files not similar")
+		return false
+	}
 	return true
 }
 
@@ -148,7 +166,7 @@ func TestListPosts(t *testing.T) {
 		}()
 
 		req := <- examiner.Requests
-		if !CompareRequests(req.RequestImpl, x.expectedRequest) {
+		if !CompareRequests(t, req.RequestImpl, x.expectedRequest) {
 			t.Errorf("Discrepancy in request!\nActual: %+v\nExpected: %+v\n", req.RequestImpl, x.expectedRequest)
 		}
 		examiner.Responses <- mock.ResponseAndError{
@@ -263,7 +281,7 @@ func TestTestLogin(t *testing.T) {
 		}()
 
 		req := <- examiner.Requests
-		if !CompareRequests(req.RequestImpl, x.expectedRequest) {
+		if !CompareRequests(t, req.RequestImpl, x.expectedRequest) {
 			t.Errorf("Discrepancy in request!\nActual: %+v\nExpected: %+v\n", req.RequestImpl, x.expectedRequest)
 		}
 		examiner.Responses <- mock.ResponseAndError{
@@ -330,7 +348,7 @@ func TestListTags(t *testing.T) {
 		}()
 
 		req := <- examiner.Requests
-		if !CompareRequests(req.RequestImpl, x.expectedRequest) {
+		if !CompareRequests(t, req.RequestImpl, x.expectedRequest) {
 			t.Errorf("Discrepancy in request!\nActual: %+v\nExpected: %+v\n", req.RequestImpl, x.expectedRequest)
 		}
 		examiner.Responses <- mock.ResponseAndError{
@@ -392,7 +410,7 @@ func TestListTagAliases(t *testing.T) {
 		}()
 
 		req := <- examiner.Requests
-		if !CompareRequests(req.RequestImpl, x.expectedRequest) {
+		if !CompareRequests(t, req.RequestImpl, x.expectedRequest) {
 			t.Errorf("Discrepancy in request!\nActual: %+v\nExpected: %+v\n", req.RequestImpl, x.expectedRequest)
 		}
 		examiner.Responses <- mock.ResponseAndError{
@@ -452,7 +470,7 @@ func TestFetchOnePost(t *testing.T) {
 		}()
 
 		req := <- examiner.Requests
-		if !CompareRequests(req.RequestImpl, x.expectedRequest) {
+		if !CompareRequests(t, req.RequestImpl, x.expectedRequest) {
 			t.Errorf("Discrepancy in request!\nActual: %+v\nExpected: %+v\n", req.RequestImpl, x.expectedRequest)
 		}
 		examiner.Responses <- mock.ResponseAndError{
@@ -504,7 +522,7 @@ func TestGetTagData(t *testing.T) {
 		}()
 
 		req := <- examiner.Requests
-		if !CompareRequests(req.RequestImpl, x.expectedRequest) {
+		if !CompareRequests(t, req.RequestImpl, x.expectedRequest) {
 			t.Errorf("Discrepancy in request!\nActual: %+v\nExpected: %+v\n", req.RequestImpl, x.expectedRequest)
 		}
 		examiner.Responses <- mock.ResponseAndError{
@@ -610,7 +628,7 @@ func TestFetchUser(t *testing.T) {
 		}()
 
 		req := <- examiner.Requests
-		if !CompareRequests(req.RequestImpl, x.expectedRequest) {
+		if !CompareRequests(t, req.RequestImpl, x.expectedRequest) {
 			t.Errorf("Discrepancy in request!\nActual: %+v\nExpected: %+v\n", req.RequestImpl, x.expectedRequest)
 		}
 		examiner.Responses <- mock.ResponseAndError{
@@ -703,7 +721,7 @@ func TestUploadFile(t *testing.T) {
 		}()
 
 		req := <- examiner.Requests
-		if !CompareRequests(req.RequestImpl, x.expectedRequest) {
+		if !CompareRequests(t, req.RequestImpl, x.expectedRequest) {
 			t.Errorf("Discrepancy in request!\nActual: %+v\nExpected: %+v\n", req.RequestImpl, x.expectedRequest)
 		}
 		examiner.Responses <- mock.ResponseAndError{
