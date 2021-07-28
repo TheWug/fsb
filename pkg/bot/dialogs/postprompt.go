@@ -4,6 +4,7 @@ import (
 	"github.com/thewug/fsb/pkg/api"
 	"github.com/thewug/fsb/pkg/api/tags"
 	"github.com/thewug/fsb/pkg/api/tags/wizard"
+	"github.com/thewug/fsb/pkg/api/types"
 	"github.com/thewug/fsb/pkg/storage"
 	"github.com/thewug/fsb/pkg/apiextra"
 
@@ -58,7 +59,7 @@ type PostPrompt struct {
 	SeenSources map[string]int `json:"source_seen"`
 	SeenSourcesReverse []string `json:"source_seen_rev"`
 	Parent int `json:"parent"`
-	Rating string `json:"rating"`
+	Rating types.PostRating `json:"rating"`
 	Description string `json:"description"`
 	File PostFile `json:"file"`
 }
@@ -162,7 +163,7 @@ func (this *PostPrompt) PostStatus(b *bytes.Buffer) {
 	}
 	if len(this.Rating) != 0 {
 		b.WriteString("Rating: <code>")
-		b.WriteString(api.RatingNameString(this.TestRating()))
+		b.WriteString(this.TestRating().String())
 		b.WriteString("</code>\n")
 		no_changes = false
 	}
@@ -196,8 +197,8 @@ func (this *PostPrompt) PostStatus(b *bytes.Buffer) {
 	}
 }
 
-func (this *PostPrompt) TestRating() string {
-	if this.Rating == "" {
+func (this *PostPrompt) TestRating() types.PostRating {
+	if this.Rating == types.Original {
 		return this.TagWizard.Rating()
 	}
 

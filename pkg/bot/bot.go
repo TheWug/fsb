@@ -293,7 +293,7 @@ func (this *AutofixState) HandleCallbackTx(tx storage.DBLike, ctx *gogram.Callba
 			this.Behavior.DismissPromptPost(tx, ctx.Bot, post_info, diff)
 		} else {
 			reason := "Manual tag cleanup: typos and concatenations (via KnottyBot)"
-			post, err := api.UpdatePost(creds.User, creds.ApiKey, post_info.PostId, diff, nil, nil, nil, nil, &reason)
+			post, err := api.UpdatePost(creds.User, creds.ApiKey, post_info.PostId, diff, apitypes.Original, nil, nil, nil, &reason)
 			if err != nil {
 				ctx.AnswerAsync(data.OCallback{Notification: "\u26A0 An error occurred when trying to update the post! Try again later."}, nil)
 				return err

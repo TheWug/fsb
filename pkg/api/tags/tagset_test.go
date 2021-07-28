@@ -15,7 +15,6 @@ func TestTagSet(t *testing.T) {
 	t.Run("String", String)
 	t.Run("Len", Len)
 	t.Run("Reset", Reset)
-	t.Run("Rating", Rating)
 	t.Run("ApplyDiff", ApplyDiff)
 	t.Run("Clone", Clone)
 	t.Run("ToggleString", ToggleString)
@@ -302,35 +301,6 @@ func Reset(t *testing.T) {
 	set.Reset()
 	if !set.Equal(TagSet{}) {
 		t.Errorf("\nExpected: %+v\nActual:   %+v\n", TagSet{}, set)
-	}
-}
-
-func Rating(t *testing.T) {
-	var pairs = []struct {
-		name, rating string
-		value TagSet
-	}{
-		{"empty", "",
-			TagSet{}},
-		{"no rating", "",
-			TagSet{StringSet: StringSet{Data: map[string]bool{"a":true, "foo":true, "bar":true}}}},
-		{"s", "safe",
-			TagSet{StringSet: StringSet{Data: map[string]bool{"rating:safe":true, "foo":true}}}},
-		{"q", "questionable",
-			TagSet{StringSet: StringSet{Data: map[string]bool{"bar":true, "rating:q":true}}}},
-		{"e", "explicit",
-			TagSet{StringSet: StringSet{Data: map[string]bool{"rating:enormouspenis":true}}}},
-		{"overload", "explicit",
-			TagSet{StringSet: StringSet{Data: map[string]bool{"rating:E":true, "rating:quonk":true, "rating:silly":true}}}},
-	}
-
-	for _, x := range pairs {
-		t.Run(x.name, func(t *testing.T) {
-			out := x.value.Rating()
-			if out != x.rating {
-				t.Errorf("\nExpected: %s\nActual:   %s\n", x.rating, out)
-			}
-		})
 	}
 }
 

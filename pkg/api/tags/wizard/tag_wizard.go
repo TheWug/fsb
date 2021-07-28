@@ -2,6 +2,7 @@ package wizard
 
 import (
 	"github.com/thewug/fsb/pkg/api/tags"
+	"github.com/thewug/fsb/pkg/api/types"
 
 	"github.com/thewug/gogram/data"
 	"github.com/kballard/go-shellquote"
@@ -379,8 +380,8 @@ func (this *TagWizard) Len() (int) {
 	return this.Tags().Len()
 }
 
-func (this *TagWizard) Rating() (string) {
-	return this.tags.Rating()
+func (this *TagWizard) Rating() (types.PostRating) {
+	return types.RatingFromTagSet(this.tags)
 }
 
 func (this *TagWizard) Tags() (tags.TagSet) {

@@ -658,7 +658,8 @@ func TestUploadFile(t *testing.T) {
 		file_data io.Reader
 		upload_url string
 		tags tags.TagSet
-		rating, source, description string
+		rating types.PostRating
+		source, description string
 		parent *int
 		user, apikey string
 		response *http.Response
@@ -667,7 +668,7 @@ func TestUploadFile(t *testing.T) {
 		expectedOutput *UploadCallResult
 		expectedError error
 	}{
-		{strings.NewReader("file data"), "", tags.TagSet{tags.StringSet{map[string]bool{"afoo":true, "bar":true}}}, "e", "source", "description", nil,
+		{strings.NewReader("file data"), "", tags.TagSet{tags.StringSet{map[string]bool{"afoo":true, "bar":true}}}, types.Explicit, "source", "description", nil,
 			"testuser", "testpassword",
 			&http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"success":true,"location":"url"}`))},
 			nil,
@@ -678,7 +679,7 @@ func TestUploadFile(t *testing.T) {
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
 			&UploadCallResult{Success: true, Location: sptr("url"), Status: "200 Testing", StatusCode: 200},
 			nil},
-		{nil, "upload from url", tags.TagSet{tags.StringSet{map[string]bool{"afoo":true, "bar":true}}}, "e", "source", "description", new(int),
+		{nil, "upload from url", tags.TagSet{tags.StringSet{map[string]bool{"afoo":true, "bar":true}}}, types.Explicit, "source", "description", new(int),
 			"testuser", "testpassword",
 			&http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"success":true,"location":"url"}`))},
 			nil,
@@ -688,7 +689,7 @@ func TestUploadFile(t *testing.T) {
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
 			&UploadCallResult{Success: true, Location: sptr("url"), Status: "200 Testing", StatusCode: 200},
 			nil},
-		{nil, "upload from url", tags.TagSet{tags.StringSet{map[string]bool{"afoo":true, "bar":true}}}, "e", "source", "description", new(int),
+		{nil, "upload from url", tags.TagSet{tags.StringSet{map[string]bool{"afoo":true, "bar":true}}}, types.Explicit, "source", "description", new(int),
 			"testuser", "testpassword",
 			nil,
 			errors.New("failure"),
@@ -698,7 +699,7 @@ func TestUploadFile(t *testing.T) {
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
 			&UploadCallResult{},
 			errors.New("failure")},
-		{nil, "upload from url", tags.TagSet{tags.StringSet{map[string]bool{"afoo":true, "bar":true}}}, "e", "source", "description", new(int),
+		{nil, "upload from url", tags.TagSet{tags.StringSet{map[string]bool{"afoo":true, "bar":true}}}, types.Explicit, "source", "description", new(int),
 			"testuser", "testpassword",
 			&http.Response{Status: "401 Testing", StatusCode: 401, Body: ioutil.NopCloser(strings.NewReader(`{"success":false,"reason":"fail"}`))},
 			nil,
@@ -708,7 +709,7 @@ func TestUploadFile(t *testing.T) {
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
 			&UploadCallResult{Success: false, Reason: sptr("fail"), Status: "401 Testing", StatusCode: 401},
 			nil},
-		{nil, "", tags.TagSet{tags.StringSet{map[string]bool{"afoo":true, "bar":true}}}, "e", "source", "description", new(int),
+		{nil, "", tags.TagSet{tags.StringSet{map[string]bool{"afoo":true, "bar":true}}}, types.Explicit, "source", "description", new(int),
 			"testuser", "testpassword",
 			nil,
 			nil,
@@ -758,7 +759,8 @@ func TestUpdatePost(t *testing.T) {
 
 	testcases := map[string]struct{
 		tags tags.TagDiff
-		rating, description, reason *string
+		rating types.PostRating
+		description, reason *string
 		parent *int
 		sourcediff []string
 		user, apikey string
@@ -768,40 +770,40 @@ func TestUpdatePost(t *testing.T) {
 		expectedFuncOutput *types.TPostInfo
 		expectedFuncError error
 	}{
-		"normal": {tags.TagDiffFromString(tagstring), sptr("new_rating"), sptr("new_description"), sptr("edit_reason"),
+		"normal": {tags.TagDiffFromString(tagstring), types.Safe, sptr("new_description"), sptr("edit_reason"),
 			iptr(1000), []string{"-source1", "source2"},
 			"testuser", "testapikey",
-			&http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"id":9999, "tags":{"general":["tag1", "afoo"]}, "sources":["source0", "source2"], "relationships":{"parent_id":1000}, "rating":"new_rating", "description":"new_description"}`))},
+			&http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"id":9999, "tags":{"general":["tag1", "afoo"]}, "sources":["source0", "source2"], "relationships":{"parent_id":1000}, "rating":"s", "description":"new_description"}`))},
 			nil,
 			reqtify.RequestImpl{URLPath: "/posts/9999.json", Verb: reqtify.PATCH,
 				BasicUser: "testuser", BasicPassword: "testapikey",
-				FormParams: url.Values{"post[source_diff]":[]string{"-source1\nsource2"}, "post[description]":[]string{"new_description"}, "post[tag_string_diff]":[]string{tagstring}, "post[rating]":[]string{"new_rating"}, "post[parent_id]":[]string{"1000"}, "post[edit_reason]": []string{"edit_reason"}},
+				FormParams: url.Values{"post[source_diff]":[]string{"-source1\nsource2"}, "post[description]":[]string{"new_description"}, "post[tag_string_diff]":[]string{tagstring}, "post[rating]":[]string{"s"}, "post[parent_id]":[]string{"1000"}, "post[edit_reason]": []string{"edit_reason"}},
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
-			&types.TPostInfo{Id: 9999, Description: "new_description", Rating: "new_rating", TPostTags: types.TPostTags{General: []string{"tag1", "afoo"}}, TPostRelationships: types.TPostRelationships{Parent_id: 1000}, Sources: []string{"source0", "source2"}},
+			&types.TPostInfo{Id: 9999, Description: "new_description", Rating: types.Safe, TPostTags: types.TPostTags{General: []string{"tag1", "afoo"}}, TPostRelationships: types.TPostRelationships{Parent_id: 1000}, Sources: []string{"source0", "source2"}},
 			nil},
-		"unset-parent": {tags.TagDiff{}, nil, nil, sptr("edit_reason"),
+		"unset-parent": {tags.TagDiff{}, types.Original, nil, sptr("edit_reason"),
 			iptr(-1), nil,
 			"testuser", "testapikey",
-			&http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"id":9999, "tags":{"general":["tag1", "bar"]}, "sources":["source0", "source1"], "rating":"old_rating", "description":"old_description"}`))},
+			&http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"id":9999, "tags":{"general":["tag1", "bar"]}, "sources":["source0", "source1"], "rating":"q", "description":"old_description"}`))},
 			nil,
 			reqtify.RequestImpl{URLPath: "/posts/9999.json", Verb: reqtify.PATCH,
 				BasicUser: "testuser", BasicPassword: "testapikey",
 				FormParams: url.Values{"post[parent_id]":[]string{""}, "post[edit_reason]": []string{"edit_reason"}},
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
-			&types.TPostInfo{Id: 9999, Description: "old_description", Rating: "old_rating", TPostTags: types.TPostTags{General: []string{"tag1", "bar"}}, Sources: []string{"source0", "source1"}},
+			&types.TPostInfo{Id: 9999, Description: "old_description", Rating: types.Questionable, TPostTags: types.TPostTags{General: []string{"tag1", "bar"}}, Sources: []string{"source0", "source1"}},
 			nil},
-		"noop": {tags.TagDiff{}, nil, nil, sptr("edit_reason"),
+		"noop": {tags.TagDiff{}, types.Original, nil, sptr("edit_reason"),
 			nil, nil,
 			"testuser", "testapikey",
-			&http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"id":9999, "tags":{"general":["tag1", "bar"]}, "sources":["source0", "source1"], "rating":"old_rating", "description":"old_description"}`))},
+			&http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"id":9999, "tags":{"general":["tag1", "bar"]}, "sources":["source0", "source1"], "rating":"q", "description":"old_description"}`))},
 			nil,
 			reqtify.RequestImpl{URLPath: "/posts/9999.json", Verb: reqtify.PATCH,
 				BasicUser: "testuser", BasicPassword: "testapikey",
 				FormParams: url.Values{"post[edit_reason]": []string{"edit_reason"}},
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
-			&types.TPostInfo{Id: 9999, Description: "old_description", Rating: "old_rating", TPostTags: types.TPostTags{General: []string{"tag1", "bar"}}, Sources: []string{"source0", "source1"}},
+			&types.TPostInfo{Id: 9999, Description: "old_description", Rating: types.Questionable, TPostTags: types.TPostTags{General: []string{"tag1", "bar"}}, Sources: []string{"source0", "source1"}},
 			nil},
-		"update-deleted": {tags.TagDiff{}, nil, nil, sptr("edit_reason"),
+		"update-deleted": {tags.TagDiff{}, types.Original, nil, sptr("edit_reason"),
 			nil, nil,
 			"testuser", "testapikey",
 			&http.Response{Status: "403 Testing", StatusCode: 403, Body: ioutil.NopCloser(strings.NewReader(`{"success":false, "reason":"Access Denied: Post not visible to you"}`))},
@@ -812,7 +814,7 @@ func TestUpdatePost(t *testing.T) {
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil), reqtify.FromJSON(nil)}},
 			nil,
 			PostIsDeleted},
-		"parse-error": {tags.TagDiff{}, nil, nil, sptr("edit_reason"),
+		"parse-error": {tags.TagDiff{}, types.Original, nil, sptr("edit_reason"),
 			nil, nil,
 			"testuser", "testapikey",
 			&http.Response{Status: "200 OK", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`<html>hi</html>`))},

@@ -3,6 +3,8 @@ package api
 import (
         "github.com/thewug/reqtify"
 
+	"github.com/thewug/fsb/pkg/api/types"
+
 	"errors"
         "fmt"
 	"log"
@@ -46,29 +48,22 @@ const DefaultBlacklist string = "gore\nscat\nwatersports\nyoung -rating:s\nloli\
 
 // filters rating tags into valid rating letters.
 // "clean" is not a valid rating, but for convenience, it is treated as identical to "safe".
-func SanitizeRating(input string) (string, error) {
+func SanitizeRating(input string) (types.PostRating, error) {
 	input = strings.Replace(strings.ToLower(input), "rating:", "", -1)
-	if input == "explicit" || input == "e" { return "e", nil }
-	if input == "questionable" || input == "q" { return "q", nil }
-	if input == "clean" || input == "c" || input == "safe" || input == "s" { return "s", nil }
-	return "", errors.New("Invalid rating")
+	if input == "explicit" || input == "e" { return types.Explicit, nil }
+	if input == "questionable" || input == "q" { return types.Questionable, nil }
+	if input == "clean" || input == "c" || input == "safe" || input == "s" { return types.Safe, nil }
+	return types.Invalid, errors.New("Invalid rating")
 }
 
 // filters ratings into valid rating letters, and the zero value to revert a change.
-func SanitizeRatingForEdit(input string) (string, error) {
+func SanitizeRatingForEdit(input string) (types.PostRating, error) {
 	input = strings.Replace(strings.ToLower(input), "rating:", "", -1)
-	if input == "explicit" || input == "e" { return "e", nil }
-	if input == "questionable" || input == "q" { return "q", nil }
-	if input == "clean" || input == "c" || input == "safe" || input == "s" { return "s", nil }
-	if input == "original" || input == "o" { return "", nil }
-	return "", errors.New("Invalid rating")
-}
-
-func RatingNameString(input string) string {
-	if input == "s" { return "Safe" }
-	if input == "q" { return "Questionable" }
-	if input == "e" { return "Explicit" }
-	return "Unknown"
+	if input == "explicit" || input == "e" { return types.Explicit, nil }
+	if input == "questionable" || input == "q" { return types.Questionable, nil }
+	if input == "clean" || input == "c" || input == "safe" || input == "s" { return types.Safe, nil }
+	if input == "original" || input == "o" { return types.Original, nil }
+	return types.Invalid, errors.New("Invalid rating")
 }
 
 func APILog(url, user string, length int, response *http.Response, err error) {
@@ -94,8 +89,8 @@ func APILog(url, user string, length int, response *http.Response, err error) {
 	}
 }
 
-func LocationToURLWithRating(location, rating string) string {
-	if rating == "s" {
+func LocationToURLWithRating(location string, rating types.PostRating) string {
+	if rating == types.Safe {
 		return FilteredEndpoint + location
 	} else {
 		return Endpoint + location

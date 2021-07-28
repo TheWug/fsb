@@ -117,7 +117,7 @@ type EditPrompt struct {
 	SeenSources map[string]int `json:"source_seen"`
 	SeenSourcesReverse []string `json:"source_seen_rev"`
 	Parent int `json:"parent"`
-	Rating string `json:"rating"`
+	Rating types.PostRating `json:"rating"`
 	Description string `json:"description"`
 	File PostFile `json:"file"`
 	Reason string `json:"reason"`
@@ -316,7 +316,7 @@ func (this *EditPrompt) PostStatus(b *bytes.Buffer) {
 	}
 	if len(this.Rating) != 0 {
 		b.WriteString("Rating: <code>")
-		b.WriteString(api.RatingNameString(this.Rating))
+		b.WriteString(this.Rating.String())
 		b.WriteString("</code>\n")
 		no_changes = false
 	}
@@ -359,17 +359,15 @@ func (this *EditPrompt) CommitEdit(tx storage.DBLike, user, api_key string, ctx 
 	if this.IsNoop() {
 		return nil, errors.New("This edit is a no-op.")
 	}
-	var rating *string
 	var parent *int
 	var description *string
 	var reason *string
 
-	if this.Rating != "" { rating = &this.Rating }
 	if this.Parent != 0 { parent = &this.Parent }
 	if this.Description != "" { description = &this.Description }
 	if this.Reason != "" { reason = &this.Reason }
 
-	update, err := api.UpdatePost(user, api_key, this.PostId, this.TagChanges, rating, parent, this.SourceChanges.Array(), description, reason)
+	update, err := api.UpdatePost(user, api_key, this.PostId, this.TagChanges, this.Rating, parent, this.SourceChanges.Array(), description, reason)
 	if err != nil {
 		return nil, err
 	}

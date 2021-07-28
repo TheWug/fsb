@@ -24,7 +24,7 @@ type UploadCallResult struct {
 	Status     string
 }
 
-func UploadFile(file_data io.Reader, upload_url string, tags tags.TagSet, rating, source, description string, parent *int, user, apitoken string) (*UploadCallResult, error) {
+func UploadFile(file_data io.Reader, upload_url string, tags tags.TagSet, rating types.PostRating, source, description string, parent *int, user, apitoken string) (*UploadCallResult, error) {
 	url := "/uploads.json"
 
 	out := UploadCallResult{}
@@ -35,7 +35,7 @@ func UploadFile(file_data io.Reader, upload_url string, tags tags.TagSet, rating
 			FormArg("upload[source]", source).
 			FormArg("upload[description]", description).
 			FormArg("upload[tag_string]", tags.String()).
-			FormArg("upload[rating]", rating).
+			FormArg("upload[rating]", string(rating)).
 			JSONInto(&out).
 			Multipart()
 	if parent != nil { req.FormArg("upload[parent_id]", strconv.Itoa(*parent)) }
@@ -61,7 +61,7 @@ var PostIsDeleted error = errors.New("This post has been deleted.")
 func UpdatePost(user, apitoken string,
 		id int,
 		tagdiff tags.TagDiff,				// empty to leave tags unchanged.
-		rating *string,					// nil to leave rating unchanged.
+		rating types.PostRating,			// nil to leave rating unchanged.
 		parent *int,					// nil to leave parent unchanged, -1 to UNSET parent
 		sourcediff []string,				// nil to leave source unchanged
 		description *string,				// nil to leave description unchanged
@@ -77,7 +77,7 @@ func UpdatePost(user, apitoken string,
 			JSONInto(&status).
 			JSONInto(&post)
 	if !tagdiff.IsZero() { req.FormArgDefault("post[tag_string_diff]", tagdiff.APIString(), "") }
-	if rating != nil { req.FormArg("post[rating]", *rating) }
+	if rating != types.Original { req.FormArgDefault("post[rating]", string(rating), string(types.Original)) }
 	if parent != nil && *parent == -1 { req.FormArg("post[parent_id]", "") }
 	if parent != nil && *parent != -1 { req.FormArg("post[parent_id]", strconv.Itoa(*parent)) }
 	if sourcediff != nil { req.FormArg("post[source_diff]", strings.Join(sourcediff, "\n")) }

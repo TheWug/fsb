@@ -1171,7 +1171,7 @@ func TyposInternal(tx storage.DBLike, control TyposControl, creds storage.UserCr
 			if diff.IsZero() { continue }
 
 			reason := fmt.Sprintf("Bulk retag: %s (%s)", diff.APIString(), control.reason)
-			newp, err := api.UpdatePost(creds.User, creds.ApiKey, id, diff, nil, nil, nil, nil, &reason)
+			newp, err := api.UpdatePost(creds.User, creds.ApiKey, id, diff, types.Original, nil, nil, nil, &reason)
 
 			if err == api.PostIsDeleted {
 				log.Printf("Post was deleted which we didn't know about? DB consistency? (%d)\n", id)
@@ -1858,7 +1858,7 @@ func CatsInternal(tx storage.DBLike, control CatsControl, creds storage.UserCred
 				diff.Add(triplet.subtag1.Name)
 				diff.Add(triplet.subtag2.Name)
 				diff.Remove(triplet.tag.Name)
-				newp, err := api.UpdatePost(creds.User, creds.ApiKey, p.Id, diff, nil, nil, nil, nil, &reason)
+				newp, err := api.UpdatePost(creds.User, creds.ApiKey, p.Id, diff, types.Original, nil, nil, nil, &reason)
 				if err != nil { return err }
 
 				if newp != nil {

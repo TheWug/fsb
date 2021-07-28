@@ -13,6 +13,37 @@ import (
 	"github.com/thewug/dml"
 )
 
+type PostRating string
+const (
+	Explicit     PostRating = "e"
+	Questionable PostRating = "q"
+	Safe         PostRating = "s"
+	Original     PostRating = ""
+	Invalid      PostRating = "invalid"
+)
+
+func (r PostRating) String() string {
+	if r == Safe { return "Safe" }
+	if r == Questionable { return "Questionable" }
+	if r == Explicit { return "Explicit" }
+	return "Unknown"
+}
+
+// attempts to find a "rating:*" tag and interpret it, returning a rating string if it does and returning nothing if there isn't one.
+func RatingFromTagSet(ts tags.TagSet) (PostRating) {
+	var s, q, e bool
+	for t, _ := range ts.Data {
+		t = strings.ToLower(t)
+		s = s || strings.HasPrefix(t, "rating:s")
+		q = q || strings.HasPrefix(t, "rating:q")
+		e = e || strings.HasPrefix(t, "rating:e")
+	}
+	if e { return Explicit }
+	if q { return Questionable }
+	if s { return Safe }
+	return Original
+}
+
 type TTagData struct {
 	Id int `json:"id" dml:"tag_id"`
 	Name string `json:"name" dml:"tag_name"`
@@ -171,14 +202,14 @@ type TPostInfo struct {
 	TPostRelationships `json:"relationships"`
 	TPostTags          `json:"tags"`
 
-	Id            int    `json:"id"`
-	Description   string `json:"description"`
-	Creator_id    int    `json:"uploader_id"`
-	Change        int    `json:"change_seq"`
-	Fav_count     int    `json:"fav_count"`
-	Rating        string `json:"rating"`
-	Comment_count int    `json:"comment_count"`
-	Sources     []string `json:"sources,omitempty"`
+	Id            int        `json:"id"`
+	Description   string     `json:"description"`
+	Creator_id    int        `json:"uploader_id"`
+	Change        int        `json:"change_seq"`
+	Fav_count     int        `json:"fav_count"`
+	Rating        PostRating `json:"rating"`
+	Comment_count int        `json:"comment_count"`
+	Sources     []string     `json:"sources,omitempty"`
 
 	sources_internal string
 
@@ -352,15 +383,9 @@ func matchesTag(post *TPostInfo, t *tags.TagSet, tag string) bool {
 	matches := false
 
 	if trimmed := strings.TrimPrefix(tag, "rating:"); trimmed != tag {
-		if strings.HasPrefix(trimmed, "s") {
-			matches = strings.HasPrefix(post.Rating, "s")
-		} else if strings.HasPrefix(trimmed, "q") {
-			matches = strings.HasPrefix(post.Rating, "q")
-		} else if strings.HasPrefix(trimmed, "e") {
-			matches = strings.HasPrefix(post.Rating, "e")
-		} else {
-			matches = false
-		}
+		matches = strings.HasPrefix(trimmed, "s") && post.Rating == Safe ||
+		          strings.HasPrefix(trimmed, "q") && post.Rating == Questionable ||
+		          strings.HasPrefix(trimmed, "e") && post.Rating == Explicit
 	} else if trimmed := strings.TrimPrefix(tag, "id:"); trimmed != tag {
 		matches = matchIntRange(trimmed, post.Id)
 	} else if trimmed := strings.TrimPrefix(tag, "score:"); trimmed != tag {

@@ -170,7 +170,7 @@ func (this *Behavior) maintenanceInternal(tx storage.DBLike, bot *gogram.Telegra
 		edit.SelectAutofix()
 		auto_diff := edit.GetChangeToApply()
 		if !auto_diff.IsZero() {
-			post, err := api.UpdatePost(default_creds.User, default_creds.ApiKey, id, auto_diff, nil, nil, nil, nil, sptr("Automatic tag cleanup: typos and concatenations (via KnottyBot)"))
+			post, err := api.UpdatePost(default_creds.User, default_creds.ApiKey, id, auto_diff, apitypes.Original, nil, nil, nil, sptr("Automatic tag cleanup: typos and concatenations (via KnottyBot)"))
 			if err != nil {
 				bot.ErrorLog.Println("Error updating post:", err.Error())
 			} else {
