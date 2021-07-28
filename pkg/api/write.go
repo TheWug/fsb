@@ -68,16 +68,13 @@ func UpdatePost(user, apitoken string,
 		reason *string) (*types.TPostInfo, error) {
 	url := fmt.Sprintf("/posts/%d.json", id)
 
-	var post struct {
-		types.TPostEditInfo
-		types.TApiStatus
-	}
-
-	post.Success = true
+	var status types.TApiStatus = types.TApiStatus{Success: true}
+	var post types.TSinglePostListing
 
 	req := api.New(url).
 			Method(reqtify.PATCH).
 			BasicAuthentication(user, apitoken).
+			JSONInto(&status).
 			JSONInto(&post)
 	if !tagdiff.IsZero() { req.FormArgDefault("post[tag_string_diff]", tagdiff.APIString(), "") }
 	if rating != nil { req.FormArg("post[rating]", *rating) }
@@ -94,11 +91,11 @@ func UpdatePost(user, apitoken string,
 		return nil, e
 	}
 
-	if post.Reason == "Access Denied: Post not visible to you" {
+	if status.Reason == "Access Denied: Post not visible to you" {
 		return nil, PostIsDeleted
 	}
 
-	return post.TPostEditInfo.TPostInfo(), e
+	return &post.Post, e
 }
 
 func VotePost(user, apitoken string,
