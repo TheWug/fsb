@@ -423,7 +423,7 @@ func (this *TPostListing) UnmarshalJSON(b []byte) (error) {
 	type TPostListingAlt TPostListing
 	var temp TPostListingAlt
 	err1 := json.Unmarshal(b, &temp)
-	if err1 == nil {
+	if err1 == nil && len(temp.Posts) != 0 {
 		*this = TPostListing(temp)
 		return nil
 	}
