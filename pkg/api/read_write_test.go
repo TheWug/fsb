@@ -708,6 +708,13 @@ func TestUploadFile(t *testing.T) {
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
 			&UploadCallResult{Success: false, Reason: sptr("fail"), Status: "401 Testing", StatusCode: 401},
 			nil},
+		{nil, "", tags.TagSet{tags.StringSet{map[string]bool{"afoo":true, "bar":true}}}, "e", "source", "description", new(int),
+			"testuser", "testpassword",
+			nil,
+			nil,
+			reqtify.RequestImpl{},
+			nil,
+			MissingArguments},
 	}
 
 	for _, x := range tuples {
@@ -720,13 +727,15 @@ func TestUploadFile(t *testing.T) {
 			wg.Done()
 		}()
 
-		req := <- examiner.Requests
-		if !CompareRequests(t, req.RequestImpl, x.expectedRequest) {
-			t.Errorf("Discrepancy in request!\nActual: %+v\nExpected: %+v\n", req.RequestImpl, x.expectedRequest)
-		}
-		examiner.Responses <- mock.ResponseAndError{
-			Response: x.response,
-			Error: x.err,
+		if x.err != nil || x.response != nil {
+			req := <- examiner.Requests
+			if !CompareRequests(t, req.RequestImpl, x.expectedRequest) {
+				t.Errorf("Discrepancy in request!\nActual: %+v\nExpected: %+v\n", req.RequestImpl, x.expectedRequest)
+			}
+			examiner.Responses <- mock.ResponseAndError{
+				Response: x.response,
+				Error: x.err,
+			}
 		}
 
 		wg.Wait()
