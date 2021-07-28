@@ -431,5 +431,5 @@ func (this *TPostListing) UnmarshalJSON(b []byte) (error) {
 	if err2 == nil {
 		return nil
 	}
-	return errors.New(fmt.Sprintf("Couldn't figure out how to parse json response (%s) (%s)", err1.Error(), err2.Error()))
+	return errors.New(fmt.Sprintf("Couldn't figure out how to parse json response (%v) (%v)", err1, err2))
 }
