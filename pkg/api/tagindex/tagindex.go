@@ -217,7 +217,7 @@ func ResyncListCommand(ctx *gogram.MessageCtx) {
 		if u, ok := err.(UserError); ok {
 			ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: u.Error(), ParseMode: data.ParseHTML}}, nil)
 		} else {
-			ctx.Bot.Log.Println("Error occurred syncing tags: %s", err.Error())
+			ctx.Bot.Log.Printf("Error occurred syncing tags: %s", err.Error())
 		}
 	}
 }
@@ -337,7 +337,7 @@ func SyncTagsCommand(ctx *gogram.MessageCtx) {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
 	} else if err != nil {
-		ctx.Bot.Log.Println("Error occurred syncing tags: %s", err.Error())
+		ctx.Bot.Log.Printf("Error occurred syncing tags: %s", err.Error())
 	}
 }
 
@@ -424,7 +424,7 @@ func RecountTagsCommand(ctx *gogram.MessageCtx) {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
 	} else if err != nil {
-		ctx.Bot.Log.Println("Error occurred syncing tags: %s", err.Error())
+		ctx.Bot.Log.Printf("Error occurred syncing tags: %s", err.Error())
 	}
 }
 
@@ -536,7 +536,7 @@ func SyncPostsCommand(ctx *gogram.MessageCtx) {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
 	} else if err != nil {
-		ctx.Bot.ErrorLog.Println("Error occurred syncing posts: %s", err.Error())
+		ctx.Bot.ErrorLog.Printf("Error occurred syncing posts: %s", err.Error())
 		return
 	}
 }
@@ -657,7 +657,7 @@ func SyncAliasesCommand(ctx *gogram.MessageCtx) {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
 	} else if err != nil {
-		ctx.Bot.Log.Println("Error occurred syncing tags: %s", err.Error())
+		ctx.Bot.Log.Printf("Error occurred syncing tags: %s", err.Error())
 	}
 }
 
@@ -1216,7 +1216,7 @@ func RefetchDeletedPostsCommand(ctx *gogram.MessageCtx) {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
 	} else if err != nil {
-		ctx.Bot.Log.Println("Error occurred syncing deleted posts: %s", err.Error())
+		ctx.Bot.Log.Printf("Error occurred syncing deleted posts: %s", err.Error())
 		return
 	}
 }
