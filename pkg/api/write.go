@@ -170,7 +170,6 @@ func FavoritePost(user, apitoken string,
 		BasicAuthentication(user, apitoken).
 		FormArg("post_id", id).
 		JSONInto(&post).
-		DebugPrint().
 		Do()
 
 	APILog(url, user, -1, r, e)
@@ -193,7 +192,6 @@ func UnfavoritePost(user, apitoken string,
 	r, e := api.New(url).
 		Method(reqtify.DELETE).
 		BasicAuthentication(user, apitoken).
-		DebugPrint().
 		Do()
 
 	APILog(url, user, -1, r, e)
