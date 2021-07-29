@@ -6,6 +6,13 @@ import (
 	"testing"
 )
 
+func Test_Simple(t *testing.T) {
+	Explicit.String()
+	Questionable.String()
+	Safe.String()
+	Original.String()
+}
+
 func Test_RatingFromTagSet(t *testing.T) {
 	var testcases = map[string]struct {
 		rating PostRating
