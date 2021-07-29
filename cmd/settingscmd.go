@@ -98,7 +98,7 @@ func sptr(x string) *string { return &x }
 func (this *SettingsState) Handle(ctx *gogram.MessageCtx) {
 	err := storage.DefaultTransact(func(tx storage.DBLike) error { return this.HandleTx(tx, ctx) })
 	if err != nil {
-		ctx.Bot.ErrorLog.Println("Error in SettingsState.Handle: %s", err)
+		ctx.Bot.ErrorLog.Printf("Error in SettingsState.Handle: %s", err.Error())
 	}
 }
 
@@ -137,7 +137,7 @@ func (this *SettingsState) HandleTx(tx storage.DBLike, ctx *gogram.MessageCtx) e
 func (this *SettingsState) HandleCallback(ctx *gogram.CallbackCtx) {
 	err := storage.DefaultTransact(func(tx storage.DBLike) error { return this.HandleCallbackTx(tx, ctx) })
 	if err != nil {
-		ctx.Bot.ErrorLog.Println("Error in SettingsState.HandleCallback: %s", err)
+		ctx.Bot.ErrorLog.Printf("Error in SettingsState.HandleCallback: %s", err.Error())
 	}
 }
 
