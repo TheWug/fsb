@@ -1,0 +1,638 @@
+--
+-- PostgreSQL database dump
+--
+
+-- Dumped from database version 13.1 (Ubuntu 13.1-1.pgdg18.04+1)
+-- Dumped by pg_dump version 13.1 (Ubuntu 13.1-1.pgdg18.04+1)
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: fsb_test; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA fsb_test;
+
+
+--
+-- Name: clone_post_sources(); Type: FUNCTION; Schema: fsb_test; Owner: -
+--
+
+CREATE FUNCTION fsb_test.clone_post_sources() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+begin
+  if NEW.post_sources_fixed is null then
+    NEW.post_sources_fixed := new.post_sources;
+  end if;
+  return NEW;
+end;
+$$;
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: alias_index; Type: TABLE; Schema: fsb_test; Owner: -
+--
+
+CREATE TABLE fsb_test.alias_index (
+    alias_id integer NOT NULL,
+    alias_name character varying NOT NULL,
+    alias_target_id integer NOT NULL
+);
+
+
+--
+-- Name: blit_tag_registry; Type: TABLE; Schema: fsb_test; Owner: -
+--
+
+CREATE TABLE fsb_test.blit_tag_registry (
+    tag_id integer NOT NULL,
+    is_blit boolean NOT NULL
+);
+
+
+--
+-- Name: cats_registered; Type: TABLE; Schema: fsb_test; Owner: -
+--
+
+CREATE TABLE fsb_test.cats_registered (
+    cat_id bigint NOT NULL,
+    tag_id_1 integer,
+    tag_id_2 integer,
+    tag_id_merged integer NOT NULL,
+    marked boolean NOT NULL,
+    replace_id bigint
+);
+
+
+--
+-- Name: cats_registered_cat_id_seq; Type: SEQUENCE; Schema: fsb_test; Owner: -
+--
+
+CREATE SEQUENCE fsb_test.cats_registered_cat_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: cats_registered_cat_id_seq; Type: SEQUENCE OWNED BY; Schema: fsb_test; Owner: -
+--
+
+ALTER SEQUENCE fsb_test.cats_registered_cat_id_seq OWNED BY fsb_test.cats_registered.cat_id;
+
+
+--
+-- Name: dialog_posts; Type: TABLE; Schema: fsb_test; Owner: -
+--
+
+CREATE TABLE fsb_test.dialog_posts (
+    dialog_id character varying(32) NOT NULL,
+    msg_id integer NOT NULL,
+    chat_id bigint NOT NULL,
+    dialog_data json NOT NULL,
+    msg_ts timestamp with time zone NOT NULL
+);
+
+
+--
+-- Name: phantom_tag_seq; Type: SEQUENCE; Schema: fsb_test; Owner: -
+--
+
+CREATE SEQUENCE fsb_test.phantom_tag_seq
+    START WITH -1
+    INCREMENT BY -1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: post_index; Type: TABLE; Schema: fsb_test; Owner: -
+--
+
+CREATE TABLE fsb_test.post_index (
+    post_id integer NOT NULL,
+    post_change_seq bigint NOT NULL,
+    post_rating character(1) NOT NULL,
+    post_description character varying DEFAULT ''::character varying NOT NULL,
+    post_sources character varying DEFAULT ''::character varying NOT NULL,
+    post_hash character varying NOT NULL,
+    post_deleted boolean DEFAULT false NOT NULL,
+    post_sources_fixed character varying
+);
+
+
+--
+-- Name: post_tags; Type: TABLE; Schema: fsb_test; Owner: -
+--
+
+CREATE TABLE fsb_test.post_tags (
+    post_id integer NOT NULL,
+    tag_id integer NOT NULL
+);
+
+
+--
+-- Name: post_tags_by_name; Type: TABLE; Schema: fsb_test; Owner: -
+--
+
+CREATE TABLE fsb_test.post_tags_by_name (
+    post_id integer NOT NULL,
+    tag_name character varying NOT NULL
+);
+
+
+--
+-- Name: prompt_posts; Type: TABLE; Schema: fsb_test; Owner: -
+--
+
+CREATE TABLE fsb_test.prompt_posts (
+    post_id integer NOT NULL,
+    msg_id integer NOT NULL,
+    chat_id bigint NOT NULL,
+    msg_ts timestamp with time zone NOT NULL,
+    msg_captioned boolean NOT NULL,
+    edit_list_json json NOT NULL,
+    post_type character varying(6) NOT NULL,
+    post_url character varying(128) NOT NULL,
+    sample_url character varying(128) NOT NULL,
+    post_hash character varying(32) NOT NULL,
+    post_width integer NOT NULL,
+    post_height integer NOT NULL
+);
+
+
+--
+-- Name: remote_user_credentials; Type: TABLE; Schema: fsb_test; Owner: -
+--
+
+CREATE TABLE fsb_test.remote_user_credentials (
+    telegram_id integer NOT NULL,
+    api_user character varying(255),
+    api_key character varying(63),
+    privilege_janitorial boolean DEFAULT false NOT NULL,
+    api_blacklist character varying DEFAULT ''::character varying NOT NULL,
+    api_blacklist_last_updated timestamp with time zone DEFAULT '2020-01-01 00:00:00-08'::timestamp with time zone
+);
+
+
+--
+-- Name: replacement_actions; Type: TABLE; Schema: fsb_test; Owner: -
+--
+
+CREATE TABLE fsb_test.replacement_actions (
+    action_id bigint NOT NULL,
+    telegram_user_id integer NOT NULL,
+    replace_id bigint NOT NULL,
+    post_id integer NOT NULL,
+    action_ts timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: replacement_actions_action_id_seq; Type: SEQUENCE; Schema: fsb_test; Owner: -
+--
+
+CREATE SEQUENCE fsb_test.replacement_actions_action_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: replacement_actions_action_id_seq; Type: SEQUENCE OWNED BY; Schema: fsb_test; Owner: -
+--
+
+ALTER SEQUENCE fsb_test.replacement_actions_action_id_seq OWNED BY fsb_test.replacement_actions.action_id;
+
+
+--
+-- Name: replacements; Type: TABLE; Schema: fsb_test; Owner: -
+--
+
+CREATE TABLE fsb_test.replacements (
+    replace_id bigint NOT NULL,
+    match_spec character varying NOT NULL,
+    replace_spec character varying NOT NULL,
+    autofix boolean NOT NULL
+);
+
+
+--
+-- Name: replacements_replace_id_seq; Type: SEQUENCE; Schema: fsb_test; Owner: -
+--
+
+CREATE SEQUENCE fsb_test.replacements_replace_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: replacements_replace_id_seq; Type: SEQUENCE OWNED BY; Schema: fsb_test; Owner: -
+--
+
+ALTER SEQUENCE fsb_test.replacements_replace_id_seq OWNED BY fsb_test.replacements.replace_id;
+
+
+--
+-- Name: state_persistence; Type: TABLE; Schema: fsb_test; Owner: -
+--
+
+CREATE TABLE fsb_test.state_persistence (
+    state_user integer NOT NULL,
+    state_channel bigint NOT NULL,
+    state_ts timestamp with time zone NOT NULL,
+    state_persist json NOT NULL,
+    state_type character varying(32) NOT NULL
+);
+
+
+--
+-- Name: tag_index; Type: TABLE; Schema: fsb_test; Owner: -
+--
+
+CREATE TABLE fsb_test.tag_index (
+    tag_id integer NOT NULL,
+    tag_name character varying NOT NULL,
+    tag_count integer NOT NULL,
+    tag_type integer NOT NULL,
+    tag_type_locked boolean DEFAULT false NOT NULL,
+    tag_count_full integer DEFAULT 0 NOT NULL
+);
+
+
+--
+-- Name: typos_registered; Type: TABLE; Schema: fsb_test; Owner: -
+--
+
+CREATE TABLE fsb_test.typos_registered (
+    typo_id bigint NOT NULL,
+    tag_typo_id integer NOT NULL,
+    tag_fix_id integer,
+    marked boolean NOT NULL,
+    replace_id bigint
+);
+
+
+--
+-- Name: typos_registered_typo_id_seq; Type: SEQUENCE; Schema: fsb_test; Owner: -
+--
+
+CREATE SEQUENCE fsb_test.typos_registered_typo_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: typos_registered_typo_id_seq; Type: SEQUENCE OWNED BY; Schema: fsb_test; Owner: -
+--
+
+ALTER SEQUENCE fsb_test.typos_registered_typo_id_seq OWNED BY fsb_test.typos_registered.typo_id;
+
+
+--
+-- Name: user_settings; Type: TABLE; Schema: fsb_test; Owner: -
+--
+
+CREATE TABLE fsb_test.user_settings (
+    telegram_id integer NOT NULL,
+    age_status integer NOT NULL,
+    rating_mode integer NOT NULL,
+    blacklist_mode integer NOT NULL
+);
+
+
+--
+-- Name: user_tagrules; Type: TABLE; Schema: fsb_test; Owner: -
+--
+
+CREATE TABLE fsb_test.user_tagrules (
+    telegram_id integer NOT NULL,
+    rules character varying(102400),
+    name character varying(32) DEFAULT 'main'::character varying NOT NULL
+);
+
+
+--
+-- Name: webms_converted_for_telegram; Type: TABLE; Schema: fsb_test; Owner: -
+--
+
+CREATE TABLE fsb_test.webms_converted_for_telegram (
+    md5 character varying(32) NOT NULL,
+    telegram_id character varying(96) NOT NULL
+);
+
+
+--
+-- Name: cats_registered cat_id; Type: DEFAULT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.cats_registered ALTER COLUMN cat_id SET DEFAULT nextval('fsb_test.cats_registered_cat_id_seq'::regclass);
+
+
+--
+-- Name: replacement_actions action_id; Type: DEFAULT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.replacement_actions ALTER COLUMN action_id SET DEFAULT nextval('fsb_test.replacement_actions_action_id_seq'::regclass);
+
+
+--
+-- Name: replacements replace_id; Type: DEFAULT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.replacements ALTER COLUMN replace_id SET DEFAULT nextval('fsb_test.replacements_replace_id_seq'::regclass);
+
+
+--
+-- Name: typos_registered typo_id; Type: DEFAULT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.typos_registered ALTER COLUMN typo_id SET DEFAULT nextval('fsb_test.typos_registered_typo_id_seq'::regclass);
+
+
+--
+-- Name: alias_index alias_index_pkey; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.alias_index
+    ADD CONSTRAINT alias_index_pkey PRIMARY KEY (alias_id);
+
+
+--
+-- Name: blit_tag_registry blit_tag_registry_pkey; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.blit_tag_registry
+    ADD CONSTRAINT blit_tag_registry_pkey PRIMARY KEY (tag_id);
+
+
+--
+-- Name: cats_registered cats_registered_pkey; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.cats_registered
+    ADD CONSTRAINT cats_registered_pkey PRIMARY KEY (cat_id);
+
+
+--
+-- Name: dialog_posts dialog_posts_pkey; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.dialog_posts
+    ADD CONSTRAINT dialog_posts_pkey PRIMARY KEY (msg_id, chat_id);
+
+
+--
+-- Name: post_index post_index_pkey; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.post_index
+    ADD CONSTRAINT post_index_pkey PRIMARY KEY (post_id);
+
+
+--
+-- Name: post_tags_by_name post_tags_by_name__staging_pkey; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.post_tags_by_name
+    ADD CONSTRAINT post_tags_by_name__staging_pkey PRIMARY KEY (post_id, tag_name);
+
+
+--
+-- Name: post_tags post_tags_pkey; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.post_tags
+    ADD CONSTRAINT post_tags_pkey PRIMARY KEY (post_id, tag_id);
+
+
+--
+-- Name: prompt_posts prompt_posts_pkey; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.prompt_posts
+    ADD CONSTRAINT prompt_posts_pkey PRIMARY KEY (post_id);
+
+
+--
+-- Name: remote_user_credentials remote_user_credentials_pkey; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.remote_user_credentials
+    ADD CONSTRAINT remote_user_credentials_pkey PRIMARY KEY (telegram_id);
+
+
+--
+-- Name: replacement_actions replacement_actions_pkey; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.replacement_actions
+    ADD CONSTRAINT replacement_actions_pkey PRIMARY KEY (action_id);
+
+
+--
+-- Name: replacements replacements_pkey; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.replacements
+    ADD CONSTRAINT replacements_pkey PRIMARY KEY (replace_id);
+
+
+--
+-- Name: state_persistence state_persistence_pkey; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.state_persistence
+    ADD CONSTRAINT state_persistence_pkey PRIMARY KEY (state_user, state_channel);
+
+
+--
+-- Name: tag_index tag_index__staging_pkey; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.tag_index
+    ADD CONSTRAINT tag_index__staging_pkey PRIMARY KEY (tag_id);
+
+
+--
+-- Name: typos_registered typos_registered_pkey; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.typos_registered
+    ADD CONSTRAINT typos_registered_pkey PRIMARY KEY (typo_id);
+
+
+--
+-- Name: cats_registered unique_tag_id_merged; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.cats_registered
+    ADD CONSTRAINT unique_tag_id_merged UNIQUE (tag_id_merged);
+
+
+--
+-- Name: tag_index unique_tag_name; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.tag_index
+    ADD CONSTRAINT unique_tag_name UNIQUE (tag_name);
+
+
+--
+-- Name: typos_registered unique_tag_typo_id; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.typos_registered
+    ADD CONSTRAINT unique_tag_typo_id UNIQUE (tag_typo_id);
+
+
+--
+-- Name: user_settings user_settings_pkey; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.user_settings
+    ADD CONSTRAINT user_settings_pkey PRIMARY KEY (telegram_id);
+
+
+--
+-- Name: user_tagrules user_tagrules_pkey; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.user_tagrules
+    ADD CONSTRAINT user_tagrules_pkey PRIMARY KEY (telegram_id, name);
+
+
+--
+-- Name: webms_converted_for_telegram webms_converted_for_telegram_pkey; Type: CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.webms_converted_for_telegram
+    ADD CONSTRAINT webms_converted_for_telegram_pkey PRIMARY KEY (md5);
+
+
+--
+-- Name: post_index_change_seq; Type: INDEX; Schema: fsb_test; Owner: -
+--
+
+CREATE INDEX post_index_change_seq ON fsb_test.post_index USING btree (post_change_seq);
+
+
+--
+-- Name: post_index_post_deleted_post_id_idx; Type: INDEX; Schema: fsb_test; Owner: -
+--
+
+CREATE INDEX post_index_post_deleted_post_id_idx ON fsb_test.post_index USING btree (post_deleted, post_id);
+
+
+--
+-- Name: post_tags_by_name__staging_tag_name_idx; Type: INDEX; Schema: fsb_test; Owner: -
+--
+
+CREATE INDEX post_tags_by_name__staging_tag_name_idx ON fsb_test.post_tags_by_name USING btree (tag_name);
+
+
+--
+-- Name: post_tags_by_post_id; Type: INDEX; Schema: fsb_test; Owner: -
+--
+
+CREATE INDEX post_tags_by_post_id ON fsb_test.post_tags USING btree (post_id);
+
+
+--
+-- Name: post_tags_tag_id_idx; Type: INDEX; Schema: fsb_test; Owner: -
+--
+
+CREATE INDEX post_tags_tag_id_idx ON fsb_test.post_tags USING btree (tag_id);
+
+
+--
+-- Name: prompt_posts_chat_id_msg_id_idx; Type: INDEX; Schema: fsb_test; Owner: -
+--
+
+CREATE UNIQUE INDEX prompt_posts_chat_id_msg_id_idx ON fsb_test.prompt_posts USING btree (chat_id, msg_id);
+
+
+--
+-- Name: post_index clone_sources_on_post_index; Type: TRIGGER; Schema: fsb_test; Owner: -
+--
+
+CREATE TRIGGER clone_sources_on_post_index BEFORE INSERT ON fsb_test.post_index FOR EACH ROW EXECUTE FUNCTION fsb_test.clone_post_sources();
+
+
+--
+-- Name: cats_registered cats_registered_replace_id_fkey; Type: FK CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.cats_registered
+    ADD CONSTRAINT cats_registered_replace_id_fkey FOREIGN KEY (replace_id) REFERENCES fsb_test.replacements(replace_id) ON DELETE SET NULL;
+
+
+--
+-- Name: cats_registered cats_registered_tag_id_1_fkey; Type: FK CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.cats_registered
+    ADD CONSTRAINT cats_registered_tag_id_1_fkey FOREIGN KEY (tag_id_1) REFERENCES fsb_test.tag_index(tag_id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: cats_registered cats_registered_tag_id_2_fkey; Type: FK CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.cats_registered
+    ADD CONSTRAINT cats_registered_tag_id_2_fkey FOREIGN KEY (tag_id_2) REFERENCES fsb_test.tag_index(tag_id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: cats_registered cats_registered_tag_id_merged_fkey; Type: FK CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.cats_registered
+    ADD CONSTRAINT cats_registered_tag_id_merged_fkey FOREIGN KEY (tag_id_merged) REFERENCES fsb_test.tag_index(tag_id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: post_tags post_tags_tag_id_fkey; Type: FK CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.post_tags
+    ADD CONSTRAINT post_tags_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES fsb_test.tag_index(tag_id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: typos_registered typos_registered_tag_fix_id_fkey; Type: FK CONSTRAINT; Schema: fsb_test; Owner: -
+--
+
+ALTER TABLE ONLY fsb_test.typos_registered
+    ADD CONSTRAINT typos_registered_tag_fix_id_fkey FOREIGN KEY (tag_fix_id) REFERENCES fsb_test.tag_index(tag_id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- PostgreSQL database dump complete
+--
+

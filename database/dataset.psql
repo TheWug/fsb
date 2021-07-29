@@ -1,0 +1,267 @@
+--
+-- PostgreSQL database dump
+--
+
+-- Dumped from database version 13.1 (Ubuntu 13.1-1.pgdg18.04+1)
+-- Dumped by pg_dump version 13.1 (Ubuntu 13.1-1.pgdg18.04+1)
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Data for Name: alias_index; Type: TABLE DATA; Schema: fsb_test; Owner: fsb_test
+--
+
+COPY fsb_test.alias_index (alias_id, alias_name, alias_target_id) FROM stdin;
+1	large	20
+\.
+
+
+--
+-- Data for Name: blit_tag_registry; Type: TABLE DATA; Schema: fsb_test; Owner: fsb_test
+--
+
+COPY fsb_test.blit_tag_registry (tag_id, is_blit) FROM stdin;
+\.
+
+
+--
+-- Data for Name: replacements; Type: TABLE DATA; Schema: fsb_test; Owner: fsb_test
+--
+
+COPY fsb_test.replacements (replace_id, match_spec, replace_spec, autofix) FROM stdin;
+1	dogcat	-dogcat dog cat	t
+\.
+
+
+--
+-- Data for Name: tag_index; Type: TABLE DATA; Schema: fsb_test; Owner: fsb_test
+--
+
+COPY fsb_test.tag_index (tag_id, tag_name, tag_count, tag_type, tag_type_locked, tag_count_full) FROM stdin;
+1	small	0	0	f	0
+2	medium	0	0	f	0
+3	large	0	0	f	0
+4	da-vinci	0	1	f	0
+5	dr-seuss	0	1	f	0
+6	shakespeare	0	1	f	0
+7	disney	0	3	f	0
+8	blizzard	0	3	f	0
+9	dog	0	5	f	0
+10	cat	0	5	f	0
+11	reptile	0	5	f	0
+12	fish	0	5	f	0
+13	person_a	0	4	f	0
+14	person_b	0	4	f	0
+15	not_a_real_tag	0	6	f	0
+16	widescreen	0	7	f	0
+17	high_res	0	7	f	0
+18	not_what_it_appears	0	8	f	0
+19	extra_context	0	8	f	0
+20	big	0	0	f	0
+21	didney	0	0	f	0
+22	dogcat	0	0	f	0
+\.
+
+
+--
+-- Data for Name: cats_registered; Type: TABLE DATA; Schema: fsb_test; Owner: fsb_test
+--
+
+COPY fsb_test.cats_registered (cat_id, tag_id_1, tag_id_2, tag_id_merged, marked, replace_id) FROM stdin;
+1	9	10	22	t	1
+\.
+
+
+--
+-- Data for Name: dialog_posts; Type: TABLE DATA; Schema: fsb_test; Owner: fsb_test
+--
+
+COPY fsb_test.dialog_posts (dialog_id, msg_id, chat_id, dialog_data, msg_ts) FROM stdin;
+\.
+
+
+--
+-- Data for Name: post_index; Type: TABLE DATA; Schema: fsb_test; Owner: fsb_test
+--
+
+COPY fsb_test.post_index (post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted, post_sources_fixed) FROM stdin;
+1	45	s	description of post 1	source 1\\nsource 2	1F2A0000	f	
+2	72	s	description of post 2	source 3\\nsource 4	1F2A1111	f	
+3	66	q	description of post 3	source 5	1F2A2222	t	
+4	73	q		source 6	1F2A3333	f	
+5	89	e	description of post 4	source 7	1F2A4444	f	
+\.
+
+
+--
+-- Data for Name: post_tags; Type: TABLE DATA; Schema: fsb_test; Owner: fsb_test
+--
+
+COPY fsb_test.post_tags (post_id, tag_id) FROM stdin;
+3	1
+4	1
+5	1
+2	2
+4	2
+4	3
+5	3
+5	4
+1	6
+5	6
+3	7
+5	8
+2	9
+4	9
+5	9
+1	10
+2	10
+3	10
+4	10
+5	10
+2	11
+4	12
+1	13
+2	13
+4	13
+3	14
+4	14
+1	16
+2	16
+3	16
+4	16
+5	16
+1	18
+1	19
+5	19
+1	21
+2	21
+4	21
+1	22
+2	22
+3	22
+4	22
+\.
+
+
+--
+-- Data for Name: post_tags_by_name; Type: TABLE DATA; Schema: fsb_test; Owner: fsb_test
+--
+
+COPY fsb_test.post_tags_by_name (post_id, tag_name) FROM stdin;
+\.
+
+
+--
+-- Data for Name: prompt_posts; Type: TABLE DATA; Schema: fsb_test; Owner: fsb_test
+--
+
+COPY fsb_test.prompt_posts (post_id, msg_id, chat_id, msg_ts, msg_captioned, edit_list_json, post_type, post_url, sample_url, post_hash, post_width, post_height) FROM stdin;
+\.
+
+
+--
+-- Data for Name: remote_user_credentials; Type: TABLE DATA; Schema: fsb_test; Owner: fsb_test
+--
+
+COPY fsb_test.remote_user_credentials (telegram_id, api_user, api_key, privilege_janitorial, api_blacklist, api_blacklist_last_updated) FROM stdin;
+1	test	testapikey	f		2021-07-29 10:03:33.688289-07
+2	janitor	testapikey	t	small	2021-07-29 10:03:59.593111-07
+\.
+
+
+--
+-- Data for Name: replacement_actions; Type: TABLE DATA; Schema: fsb_test; Owner: fsb_test
+--
+
+COPY fsb_test.replacement_actions (action_id, telegram_user_id, replace_id, post_id, action_ts) FROM stdin;
+\.
+
+
+--
+-- Data for Name: state_persistence; Type: TABLE DATA; Schema: fsb_test; Owner: fsb_test
+--
+
+COPY fsb_test.state_persistence (state_user, state_channel, state_ts, state_persist, state_type) FROM stdin;
+\.
+
+
+--
+-- Data for Name: typos_registered; Type: TABLE DATA; Schema: fsb_test; Owner: fsb_test
+--
+
+COPY fsb_test.typos_registered (typo_id, tag_typo_id, tag_fix_id, marked, replace_id) FROM stdin;
+\.
+
+
+--
+-- Data for Name: user_settings; Type: TABLE DATA; Schema: fsb_test; Owner: fsb_test
+--
+
+COPY fsb_test.user_settings (telegram_id, age_status, rating_mode, blacklist_mode) FROM stdin;
+\.
+
+
+--
+-- Data for Name: user_tagrules; Type: TABLE DATA; Schema: fsb_test; Owner: fsb_test
+--
+
+COPY fsb_test.user_tagrules (telegram_id, rules, name) FROM stdin;
+\.
+
+
+--
+-- Data for Name: webms_converted_for_telegram; Type: TABLE DATA; Schema: fsb_test; Owner: fsb_test
+--
+
+COPY fsb_test.webms_converted_for_telegram (md5, telegram_id) FROM stdin;
+\.
+
+
+--
+-- Name: cats_registered_cat_id_seq; Type: SEQUENCE SET; Schema: fsb_test; Owner: fsb_test
+--
+
+SELECT pg_catalog.setval('fsb_test.cats_registered_cat_id_seq', 1, false);
+
+
+--
+-- Name: phantom_tag_seq; Type: SEQUENCE SET; Schema: fsb_test; Owner: fsb_test
+--
+
+SELECT pg_catalog.setval('fsb_test.phantom_tag_seq', -1, false);
+
+
+--
+-- Name: replacement_actions_action_id_seq; Type: SEQUENCE SET; Schema: fsb_test; Owner: fsb_test
+--
+
+SELECT pg_catalog.setval('fsb_test.replacement_actions_action_id_seq', 1, false);
+
+
+--
+-- Name: replacements_replace_id_seq; Type: SEQUENCE SET; Schema: fsb_test; Owner: fsb_test
+--
+
+SELECT pg_catalog.setval('fsb_test.replacements_replace_id_seq', 1, false);
+
+
+--
+-- Name: typos_registered_typo_id_seq; Type: SEQUENCE SET; Schema: fsb_test; Owner: fsb_test
+--
+
+SELECT pg_catalog.setval('fsb_test.typos_registered_typo_id_seq', 1, false);
+
+
+--
+-- PostgreSQL database dump complete
+--
+
