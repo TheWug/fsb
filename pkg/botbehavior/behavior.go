@@ -354,7 +354,6 @@ func (this *Behavior) PromptPost(bot *gogram.TelegramBot, post_info *storage.Pro
 				},
 			})
 		} else {
-			send.Text = fmt.Sprintf("%s", post_info.PostId, post_info.PostType, send.Text) // fixme
 			message, err = bot.Remote.SendMessage(data.OMessage{
 				SendData: send,
 				DisableWebPagePreview: true,
