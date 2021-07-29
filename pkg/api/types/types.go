@@ -45,12 +45,12 @@ func RatingFromTagSet(ts tags.TagSet) (PostRating) {
 }
 
 type TTagData struct {
-	Id int `json:"id" dml:"tag_id"`
-	Name string `json:"name" dml:"tag_name"`
-	Count int `json:"post_count" dml:"tag_count"`
-	FullCount int `dml:"tag_count_full"`// this field is only present in the local DB
-	Type TagCategory `json:"category" dml:"tag_type"`
-	Locked *bool `json:"is_locked" dml:"tag_type_locked"`
+	Id        int         `json:"id"         dml:"tag_id"`
+	Name      string      `json:"name"       dml:"tag_name"`
+	Count     int         `json:"post_count" dml:"tag_count"`
+	FullCount int                           `dml:"tag_count_full"`// this field is only present in the local DB
+	Type      TagCategory `json:"category"   dml:"tag_type"`
+	Locked   *bool        `json:"is_locked"  dml:"tag_type_locked"`
 
 	// created_at
 	// updated_at
@@ -64,10 +64,6 @@ func (this TTagData) ApparentCount(include_deleted bool) int {
 	} else {
 		return this.Count
 	}
-}
-
-func (tag *TTagData) ScanFrom(row Scannable) error {
-	return row.Scan(&tag.Id, &tag.Name, &tag.Count, &tag.FullCount, &tag.Type, &tag.Locked)
 }
 
 type TTagInfoArray []TTagData
