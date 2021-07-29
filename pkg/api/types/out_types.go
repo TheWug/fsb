@@ -68,7 +68,7 @@ func PostsAfterChangeSeq(change int) (string) {
 }
 
 func PostsAfterId(id int) (string) {
-	return fmt.Sprintf("status:any order:id id:>%d", id)
+	return fmt.Sprintf("status:any order:id_asc id:>%d", id)
 }
 
 func DeletedPostsAfterId(id int) (string) {
