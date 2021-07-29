@@ -2,17 +2,19 @@ package storage
 
 import (
 	apitypes "github.com/thewug/fsb/pkg/api/types"
-	
+
+	"github.com/thewug/dml"
+
 	"database/sql"
 	"errors"
 	"fmt"
-	
+
 	"github.com/lib/pq"
 )
 
 // Looks up a tag by its name.
 // Has a special option `createPhantom`, which when set, will create a "phantom tag" in the database.
-// the type will be inferred from the tag name (a prefix can be used to specify its type, see 
+// the type will be inferred from the tag name (a prefix can be used to specify its type, see
 // PrefixedTagToTypedTag. It is created with a negative tag_id (all such tags with negative IDs are
 // phantoms).
 // Phantom tags have all of the hallmarks of real tags but don't exist server-side. When the bot
@@ -24,20 +26,17 @@ func GetTagByName(tx DBLike, name string, createPhantom bool) (*apitypes.TTagDat
 	name, typ := PrefixedTagToTypedTag(name)
 
 	var tag apitypes.TTagData
-	err := tag.ScanFrom(tx.QueryRow(query, name))
+	err := dml.QuickScan(tx.QueryRow(query, name), &tag)
 
 	if err == sql.ErrNoRows {
 		if !createPhantom { return nil, nil } // don't create phantom tag, so just return nil for "not found"
 		// otherwise, insert a phantom tag
 		query = "INSERT INTO tag_index (tag_id, tag_name, tag_count, tag_type, tag_type_locked) VALUES (nextval('phantom_tag_seq'), $1, 0, $2, false) RETURNING tag_id, tag_name, tag_count, tag_count_full, tag_type, tag_type_locked"
-		err = tag.ScanFrom(tx.QueryRow(query, name, typ))
+		err = dml.QuickScan(tx.QueryRow(query, name, typ), &tag)
 		if err == sql.ErrNoRows { return nil, errors.New("failed to add phantom tag") }
 	}
-	
-	if err != nil {
-		return nil, err
-	}
-	
+
+	if err != nil { return nil, err }
 	return &tag, err
 }
 
@@ -51,25 +50,20 @@ func GetTag(tx *sql.Tx, id int) (*apitypes.TTagData, error) {
 
 func GetTags(tx *sql.Tx, ids []int) (apitypes.TTagInfoArray, error) {
 	query := "SELECT tag_id, tag_name, tag_count, tag_count_full, tag_type, tag_type_locked FROM tag_index WHERE tag_id = ANY($1)"
-	rows, err := tx.Query(query, pq.Array(ids))
+	rows, err := dml.X(tx.Query(query, pq.Array(ids)))
 	if err != nil { return nil, err }
-	
-	var tag apitypes.TTagData
+
 	var out apitypes.TTagInfoArray
-	for rows.Next() {
-		err := tag.ScanFrom(rows)
-		if err != nil {	return nil, err }
-		out = append(out, tag)
-	}
-	
+	err = dml.ScanArray(rows, &out)
+
+	if err != nil { return nil, err }
 	return out, nil
 }
 
 func GetLastTag(tx DBLike) (*apitypes.TTagData, error) {
 	sq := "SELECT tag_id, tag_name, tag_count, tag_count_full, tag_type, tag_type_locked FROM tag_index WHERE tag_id = (SELECT MAX(tag_id) FROM tag_index) LIMIT 1"
-	row := tx.QueryRow(sq)
 	var tag apitypes.TTagData
-	err := tag.ScanFrom(row)
+	err := dml.QuickScan(tx.QueryRow(sq), &tag)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	} else if err != nil {
@@ -84,17 +78,13 @@ func GetTagsWithCountEqual(tx *sql.Tx, count int) (apitypes.TTagInfoArray, error
 
 func getTagsWithCount(tx *sql.Tx, count int, differentiator string) (apitypes.TTagInfoArray, error) {
 	query := fmt.Sprintf("SELECT tag_id, tag_name, tag_count, tag_count_full, tag_type, tag_type_locked FROM tag_index WHERE tag_count %s $1", differentiator)
-	rows, err := tx.Query(query, count)
+	rows, err := dml.X(tx.Query(query, count))
 	if err != nil { return nil, err }
 
-	var tag apitypes.TTagData
 	var out apitypes.TTagInfoArray
-	for rows.Next() {
-		err = tag.ScanFrom(rows)
-		if err != nil {	return nil, err }
-		out = append(out, tag)
-	}
-	
+	err = dml.ScanArray(rows, &out)
+
+	if err != nil { return nil, err }
 	return out, nil
 }
 
@@ -122,16 +112,12 @@ func EnumerateAllTags(tx DBLike, orderByCount bool) (apitypes.TTagInfoArray, err
 		order_by = ""
 	}
 
-	rows, err := tx.Query(fmt.Sprintf(query, order_by))
+	rows, err := dml.X(tx.Query(fmt.Sprintf(query, order_by)))
 	if err != nil { return nil, err }
 
-	var output apitypes.TTagInfoArray
-	var tag apitypes.TTagData
-	for rows.Next() {
-		err = tag.ScanFrom(rows)
-		if err != nil { return nil, err }
-		output = append(output, tag)
-	}
+	var out apitypes.TTagInfoArray
+	err = dml.ScanArray(rows, &out)
 
-	return output, nil
+	if err != nil { return nil, err }
+	return out, nil
 }
