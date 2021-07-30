@@ -114,6 +114,20 @@ func GetPostIDFromMessage(msg *data.TMessage) (int) {
 		}
 	}
 
+	for _, entity := range msg.GetEntities() {
+		if entity.Url != nil {
+			md5 := md5hashmatch.MatchString(*entity.Url)
+			if md5 != "" {
+				post, err := storage.PostByMD5(storage.DefaultNoTx(), md5)
+				if post != nil && err == nil {
+					return post.Id
+				} else {
+					break
+				}
+			}
+		}
+	}
+
 	return GetPostIDFromText(msg.PlainText())
 }
 
