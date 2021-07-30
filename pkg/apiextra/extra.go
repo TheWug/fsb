@@ -31,7 +31,7 @@ func Init(s settings) error {
 	                                                     regexp.QuoteMeta(s.GetApiEndpoint()),
 	                                                     regexp.QuoteMeta(s.GetApiFilteredEndpoint())))
 	md5hashmatch.fields = []int{3,8}
-	md5hashmatch.regexp, err = regexp.Compile(fmt.Sprintf(`((^|[^\w-])md5:([0-9A-Fa-f]{32})(\W|$)|(https?://)%s(%s|%s)/data/(\w+/)+([0-9A-Za-z]{32})\.\w+)`,
+	md5hashmatch.regexp, err = regexp.Compile(fmt.Sprintf(`((^|[^\w-])md5:([0-9A-Fa-f]{32})(\W|$)|(https?://)?%s(%s|%s)/data/(\w+/)+([0-9A-Za-z]{32})\.\w+)`,
 	                                                      regexp.QuoteMeta(s.GetApiStaticPrefix()),
 	                                                      regexp.QuoteMeta(s.GetApiEndpoint()),
 	                                                      regexp.QuoteMeta(s.GetApiFilteredEndpoint())))
