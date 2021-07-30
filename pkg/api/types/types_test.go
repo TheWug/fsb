@@ -140,3 +140,21 @@ func Test_SinglePostByMd5(t *testing.T) {
 		})
 	}
 }
+
+func Test_TTagData_ApparentCount(t *testing.T) {
+	testcases := map[string]struct{
+		tag TTagData
+		flag bool
+		result int
+	}{
+		"full": {TTagData{Count: 75, FullCount: 100}, true, 100},
+		"visible": {TTagData{Count: 75, FullCount: 100}, false, 75},
+	}
+
+	for k, v := range testcases {
+		t.Run(k, func(t *testing.T) {
+			result := v.tag.ApparentCount(v.flag)
+			if result != v.result { t.Errorf("Unexpected output: got %d, expected %d", result, v.result) }
+		})
+	}
+}
