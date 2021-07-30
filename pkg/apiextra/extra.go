@@ -4,7 +4,6 @@ import (
 	"github.com/thewug/fsb/pkg/storage"
 
 	"github.com/thewug/gogram/data"
-	"github.com/thewug/fsb/pkg/api/types"
 
 	"regexp"
 	"strconv"
@@ -93,12 +92,7 @@ func GetPostIDFromText(text string) int {
 	if found == NONEXISTENT_POST {
 		md5 := md5hashmatch.MatchString(text)
 		if md5 != "" {
-			var post *types.TPostInfo
-			var err error
-			err = storage.DefaultTransact(func(tx storage.DBLike) error {
-				post, err = storage.PostByMD5(tx, md5)
-				return err
-			})
+			post, err := storage.PostByMD5(storage.DefaultNoTx(), md5)
 			if post != nil && err == nil {
 				found = post.Id
 			}
