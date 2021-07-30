@@ -124,7 +124,12 @@ func PostByMD5(tx DBLike, md5 string) (*apitypes.TPostInfo, error) {
 	var sources string
 	query := "SELECT post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted, ARRAY(SELECT tag_name FROM tag_index INNER JOIN post_tags USING (tag_id) WHERE post_id = post_index.post_id) AS post_tags FROM post_index WHERE post_hash = $1;"
 	err := tx.QueryRow(query, md5).Scan(&item.Id, &item.Change, &item.Rating, &item.Description, &sources, &item.Md5, &item.Deleted, pq.Array(&item.General))
-	if err != sql.ErrNoRows && err != nil  { return nil, err }
+	if err == sql.ErrNoRows {
+		return nil, nil
+	} else if err != sql.ErrNoRows && err != nil {
+		return nil, err
+	}
+
 	item.Sources = strings.Split(sources, "\n")
 
 	return &item, nil

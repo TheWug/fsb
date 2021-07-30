@@ -1,9 +1,16 @@
 package apiextra
 
 import (
+	dbtest "github.com/thewug/fsb/pkg/storage/test"
+
 	"github.com/thewug/fsb/pkg/api"
+	"github.com/thewug/fsb/pkg/storage"
+
+	"github.com/thewug/gogram/data"
 
 	"testing"
+	"os"
+	"fmt"
 )
 
 type S struct {
@@ -17,6 +24,12 @@ func (s S) GetApiStaticPrefix() string { return "static." }
 func TestMain(m *testing.M) {
 	api.Init(S{})
 	Init(S{})
+
+	db, err := dbtest.TestDatabase()
+
+	dir, _ := os.Getwd()
+	if err != nil { panic(fmt.Sprintf("Could not open test database: %s %v!", dir, err)) }
+	storage.Db_pool = db
 
 	os.Exit(m.Run())
 }
@@ -67,6 +80,34 @@ func Test_regexes(t *testing.T) {
 		t.Run(k, func(t *testing.T) {
 			out := v.match.MatchString(v.test)
 			if out != v.expected { t.Errorf("Unexpected result: got %s, expected %s (%s)", out, v.expected, v.test) }
+		})
+	}
+}
+
+func sptr(x string) *string { return &x }
+
+func Test_GetPostIDFromText(t *testing.T) {
+	testcases := map[string]struct{
+		message *data.TMessage
+		expected int
+	}{
+		"link-in-text":			{&data.TMessage{Text: sptr("https://" + api.Endpoint + "/posts/1000")}, 1000},
+		"link-in-caption":		{&data.TMessage{Caption: sptr("https://" + api.FilteredEndpoint + "/posts/1000")}, 1000},
+		"link-in-url-entity":		{&data.TMessage{Text: sptr("hi"), Entities: &[]data.TMessageEntity{data.TMessageEntity{Url: sptr("https://" + api.Endpoint + "/posts/1000")}}}, 1000},
+		"second-link-in-url-entity":	{&data.TMessage{Text: sptr("hi"), Entities: &[]data.TMessageEntity{data.TMessageEntity{Url: sptr("https://" + api.Endpoint + "/posts/1000")}, data.TMessageEntity{Url: sptr("https://" + api.Endpoint + "/posts/2000")}}}, 1000},
+		"md5-in-text":			{&data.TMessage{Text: sptr("md5:0000000000000000000000001F2A0000")}, 1},
+		"md5-in-caption":		{&data.TMessage{Caption: sptr("md5:0000000000000000000000001F2A0000")}, 1},
+		"md5-in-url-entity":		{&data.TMessage{Text: sptr("hi"), Entities: &[]data.TMessageEntity{data.TMessageEntity{Url: sptr("md5:0000000000000000000000001F2A0000")}}}, 1},
+		"second-md5-in-url-entity":	{&data.TMessage{Text: sptr("hi"), Entities: &[]data.TMessageEntity{data.TMessageEntity{Url: sptr("md5:FFFF000000000000000000001F2A0000")}, data.TMessageEntity{Url: sptr("md5:0000000000000000000000001F2A0000")}}}, NONEXISTENT_POST},
+		"post-id-in-text":		{&data.TMessage{Text: sptr("2000")}, 2000},
+		"post-id-in-caption":		{&data.TMessage{Caption: sptr("2000")}, 2000},
+		"post-id-in-url-entity":	{&data.TMessage{Text: sptr("hi"), Entities: &[]data.TMessageEntity{data.TMessageEntity{Url: sptr("1234")}}}, NONEXISTENT_POST},
+	}
+
+	for k, v := range testcases {
+		t.Run(k, func(t *testing.T) {
+			out := GetPostIDFromMessage(v.message)
+			if out != v.expected { t.Errorf("Unexpected result: got %d, expected %d", out, v.expected) }
 		})
 	}
 }
