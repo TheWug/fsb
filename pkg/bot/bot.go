@@ -740,7 +740,7 @@ func (this *LoginState) HandleTx(tx storage.DBLike, ctx *gogram.MessageCtx) erro
 		ctx.SetState(nil)
 		return nil
 	} else if ctx.Cmd.Command == "/logout" {
-		storage.WriteUserCreds(nil, storage.UserCreds{TelegramId: ctx.Msg.From.Id})
+		storage.WriteUserCreds(tx, storage.UserCreds{TelegramId: ctx.Msg.From.Id})
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You are now logged out."}}, nil)
 		ctx.SetState(nil)
 		return nil
