@@ -69,23 +69,19 @@ func (this TTagData) ApparentCount(include_deleted bool) int {
 type TTagInfoArray []TTagData
 
 type TTagListing struct {
-	Tags TTagInfoArray `json:"tags"`
+	Tags TTagInfoArray
 }
 
 func (this *TTagListing) UnmarshalJSON(b []byte) (error) {
+	var x struct {
+		Tags *TTagInfoArray `json:"tags"`
+	}
 
-	type TTagListingAlt TTagListing
-	var temp TTagListingAlt
-	err1 := json.Unmarshal(b, &temp)
-	if err1 == nil {
-		*this = TTagListing(temp)
-		return nil
-	}
-	err2 := json.Unmarshal(b, &this.Tags)
-	if err2 == nil {
-		return nil
-	}
-	return errors.New(fmt.Sprintf("Couldn't figure out how to parse json response (%s) (%s)", err1.Error(), err2.Error()))
+	err := multi_format_unmarshal(b, func() bool {
+		return x.Tags != nil
+	}, func() { x.Tags = nil }, &x, &x.Tags)
+	if x.Tags != nil { this.Tags = *x.Tags }
+	return err
 }
 
 type TAliasData struct {
@@ -104,23 +100,23 @@ type TAliasData struct {
 type TAliasInfoArray []TAliasData
 
 type TAliasListing struct {
-	Aliases TAliasInfoArray `json:"tag_aliases"`
+	Aliases TAliasInfoArray
+}
+
+type alias_listing struct {
+	Aliases *TAliasInfoArray `json:"tag_aliases"`
 }
 
 func (this *TAliasListing) UnmarshalJSON(b []byte) (error) {
+	var x struct {
+		Aliases *TAliasInfoArray `json:"tag_aliases"`
+	}
 
-	type TAliasListingAlt TAliasListing
-	var temp TAliasListingAlt
-	err1 := json.Unmarshal(b, &temp)
-	if err1 == nil {
-		*this = TAliasListing(temp)
-		return nil
-	}
-	err2 := json.Unmarshal(b, &this.Aliases)
-	if err2 == nil {
-		return nil
-	}
-	return errors.New(fmt.Sprintf("Couldn't figure out how to parse json response (%s) (%s)", err1.Error(), err2.Error()))
+	err := multi_format_unmarshal(b, func() bool {
+		return x.Aliases != nil
+	}, func() { x.Aliases = nil }, &x, &x.Aliases)
+	if x.Aliases != nil { this.Aliases = *x.Aliases }
+	return err
 }
 
 type TTagHistory struct {
@@ -390,43 +386,72 @@ type TApiStatus struct {
 }
 
 type TPostListing struct {
-	Posts TPostInfoArray `json:"posts"`
+	Posts TPostInfoArray
 }
 
 func (this *TPostListing) UnmarshalJSON(b []byte) (error) {
+	var x struct {
+		Posts *TPostInfoArray `json:"posts"`
+	}
 
-	type TPostListingAlt TPostListing
-	var temp TPostListingAlt
-	err1 := json.Unmarshal(b, &temp)
-	if err1 == nil && len(temp.Posts) != 0 {
-		*this = TPostListing(temp)
-		return nil
-	}
-	err2 := json.Unmarshal(b, &this.Posts)
-	if err2 == nil {
-		return nil
-	}
-	return errors.New(fmt.Sprintf("Couldn't figure out how to parse json response (%v) (%v)", err1, err2))
+	err := multi_format_unmarshal(b, func() bool {
+		return x.Posts != nil
+	}, func() { x.Posts = nil }, &x, &x.Posts)
+	if x.Posts != nil { this.Posts = *x.Posts }
+	return err
 }
 
 type TSinglePostListing struct {
-	Post TPostInfo `json:"post"`
+	Post TPostInfo
 }
 
 func (this *TSinglePostListing) UnmarshalJSON(b []byte) (error) {
+	var x struct {
+		Post *TPostInfo `json:"post"`
+	}
 
-	type TPostListingAlt TSinglePostListing
-	var temp TPostListingAlt
-	err1 := json.Unmarshal(b, &temp)
-	if err1 == nil && temp.Post.Id == 0 { err1 = errors.New("failed to read a valid post") }
-	if err1 == nil {
-		*this = TSinglePostListing(temp)
-		return nil
+	err := multi_format_unmarshal(b, func() bool {
+		return x.Post != nil && x.Post.Id != 0
+	}, func() { x.Post = nil }, &x, &x.Post)
+	if x.Post != nil { this.Post = *x.Post }
+	return err
+}
+
+// This function attempts to unmartial a single object in two different ways.
+// - j should be the json byte array received from the json package.
+// - good should be a function which returns true if the output object has been read successfully.
+// - reset should be a function which returns the output to its unset state.
+// - objects should contain addresses of objects suitable for passing to json.Unmarshal
+//   (in other words, they must be pointers).
+// It returns nil if any object successfully captures the provided json, or an error summarizing
+// all of the sub-errors which occurred while trying to unmarshal the provided json.
+//
+// objects are considered in order, from first to last. If unmarshaling any of them succeeds,
+// continued unmarshalling is halted.
+//
+// this function has no error protection, and will misbehave if misused,
+// including in the following circumstances:
+// - objects has length 0
+// - an object has a non-pointer type
+// - good() returns true in the state in which function is called
+// - reset() returns the system to a state in which good() returns true
+func multi_format_unmarshal(j []byte, good func() bool, reset func(), objects ...interface{}) (error) {
+	var err error
+	var errs []error
+	for _, obj := range objects {
+		err := json.Unmarshal(j, obj)
+		if err == nil && good() { break }
+		if err != nil {
+			errs = append(errs, err)
+			reset()
+		}
 	}
-	err2 := json.Unmarshal(b, &this.Post)
-	if err2 == nil && temp.Post.Id == 0 { err2 = errors.New("failed to read a valid post") }
-	if err2 == nil {
-		return nil
+
+	if !good() {
+		var errstrings []string
+		for _, e := range errs { errstrings = append(errstrings, e.Error()) }
+		err = errors.New(fmt.Sprintf("Couldn't figure out how to parse json response (%v)", strings.Join(errstrings, ", ")))
 	}
-	return errors.New(fmt.Sprintf("Couldn't figure out how to parse json response (%v) (%v)", err1, err2))
+
+	return err
 }

@@ -5,6 +5,7 @@ import (
 
 	"testing"
 	"strings"
+	"reflect"
 )
 
 func Test_Simple(t *testing.T) {
@@ -155,6 +156,118 @@ func Test_TTagData_ApparentCount(t *testing.T) {
 		t.Run(k, func(t *testing.T) {
 			result := v.tag.ApparentCount(v.flag)
 			if result != v.result { t.Errorf("Unexpected output: got %d, expected %d", result, v.result) }
+		})
+	}
+}
+
+func Test_TTagListing_UnmarshalJSON(t *testing.T) {
+	testcases := map[string]struct{
+		jsondata string
+		expected TTagInfoArray
+		err string
+	}{
+		"empty-untagged": {`[]`, TTagInfoArray{}, ""},
+		"empty": {`{"tags":[]}`, TTagInfoArray{}, ""},
+		"full-untagged": {`[{"id": 1, "name": "cat"}, {"id": 2, "name": "dog"}]`, TTagInfoArray{TTagData{Id: 1, Name: "cat"}, TTagData{Id: 2, Name: "dog"}}, ""},
+		"full": {`{"tags": [{"id": 1, "name": "cat"}, {"id": 2, "name": "dog"}]}`, TTagInfoArray{TTagData{Id: 1, Name: "cat"}, TTagData{Id: 2, Name: "dog"}}, ""},
+		"missing": {`{"missing":true}`, TTagInfoArray{}, "figure out how to parse"},
+	}
+
+	for k, v := range testcases {
+		t.Run(k, func(t *testing.T) {
+			var start TTagListing
+			result := start.UnmarshalJSON([]byte(v.jsondata))
+			if result == nil && v.err != "" || result != nil && (v.err == "" || !strings.Contains(result.Error(), v.err)) {
+				t.Errorf("Unexpected error: got %v, wanted matching %s", result, v.err)
+			}
+
+			if !(len(start.Tags) == 0 && len(v.expected) == 0 || reflect.DeepEqual(start.Tags, v.expected)) {
+				t.Errorf("Unexpected result: got %v, expected %v", start.Tags, v.expected)
+			}
+		})
+	}
+}
+
+func Test_TAliasListing_UnmarshalJSON(t *testing.T) {
+	testcases := map[string]struct{
+		jsondata string
+		expected TAliasInfoArray
+		err string
+	}{
+		"empty-untagged": {`[]`, TAliasInfoArray{}, ""},
+		"empty": {`{"tag_aliases":[]}`, TAliasInfoArray{}, ""},
+		"full-untagged": {`[{"id":1, "consequent_name": "cat"}, {"id":2, "consequent_name": "dog"}]`, TAliasInfoArray{TAliasData{Id: 1, Name: "cat"}, TAliasData{Id: 2, Name: "dog"}}, ""},
+		"full": {`{"tag_aliases": [{"id":1, "consequent_name": "cat"}, {"id":2, "consequent_name": "dog"}]}`, TAliasInfoArray{TAliasData{Id: 1, Name: "cat"}, TAliasData{Id: 2, Name: "dog"}}, ""},
+		"missing": {`{"missing":true}`, TAliasInfoArray{}, "figure out how to parse"},
+	}
+
+	for k, v := range testcases {
+		t.Run(k, func(t *testing.T) {
+			var start TAliasListing
+			result := start.UnmarshalJSON([]byte(v.jsondata))
+			if result == nil && v.err != "" || result != nil && (v.err == "" || !strings.Contains(result.Error(), v.err)) {
+				t.Errorf("Unexpected error: got %v, wanted matching %s", result, v.err)
+			}
+
+			if !(len(start.Aliases) == 0 && len(v.expected) == 0 || reflect.DeepEqual(start.Aliases, v.expected)) {
+				t.Errorf("Unexpected result: got %v, expected %v", start.Aliases, v.expected)
+			}
+		})
+	}
+}
+
+func Test_TPostListing_UnmarshalJSON(t *testing.T) {
+	testcases := map[string]struct{
+		jsondata string
+		expected TPostInfoArray
+		err string
+	}{
+		"empty-untagged": {`[]`, TPostInfoArray{}, ""},
+		"empty": {`{"posts":[]}`, TPostInfoArray{}, ""},
+		"full-untagged": {`[{"id":1, "description": "hello"}, {"id":2, "description": "hello2"}]`, TPostInfoArray{TPostInfo{Id: 1, Description: "hello"}, TPostInfo{Id: 2, Description: "hello2"}}, ""},
+		"full": {`{"posts": [{"id":1, "description": "hello"}, {"id":2, "description": "hello2"}]}`, TPostInfoArray{TPostInfo{Id: 1, Description: "hello"}, TPostInfo{Id: 2, Description: "hello2"}}, ""},
+		"missing": {`{"missing":true}`, TPostInfoArray{}, "figure out how to parse"},
+	}
+
+	for k, v := range testcases {
+		t.Run(k, func(t *testing.T) {
+			var start TPostListing
+			result := start.UnmarshalJSON([]byte(v.jsondata))
+			if result == nil && v.err != "" || result != nil && (v.err == "" || !strings.Contains(result.Error(), v.err)) {
+				t.Errorf("Unexpected error: got %v, wanted matching %s", result, v.err)
+			}
+
+			if !(len(start.Posts) == 0 && len(v.expected) == 0 || reflect.DeepEqual(start.Posts, v.expected)) {
+				t.Errorf("Unexpected result: got %v, expected %v", start.Posts, v.expected)
+			}
+		})
+	}
+}
+
+func Test_TSinglePostListing_UnmarshalJSON(t *testing.T) {
+	testcases := map[string]struct{
+		jsondata string
+		expected TPostInfo
+		err string
+	}{
+		"empty-untagged": {`null`, TPostInfo{}, "figure out how to parse"},
+		"empty": {`{"post": null}`, TPostInfo{}, "figure out how to parse"},
+		"full-untagged": {`{"id":1, "description": "hello"}`, TPostInfo{Id: 1, Description: "hello"}, ""},
+		"full": {`{"post": {"id":1, "description": "hello"}}`, TPostInfo{Id: 1, Description: "hello"}, ""},
+		"missing": {`{"missing":true}`, TPostInfo{}, "figure out how to parse"},
+	}
+
+	for k, v := range testcases {
+		t.Run(k, func(t *testing.T) {
+			var start TSinglePostListing
+			result := start.UnmarshalJSON([]byte(v.jsondata))
+			if result == nil && v.err != "" || result != nil && (v.err == "" || !strings.Contains(result.Error(), v.err)) {
+				t.Errorf("Unexpected error: got %v, wanted matching %s", result, v.err)
+			}
+
+			if !(reflect.DeepEqual(start.Post, v.expected)) {
+				t.Errorf("Unexpected result: got %v, expected %v", start.Post, v.expected)
+			}
 		})
 	}
 }
