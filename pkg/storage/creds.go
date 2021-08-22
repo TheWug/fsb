@@ -10,11 +10,12 @@ import (
 var ErrNoLogin error = NewCommitAndYield("no stored credentials for telegram user")
 
 type UserCreds struct {
-	TelegramId tgtypes.UserID
-	User, ApiKey string
-	Janitor bool
-	Blacklist string
-	BlacklistFetched time.Time
+	TelegramId           tgtypes.UserID
+	User                 string
+	ApiKey               string
+	Janitor              bool
+	Blacklist            string
+	BlacklistFetched     time.Time
 }
 
 /* type Scannable interface {
