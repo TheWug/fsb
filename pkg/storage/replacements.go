@@ -7,21 +7,14 @@ import (
 
 	"github.com/lib/pq"
 	tgdata "github.com/thewug/gogram/data"
+	"github.com/thewug/dml"
 )
 
 type Replacer struct {
-	Id          int64
-	MatchSpec   string
-	ReplaceSpec string
-	Autofix     bool
-}
-
-type Scannable interface {
-	Scan(...interface{}) error
-}
-
-func (this *Replacer) ScanFrom(rows Scannable) error {
-	return rows.Scan(&this.Id, &this.MatchSpec, &this.ReplaceSpec, &this.Autofix)
+	Id          int64  `dml:"replace_id"`
+	MatchSpec   string `dml:"match_spec"`
+	ReplaceSpec string `dml:"replace_spec"`
+	Autofix     bool   `dml:"autofix"`
 }
 
 func (this *Replacer) Matcher() ReplacerMatcher {
@@ -48,18 +41,14 @@ func (rm *ReplacerMatcher) Matches(postTags tags.TagSet) bool {
 type ReplacementHistory struct {
 	ReplacementHistoryKey
 
-	Id int64
-	TelegramUserId tgdata.UserID
-	Timestamp time.Time
+	Id             int64         `dml:"action_id"`
+	TelegramUserId tgdata.UserID `dml:"telegram_user_id"`
+	Timestamp      time.Time     `dml:"action_ts"`
 }
 
 type ReplacementHistoryKey struct {
-	ReplacerId int64
-	PostId int
-}
-
-func (this *ReplacementHistory) ScanFrom(rows Scannable) error {
-	return rows.Scan(&this.Id, &this.TelegramUserId, &this.ReplacerId, &this.PostId, &this.Timestamp)
+	ReplacerId int64 `dml:"replace_id"`
+	PostId     int   `dml:"post_id"`
 }
 
 func AddReplacement(tx DBLike, repl Replacer) (*Replacer, error) {
@@ -84,26 +73,19 @@ func DeleteReplacement(tx DBLike, id int64) (error) {
 
 func GetReplacements(tx DBLike, after_id int64) ([]Replacer, error) {
 	query := "SELECT replace_id, match_spec, replace_spec, autofix FROM replacements WHERE replace_id > $1 ORDER BY replace_id LIMIT 500"
-	rows, err := tx.Query(query, after_id)
+	rows, err := dml.X(tx.Query(query, after_id))
 	defer rows.Close()
 	if err != nil { return nil, err }
 
 	var out []Replacer
+	err = dml.ScanArray(rows, &out)
 
-	for rows.Next() {
-		var r Replacer
-		err = r.ScanFrom(rows)
-		if err != nil { return nil, err }
-
-		out = append(out, r)
-	}
-
-	return out, nil
+	return out, err
 }
 
 func GetReplacementHistorySince(tx DBLike, post_ids []int, since time.Time) (map[ReplacementHistoryKey]ReplacementHistory, error) {
 	query := "SELECT action_id, telegram_user_id, replace_id, post_id, action_ts FROM replacement_actions WHERE post_id = ANY($1::int[]) AND action_ts > $2"
-	rows, err := tx.Query(query, pq.Array(post_ids), since)
+	rows, err := dml.X(tx.Query(query, pq.Array(post_ids), since))
 	if err != nil { return nil, err }
 	defer rows.Close()
 
@@ -111,7 +93,7 @@ func GetReplacementHistorySince(tx DBLike, post_ids []int, since time.Time) (map
 
 	for rows.Next() {
 		var r ReplacementHistory
-		err = r.ScanFrom(rows)
+		err = dml.Scan(rows, &r)
 		if err != nil { return nil, err }
 
 		out[r.ReplacementHistoryKey] = r

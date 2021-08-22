@@ -246,18 +246,6 @@ func (this *TPostInfo) PostScan() error {
 	return nil
 }
 
-type Scannable interface {
-	Scan(...interface{}) error
-}
-
-func (this *TPostInfo) ScanFrom(rows Scannable) error {
-	var sources string
-	err := rows.Scan(&this.Id, &this.Change, &this.Rating, &this.Description, &sources, &this.Md5, &this.Deleted, pq.Array(&this.General))
-	if err != nil { return err }
-	this.Sources = strings.Split(sources, "\n")
-	return nil
-}
-
 func (this *TPostInfo) Tags() ([]string) {
 	var tags []string
 	tags = append(tags, this.General...)

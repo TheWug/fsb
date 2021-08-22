@@ -103,20 +103,15 @@ func PostByID(tx DBLike, id int) (*apitypes.TPostInfo, error) {
 }
 
 func PostsById(tx DBLike, ids []int) ([]apitypes.TPostInfo, error) {
-	var item apitypes.TPostInfo
 	query := "SELECT post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted, ARRAY(SELECT tag_name FROM tag_index INNER JOIN post_tags USING (tag_id) WHERE post_id = post_index.post_id) AS post_tags FROM post_index WHERE post_id = ANY($1::int[])"
-	rows, err := tx.Query(query, pq.Array(ids))
+	rows, err := dml.X(tx.Query(query, pq.Array(ids)))
 	if err != nil { return nil, err }
 	defer rows.Close()
 
 	var out []apitypes.TPostInfo
-	for rows.Next() {
-		err = item.ScanFrom(rows)
-		if err != nil { return nil, err }
-		out = append(out, item)
-	}
+	err = dml.ScanArray(rows, &out)
 
-	return out, nil
+	return out, err
 }
 
 func PostByMD5(tx DBLike, md5 string) (*apitypes.TPostInfo, error) {

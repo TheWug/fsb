@@ -5,33 +5,27 @@ import (
 	"database/sql"
 
 	tgtypes "github.com/thewug/gogram/data"
+
+	"github.com/thewug/dml"
 )
 
 var ErrNoLogin error = NewCommitAndYield("no stored credentials for telegram user")
 
 type UserCreds struct {
-	TelegramId           tgtypes.UserID
-	User                 string
-	ApiKey               string
-	Janitor              bool
-	Blacklist            string
-	BlacklistFetched     time.Time
-}
-
-/* type Scannable interface {
-	Scan(...interface{}) error
-} */
-
-func (creds *UserCreds) ScanFrom(row Scannable) error {
-	return row.Scan(&creds.User, &creds.ApiKey, &creds.Janitor, &creds.Blacklist, &creds.BlacklistFetched)
+	TelegramId           tgtypes.UserID `dml:"telegram_id"`
+	User                 string         `dml:"api_user"`
+	ApiKey               string         `dml:"api_apikey"`
+	Janitor              bool           `dml:"privilege_janitorial"`
+	Blacklist            string         `dml:"api_blacklist"`
+	BlacklistFetched     time.Time      `dml:"api_blacklist_last_updated"`
 }
 
 func GetUserCreds(tx DBLike, id tgtypes.UserID) (UserCreds, error) {
 	creds := UserCreds{TelegramId: id}
 
 	f := func(tx DBLike) error {
-		query := "SELECT api_user, api_key, privilege_janitorial, api_blacklist, api_blacklist_last_updated FROM remote_user_credentials WHERE telegram_id = $1"
-		if err := creds.ScanFrom(tx.QueryRow(query, id)); err == sql.ErrNoRows {
+		query := "SELECT telegram_id, api_user, api_key, privilege_janitorial, api_blacklist, api_blacklist_last_updated FROM remote_user_credentials WHERE telegram_id = $1"
+		if err := dml.QuickScan(tx.QueryRow(query, id), &creds); err == sql.ErrNoRows {
 			return ErrNoLogin
 		} else {
 			return err
