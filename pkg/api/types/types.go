@@ -242,6 +242,7 @@ func (this *TPostInfo) GetFields() (dml.NamedFields, error) {
 
 func (this *TPostInfo) PostScan() error {
 	this.Sources = strings.Split(this.sources_internal, "\n")
+	if len(this.Sources) == 1 && len(this.Sources[0]) == 0 { this.Sources = nil }
 	this.sources_internal = ""
 	return nil
 }

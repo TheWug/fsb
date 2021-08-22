@@ -271,3 +271,63 @@ func Test_TSinglePostListing_UnmarshalJSON(t *testing.T) {
 		})
 	}
 }
+
+func Test_MatchesBlacklist(t *testing.T) {
+	testcases := map[string]struct{
+		post TPostInfo
+		blacklist string
+		matches bool
+	}{
+		"everything+": {TPostInfo{Id: 5, Rating: Questionable, TPostTags: TPostTags{General: []string{"cat", "dog", "dragon", "gryphon"}}}, "cat dog ~gryphon ~fox -walrus rating:q", true},
+		"everything+spaces": {TPostInfo{Id: 5, Rating: Questionable, TPostTags: TPostTags{General: []string{"cat", "dog", "dragon", "gryphon"}}}, "cat   dog   ~gryphon   ~fox     -walrus       rating:q", true},
+		"include+": {TPostInfo{Id: 5, Rating: Questionable, TPostTags: TPostTags{General: []string{"cat", "dog", "dragon", "gryphon"}}}, "cat", true},
+		"exclude+": {TPostInfo{Id: 5, Rating: Questionable, TPostTags: TPostTags{General: []string{"cat", "dog", "dragon", "gryphon"}}}, "-fox", true},
+		"either+": {TPostInfo{Id: 5, Rating: Questionable, TPostTags: TPostTags{General: []string{"cat", "dog", "dragon", "gryphon"}}}, "~dragon ~naga", true},
+		"rating+": {TPostInfo{Id: 5, Rating: Questionable, TPostTags: TPostTags{General: []string{"cat", "dog", "dragon", "gryphon"}}}, "rating:q", true},
+		"id+": {TPostInfo{Id: 5, Rating: Questionable, TPostTags: TPostTags{General: []string{"cat", "dog", "dragon", "gryphon"}}}, "id:5", true},
+		"include-": {TPostInfo{Id: 5, Rating: Questionable, TPostTags: TPostTags{General: []string{"cat", "dog", "dragon", "gryphon"}}}, "walrus", false},
+		"exclude-": {TPostInfo{Id: 5, Rating: Questionable, TPostTags: TPostTags{General: []string{"cat", "dog", "dragon", "gryphon"}}}, "-cat", false},
+		"either-": {TPostInfo{Id: 5, Rating: Questionable, TPostTags: TPostTags{General: []string{"cat", "dog", "dragon", "gryphon"}}}, "~fox ~walrus", false},
+		"empty-": {TPostInfo{Id: 5, Rating: Questionable, TPostTags: TPostTags{General: []string{"cat", "dog", "dragon", "gryphon"}}}, "", false},
+		"rating-": {TPostInfo{Id: 5, Rating: Questionable, TPostTags: TPostTags{General: []string{"cat", "dog", "dragon", "gryphon"}}}, "rating:e", false},
+		"id-": {TPostInfo{Id: 5, Rating: Questionable, TPostTags: TPostTags{General: []string{"cat", "dog", "dragon", "gryphon"}}}, "id:4", false},
+
+		// support more blacklist tag options:
+		// by upload user
+		// by file type
+	}
+
+	for k, v := range testcases {
+		t.Run(k, func(t *testing.T) {
+			t.Logf("Blacklist: %s\nPost: %+v\n", v.blacklist, v.post)
+			out := v.post.MatchesBlacklist(v.blacklist)
+			if out != v.matches { t.Errorf("Unexpected result: got %t, expected %t", out, v.matches) }
+		})
+	}
+}
+
+// this is a dummy test. It's used to mark simple functions such as getters and setters which are too simple to test, so they
+// show up as covered code. If it's more complicated than a getter or a setter, it shouldn't be here.
+func Test_Others(t *testing.T) {
+	(&TPostInfo{}).GetFields()
+}
+
+func Test_TPostInfo_PostScan(t *testing.T) {
+	testcases := map[string]struct{
+		raw_sources string
+		expected []string
+		err string
+	}{
+		"normal": {"a\nb\nc", []string{"a", "b", "c"}, ""},
+		"empty": {"", []string{}, ""},
+	}
+
+	for k, v := range testcases {
+		t.Run(k, func(t *testing.T) {
+			post := TPostInfo{sources_internal: v.raw_sources}
+			err := post.PostScan()
+			if !(len(post.Sources) == 0 && len(v.expected) == 0 || reflect.DeepEqual(post.Sources, v.expected)) { t.Errorf("Unexpected result: got %v, expected %v", post.Sources, v.expected) }
+			if err == nil && v.err != "" || err != nil && (v.err == "" || !strings.Contains(err.Error(), v.err)) { t.Errorf("Unexpected error: got %v, wanted matching %s", err, v.err) }
+		})
+	}
+}
