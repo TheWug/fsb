@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"errors"
 	"io/ioutil"
-	"log"
 	"github.com/thewug/reqtify"
 	"io"
 	"fmt"
@@ -44,12 +43,10 @@ func UploadFile(file_data io.Reader, upload_url, tags, rating, source, descripti
 	} else { return nil, MissingArguments }
 
 	r, e := req.Do()
-	out.Status = r.Status
-	out.StatusCode = r.StatusCode
-	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
+	APILog(url, user, -1, r, e)
 
-	if e != nil {
-		return &out, e
+	if r != nil {
+		out.Status, out.StatusCode = r.Status, r.StatusCode
 	}
 
 	return &out, e
@@ -87,7 +84,7 @@ func UpdatePost(user, apitoken string,
 	if reason != nil { req.FormArg("post[edit_reason]", *reason) }
 	r, e := req.Do()
 
-	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
+	APILog(url, user, -1, r, e)
 
 	if e != nil {
 		return nil, e
@@ -116,7 +113,7 @@ func VotePost(user, apitoken string,
 			Into(&score).
 			Do()
 
-	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
+	APILog(url, user, -1, r, e)
 
 	// this returns HTML, but 200, if you pick an ID which doesn't exist, so ??? i guess
 
@@ -136,7 +133,7 @@ func UnvotePost(user, apitoken string,
 			BasicAuthentication(user, apitoken).
 			Do()
 
-	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
+	APILog(url, user, -1, r, e)
 
 	// this returns HTML, but 200, if you pick an ID which doesn't exist, so ??? i guess
 
@@ -172,7 +169,7 @@ func FavoritePost(user, apitoken string,
 		DebugPrint().
 		Do()
 
-	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
+	APILog(url, user, -1, r, e)
 
 	// this means the post was already favorited, which the api treats as an error, but we want to treat it as OK
 	if post.Success == false && post.Message == "You have already favorited this post" {
@@ -195,7 +192,7 @@ func UnfavoritePost(user, apitoken string,
 		DebugPrint().
 		Do()
 
-	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
+	APILog(url, user, -1, r, e)
 
 	// this returns HTML, but 200, if you pick an ID which doesn't exist, so ??? i guess
 

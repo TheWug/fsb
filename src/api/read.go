@@ -3,7 +3,6 @@ package api
 import (
 	"api/types"
 	"strconv"
-	"log"
 	"errors"
 	"strings"
 	"fmt"
@@ -27,17 +26,7 @@ func TagSearch(user, apitoken string, tags string, page int, limit int) (types.T
 			Into(&temp).
 			Do()
 
-	caller := "unauthenticated"
-	if user != "" {
-		caller = fmt.Sprintf("as %s", user)
-	}
-
-	if e != nil {
-		log.Printf("[api     ] API call: %s [%s] (ERROR: %s)\n", url, caller, e.Error())
-		return nil, e
-	} else if r != nil {
-		log.Printf("[api     ] API call: %s [%s] (%s, %d results)\n", url, caller, r.Status, len(temp.Posts))
-	}
+	APILog(url, user, len(temp.Posts), r, e)
 
 	return temp.Posts, e
 }
@@ -62,7 +51,7 @@ func ListTagHistory(user, apitoken string, limit int, before, after *int) (types
 	if after != nil { req.URLArg("after", strconv.Itoa(*after)) }
 	r, e := req.Do()
 
-	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
+	APILog(url, user, len(hist), r, e)
 
 	if e != nil {
 		return nil, e
@@ -88,7 +77,7 @@ func ListTags(user, apitoken string, options types.ListTagsOptions) (types.TTagI
 			Into(&results).
 			Do()
 
-	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
+	APILog(url, user, len(results.Tags), r, e)
 
 	if e != nil {
 		return nil, e
@@ -112,7 +101,7 @@ func ListTagAliases(user, apitoken string, options types.ListTagAliasOptions) (t
 			Into(&results).
 			Do()
 
-	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
+	APILog(url, user, len(results.Aliases), r, e)
 
 	if e != nil {
 		return nil, e
@@ -134,7 +123,7 @@ func ListPosts(user, apitoken string, options types.ListPostOptions) (types.TPos
 			Into(&results).
 			Do()
 
-	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
+	APILog(url, user, len(results.Posts), r, e)
 
 	if e != nil {
 		return nil, e
@@ -156,7 +145,7 @@ func FetchOnePost(user, apitoken string, id int) (*types.TPostInfo, error) {
 			Into(&post).
 			Do()
 
-	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
+	APILog(url, user, -1, r, e)
 
 	if e != nil {
 		return nil, e
@@ -186,7 +175,7 @@ func GetTagData(user, apitoken string, id int) (*types.TTagData, error) {
 			Into(&tag).
 			Do()
 
-	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
+	APILog(url, user, -1, r, e)
 
 	if e != nil {
 		return nil, e
@@ -212,12 +201,7 @@ func FetchUser(username, api_key string) (*types.TUserInfo, error) {
 
 	r, e := req.Do()
 
-	caller := "unauthenticated"
-	if api_key != "" {
-		caller = fmt.Sprintf("as %s", username)
-	}
-
-	log.Printf("[api     ] API call: %s [%s] (%s)\n", url, caller, r.Status)
+	APILog(url, username, -1, r, e)
 
 	if e != nil {
 		return nil, e

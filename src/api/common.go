@@ -48,3 +48,26 @@ func SanitizeRating(input string) (string) {
 	if input == "safe" || input == "s" { return "s" }
 	return ""
 }
+
+func APILog(url, user string, length int, response *http.Response, err error) {
+	caller := "unauthenticated"
+	if user != "" {
+		caller = fmt.Sprintf("as %s", user)
+	}
+
+	httpstatus := "Request Failure"
+	if response != nil {
+		httpstatus = response.Status
+	}
+
+	lengthstr := ""
+	if length >= 0 {
+		lengthstr = fmt.Sprintf(", %d results", length)
+	}
+
+	if err == nil {
+		log.Printf("[api     ] API call: %s [%s] (%s%s)\n", url, caller, httpstatus, lengthstr)
+	} else {
+		log.Printf("[api     ] API call: %s [%s] (%s: %s%s)", url, caller, httpstatus, err.Error(), lengthstr)
+	}
+}
