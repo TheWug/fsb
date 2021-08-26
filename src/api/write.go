@@ -54,10 +54,9 @@ func UploadFile(file_data io.Reader, upload_url, tags, rating, source, descripti
 	return &out, e
 }
 
-
 func UpdatePost(user, apitoken string,
 		id int,
-		oldtags, newtags *string,			// nil to leave tags unchanged.
+		tagdiff TagDiff,				// empty to leave tags unchanged.
 		rating *string,					// nil to leave rating unchanged.
 		parent *int,					// nil to leave parent unchanged, -1 to UNSET parent
 		source *string,					// nil to leave source unchanged
@@ -71,8 +70,7 @@ func UpdatePost(user, apitoken string,
 			Method(reqtify.PATCH).
 			BasicAuthentication(user, apitoken).
 			Into(&post)
-	if oldtags != nil { req.FormArg("post[old_tags]", *oldtags) }
-	if newtags != nil { req.FormArg("post[tags]", *newtags) }
+	if !tagdiff.IsZero() { req.FormArgDefault("post[tag_string_diff]", tagdiff.APIString(), "") }
 	if rating != nil { req.FormArg("post[rating]", *rating) }
 	if parent != nil && *parent == -1 { req.FormArg("post[parent_id]", "") }
 	if parent != nil && *parent != -1 { req.FormArg("post[parent_id]", strconv.Itoa(*parent)) }

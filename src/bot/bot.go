@@ -1087,8 +1087,8 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 		description := ""
 		parent_post := -1
 		rating := "safe"
-	
+
 		reason := "API Update Test (should be NOOP)"
-		api.UpdatePost(user, apikey, post, &oldtags, &newtags, &rating, &parent_post, &sources, &description, &reason)
+		api.UpdatePost(user, apikey, post, api.TagDiff{}, &rating, &parent_post, &sources, &description, &reason)
 	}
 }

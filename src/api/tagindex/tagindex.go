@@ -868,9 +868,10 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 
 			reason := fmt.Sprintf("Bulk retag: %s --> %s (likely typo)", v.Tag.Name, start_tag)
 			for _, p := range posts {
-				newtags := NewTagsFromOldTags(p.Tags(), map[string]bool{v.Tag.Name: true}, map[string]bool{start_tag: true})
-				oldtags := strings.Join(p.Tags(), " ")
-				newp, err := api.UpdatePost(user, api_key, p.Id, &oldtags, &newtags, nil, nil, nil, nil, &reason)
+				var diff api.TagDiff
+				diff.AddTag(start_tag)
+				diff.RemoveTag(v.Tag.Name)
+				newp, err := api.UpdatePost(user, api_key, p.Id, diff, nil, nil, nil, nil, &reason)
 				if err != nil {
 					sfx <- fmt.Sprintf(" (error: %s)", err.Error())
 					return
@@ -1180,9 +1181,11 @@ func Concatenations(ctx *gogram.MessageCtx) {
 
 		reason := fmt.Sprintf("Bulk retag: %s --> %s, %s (fixed concatenated tags)", cats[i].tag.Name, cats[i].subtag1.Name, cats[i].subtag2.Name)
 		for _, p := range posts {
-			newtags := NewTagsFromOldTags(p.Tags(), map[string]bool{cats[i].tag.Name: true}, map[string]bool{cats[i].subtag1.Name: true, cats[i].subtag2.Name: true})
-			oldtags := strings.Join(p.Tags(), " ")
-			newp, err := api.UpdatePost(user, api_key, p.Id, &oldtags, &newtags, nil, nil, nil, nil, &reason)
+			var diff api.TagDiff
+			diff.AddTag(cats[i].subtag1.Name)
+			diff.AddTag(cats[i].subtag2.Name)
+			diff.RemoveTag(cats[i].tag.Name)
+			newp, err := api.UpdatePost(user, api_key, p.Id, diff, nil, nil, nil, nil, &reason)
 			err = nil
 			if err != nil {
 				sfx <- fmt.Sprintf(" (error: %s)", err.Error())
