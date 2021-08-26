@@ -59,6 +59,7 @@ func main() {
 	var post bot.PostState
 	var janitor bot.JanitorState
 	var votes bot.VoteState
+	var autofix bot.AutofixState
 	machine.AddCommand("/help", &help)
 	machine.AddCommand("/login", &login)
 	machine.AddCommand("/logout", &login)
@@ -76,6 +77,9 @@ func main() {
 	machine.AddCommand("/upvote", &votes)
 	machine.AddCommand("/downvote", &votes)
 	machine.AddCommand("/favorite", &votes)
+	machine.AddCommand("/af-commit", &autofix)
+	machine.AddCommand("/af-dismiss", &autofix)
+	machine.AddCommand("/af-toggle", &autofix)
 
 	thebot.SetMessageCallback(machine)
 	thebot.SetStateMachine(machine)

@@ -1048,26 +1048,69 @@ type PostSuggestedEdit struct {
 	AppliedEdits  map[string]bool        `json:"applied_edits"`
 }
 
-func (this *PostSuggestedEdit) Select(api_string string) {
+func (this *PostSuggestedEdit) SelectDirect(api_string string) {
 	if this.SelectedEdits == nil {
 		this.SelectedEdits = make(map[string]bool)
 	}
 	this.SelectedEdits[api_string] = true
 }
 
-func (this *PostSuggestedEdit) Deselect(api_string string) {
+func (this *PostSuggestedEdit) DeselectDirect(api_string string) {
 	delete(this.SelectedEdits, api_string)
 }
 
-func (this *PostSuggestedEdit) Apply(api_string string) {
-	if this.AppliedEdits == nil {
-		this.AppliedEdits = make(map[string]bool)
+// do nothing if an invalid selector is specified
+func (this *PostSuggestedEdit) Select(from string, index int) {
+	if this.SelectedEdits == nil {
+		this.SelectedEdits = make(map[string]bool)
 	}
-	this.AppliedEdits[api_string] = true
+
+	array := &this.Prompt
+	if from == "prompt" {
+	} else if from == "autofix" {
+		array = &this.AutoFix
+	} else { return }
+
+	if len(*array) > index {
+		this.SelectedEdits[(*array)[index].APIString()] = true
+	}
 }
 
-func (this *PostSuggestedEdit) Deapply(api_string string) {
-	delete(this.AppliedEdits, api_string)
+func (this *PostSuggestedEdit) SelectAll() {
+	if this.SelectedEdits == nil {
+		this.SelectedEdits = make(map[string]bool)
+	}
+
+	for _, diff := range this.Prompt {
+		this.SelectedEdits[diff.APIString()] = true
+	}
+	for _, diff := range this.AutoFix {
+		this.SelectedEdits[diff.APIString()] = true
+	}
+}
+
+// do nothing if an invalid selector is specified
+func (this *PostSuggestedEdit) Deselect(from string, index int) {
+	array := &this.Prompt
+	if from == "prompt" {
+	} else if from == "autofix" {
+		array = &this.AutoFix
+	} else { return }
+
+	if len(*array) > index {
+		delete(this.SelectedEdits, (*array)[index].APIString())
+	}
+}
+
+func (this *PostSuggestedEdit) DeselectAll() {
+	this.SelectedEdits = nil
+}
+
+func (this *PostSuggestedEdit) Apply() {
+	this.AppliedEdits = make(map[string]bool)
+	for k, _ := range this.SelectedEdits {
+		this.AppliedEdits[k] = true
+	}
 }
 
 func (this PostSuggestedEdit) Value() (driver.Value, error) {
@@ -1081,6 +1124,23 @@ func (this *PostSuggestedEdit) Scan(value interface{}) error {
 	}
 
 	return json.Unmarshal(b, &this)
+}
+
+func (this PostSuggestedEdit) GetChangeToApply() apitypes.TagDiff {
+	var apply apitypes.TagDiff
+	for selected, _ := range this.SelectedEdits {
+		if !this.AppliedEdits[selected] {
+			apply.ApplyString(selected)
+		}
+	}
+
+	var revert apitypes.TagDiff
+	for applied, _ := range this.AppliedEdits {
+		if !this.SelectedEdits[applied] {
+			revert.ApplyString(applied)
+		}
+	}
+	return revert.Invert().Union(apply)
 }
 
 // merge two edit lists, with certain requirements.
@@ -1123,10 +1183,10 @@ func (this PostSuggestedEdit) Append(other PostSuggestedEdit) PostSuggestedEdit 
 	}
 
 	// merge the selected/applied edit lists.
-	for k := range this.SelectedEdits { new_pse.Select(k) }
-	for k := range other.SelectedEdits { new_pse.Select(k) }
-	for k := range this.AppliedEdits { new_pse.Select(k) }
-	for k := range other.AppliedEdits { new_pse.Select(k) }
+	for k := range this.SelectedEdits { new_pse.SelectDirect(k) }
+	for k := range other.SelectedEdits { new_pse.SelectDirect(k) }
+	for k := range this.AppliedEdits { new_pse.SelectDirect(k) }
+	for k := range other.AppliedEdits { new_pse.SelectDirect(k) }
 	return new_pse
 }
 
@@ -1202,12 +1262,18 @@ func GetSuggestedPostEdits(posts []int, settings UpdaterSettings) (map[int]PostS
 }
 
 type PromptPostInfo struct {
-	PostId    int
-	MsgId     tgtypes.MsgID
-	ChatId    tgtypes.ChatID
-	Timestamp time.Time
-	Captioned bool
-	Edit     *PostSuggestedEdit
+	PostId     int
+	PostType   string
+	PostURL    string
+	SampleURL  string
+	PostMd5    string
+	PostWidth  int
+	PostHeight int
+	MsgId      tgtypes.MsgID
+	ChatId     tgtypes.ChatID
+	Timestamp  time.Time
+	Captioned  bool
+	Edit      *PostSuggestedEdit
 }
 
 func GetAutoFixHistoryForPosts(posts []int, settings UpdaterSettings) (map[int][]apitypes.TagDiff, error) {
@@ -1241,20 +1307,38 @@ func FindPromptPost(id int, settings UpdaterSettings) (*PromptPostInfo, error) {
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
 
-	var post_info PromptPostInfo
-	query := "SELECT post_id, msg_id, chat_id, msg_ts, msg_captioned, edit_list_json FROM prompt_posts WHERE post_id = $1"
-	err := tx.QueryRow(query, id).Scan(&post_info.PostId, &post_info.MsgId, &post_info.ChatId, &post_info.Timestamp, &post_info.Captioned, &post_info.Edit)
+	var x PromptPostInfo
+	query := "SELECT post_id, post_type, post_url, sample_url, post_hash, post_width, post_height, msg_id, chat_id, msg_ts, msg_captioned, edit_list_json FROM prompt_posts WHERE post_id = $1"
+	err := tx.QueryRow(query, id).Scan(&x.PostId, &x.PostType, &x.PostURL, &x.SampleURL, &x.PostMd5, &x.PostWidth, &x.PostHeight, &x.MsgId, &x.ChatId, &x.Timestamp, &x.Captioned, &x.Edit)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
 	} else if err != nil {
 		return nil, err
 	} else {
-		return &post_info, nil
+		return &x, nil
 	}
 }
 
-func SavePromptPost(id int, post_info *PromptPostInfo, settings UpdaterSettings) (error) {
+func FindPromptPostByMessage(chat_id tgtypes.ChatID, msg_id tgtypes.MsgID, settings UpdaterSettings) (*PromptPostInfo, error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
+
+	var x PromptPostInfo
+	query := "SELECT post_id, post_type, post_url, sample_url, post_hash, post_width, post_height, msg_id, chat_id, msg_ts, msg_captioned, edit_list_json FROM prompt_posts WHERE chat_id = $1 AND msg_id = $2"
+	err := tx.QueryRow(query, chat_id, msg_id).Scan(&x.PostId, &x.PostType, &x.PostURL, &x.SampleURL, &x.PostMd5, &x.PostWidth, &x.PostHeight, &x.MsgId, &x.ChatId, &x.Timestamp, &x.Captioned, &x.Edit)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	} else {
+		return &x, nil
+	}
+}
+
+func SavePromptPost(id int, x *PromptPostInfo, settings UpdaterSettings) (error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }
@@ -1263,9 +1347,9 @@ func SavePromptPost(id int, post_info *PromptPostInfo, settings UpdaterSettings)
 	_, err := tx.Exec(query, id)
 	if err != nil { return err }
 
-	if post_info != nil {
-		query = "INSERT INTO prompt_posts (post_id, msg_id, chat_id, msg_ts, msg_captioned, edit_list_json) VALUES ($1, $2, $3, $4, $5, $6)"
-		_, err = tx.Exec(query, id, post_info.MsgId, post_info.ChatId, post_info.Timestamp, post_info.Captioned, post_info.Edit)
+	if x != nil {
+		query = "INSERT INTO prompt_posts (post_id, post_type, post_url, sample_url, post_hash, post_width, post_height, msg_id, chat_id, msg_ts, msg_captioned, edit_list_json) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)"
+		_, err = tx.Exec(query, id, x.PostType, x.PostURL, x.SampleURL, x.PostMd5, x.PostWidth, x.PostHeight, x.MsgId, x.ChatId, x.Timestamp, x.Captioned, x.Edit)
 		if err != nil { return err }
 	}
 

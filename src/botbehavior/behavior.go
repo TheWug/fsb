@@ -165,7 +165,8 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 					bot.Log.Println("Error in FindPromptPost:", err.Error())
 					continue
 				}
-				post_info = this.PromptPost(bot, post_info, id, updated_posts[id], edit)
+				post := updated_posts[id]
+				post_info = PromptPost(bot, post_info, id, &post, &edit)
 				err = storage.SavePromptPost(id, post_info, settings)
 				if err != nil {
 					bot.Log.Println("Error in SavePromptPost:", err.Error())
@@ -187,6 +188,10 @@ func ternary(b bool, x, y string) string {
 	return y
 }
 
+func sptr(s string) *string {
+	return &s
+}
+
 func GetInlineKeyboardForEdit(edit *storage.PostSuggestedEdit) (*data.TInlineKeyboard) {
 	const DIAMOND string = "\U0001F539"
 	const RED_DOT string = "\U0001F534"
@@ -195,42 +200,56 @@ func GetInlineKeyboardForEdit(edit *storage.PostSuggestedEdit) (*data.TInlineKey
 	var keyboard data.TInlineKeyboard
 	keyboard.Buttons = append(keyboard.Buttons, []data.TInlineKeyboardButton{data.TInlineKeyboardButton{
 		Text: DIAMOND + " Commit",
-		Data: func(s string) *string {return &s}("/af-commit"),
+		Data: sptr("/af-commit"),
 	},data.TInlineKeyboardButton{
 		Text: DIAMOND + " Dismiss",
-		Data: func(s string) *string {return &s}("/af-dismiss"),
+		Data: sptr("/af-dismiss"),
 	}})
+	set := len(edit.AutoFix) + len(edit.Prompt) == len(edit.SelectedEdits)
 	keyboard.Buttons = append(keyboard.Buttons, []data.TInlineKeyboardButton{data.TInlineKeyboardButton{
-		Text: ternary(len(edit.AutoFix) + len(edit.Prompt) == len(edit.SelectedEdits),
-				fmt.Sprintf("%s Clear all", strings.Repeat(RED_DOT, 3)),
-				fmt.Sprintf("%s Apply all", strings.Repeat(GREEN_DOT, 3))),
-		Data: func(s string) *string {return &s}("/af-toggle everything"),
+		Text: fmt.Sprintf("%s all", ternary(set, strings.Repeat(RED_DOT, 3) + " Clear", strings.Repeat(GREEN_DOT, 3) + " Apply")),
+		Data: sptr(fmt.Sprintf("/af-toggle everything - %s", ternary(len(edit.AutoFix) + len(edit.Prompt) == len(edit.SelectedEdits), "0", "1"))),
 	}})
 	for i, diff := range edit.AutoFix {
 		api_string := diff.APIString()
-		_, ok := edit.SelectedEdits[api_string]
+		_, set := edit.SelectedEdits[api_string]
 		keyboard.Buttons = append(keyboard.Buttons, []data.TInlineKeyboardButton{data.TInlineKeyboardButton{
-			Text: fmt.Sprintf("%s %s", ternary(ok, GREEN_DOT, RED_DOT), api_string),
-			Data: func(s string) *string {return &s}(fmt.Sprintf("/af-toggle autofix %d", i)),
+			Text: fmt.Sprintf("%s %s", ternary(set, GREEN_DOT, RED_DOT), api_string),
+			Data: sptr(fmt.Sprintf("/af-toggle autofix %d %s", i, ternary(set, "0", "1"))),
 		}})
 	}
 	for i, diff := range edit.Prompt {
 		api_string := diff.APIString()
-		_, ok := edit.SelectedEdits[api_string]
+		_, set := edit.SelectedEdits[api_string]
 		keyboard.Buttons = append(keyboard.Buttons, []data.TInlineKeyboardButton{data.TInlineKeyboardButton{
-			Text: fmt.Sprintf("%s %s", ternary(ok, GREEN_DOT, RED_DOT), api_string),
-			Data: func(s string) *string {return &s}(fmt.Sprintf("/af-toggle autofix %d", i)),
+			Text: fmt.Sprintf("%s %s", ternary(set, GREEN_DOT, RED_DOT), api_string),
+			Data: sptr(fmt.Sprintf("/af-toggle prompt %d %s", i, ternary(set, "0", "1"))),
 		}})
 	}
 
 	return &keyboard
 }
 
-func (this *Behavior) PromptPost(bot *gogram.TelegramBot, post_info *storage.PromptPostInfo, id int, post apitypes.TPostInfo, edit storage.PostSuggestedEdit) (*storage.PromptPostInfo) {
-	if post_info != nil {
-		edit = post_info.Edit.Append(edit)
+func PromptPost(bot *gogram.TelegramBot, post_info *storage.PromptPostInfo, id int, post *apitypes.TPostInfo, edit *storage.PostSuggestedEdit) (*storage.PromptPostInfo) {
+	create_mode := (post_info == nil)
+
+	if create_mode {
+		// do nothing if we are trying to create from scratch an empty prompt post, as there are no changes to make.
+		if edit == nil { return nil }
+
+		post_info = &storage.PromptPostInfo{
+			PostId: post.Id,
+			PostType: post.File_ext,
+			PostURL: post.File_url,
+			SampleURL: post.Sample_url,
+			PostMd5: post.Md5,
+			PostWidth: post.Width,
+			PostHeight: post.Height,
+			Edit: edit,
+		}
+	} else if edit != nil {
+		*post_info.Edit = post_info.Edit.Append(*edit)
 	}
-	markup := GetInlineKeyboardForEdit(&edit)
 
 	send := data.SendData{
 		TargetData: data.TargetData{
@@ -238,31 +257,31 @@ func (this *Behavior) PromptPost(bot *gogram.TelegramBot, post_info *storage.Pro
 		},
 		ParseMode: data.ParseHTML,
 		DisableNotification: true,
-		ReplyMarkup: markup,
+		ReplyMarkup: GetInlineKeyboardForEdit(post_info.Edit),
 	}
 
 	// figure out what we should say for what tags we're changing
 	var edit_string bytes.Buffer
-	if len(edit.Prompt) != 0 {
-		edit_string.WriteString(fmt.Sprintf("Manual fixes available:\n<pre>%s</pre>\n", edit.Prompt.Flatten().APIString()))
+	if len(post_info.Edit.Prompt) != 0 {
+		edit_string.WriteString(fmt.Sprintf("Manual fixes available:\n<pre>%s</pre>\n", post_info.Edit.Prompt.Flatten().APIString()))
 	}
-	if len(edit.AutoFix) != 0 {
-		edit_string.WriteString(fmt.Sprintf("Automatic fixes applied:\n<pre>%s</pre>\n", edit.AutoFix.Flatten().APIString()))
+	if len(post_info.Edit.AutoFix) != 0 {
+		edit_string.WriteString(fmt.Sprintf("Automatic fixes applied:\n<pre>%s</pre>\n", post_info.Edit.AutoFix.Flatten().APIString()))
 	}
 
 	// figure out what the message should be
-	if post.File_ext == "png" || post.File_ext == "jpg" {
-		send.Text = fmt.Sprintf("<a href=\"%s\">Image</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post.File_url, post.Id, edit_string.String())
-	} else if post.File_ext == "gif" {
-		send.Text = fmt.Sprintf("<a href=\"%s\">Animation</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post.File_url, post.Id, edit_string.String())
-	} else if post.File_ext == "webm" {
-		send.Text = fmt.Sprintf("Post ID %d (%s file, no preview available)\nView it using the links below.\n\n<a href=\"%s\">Video</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post.Id, post.File_ext, post.File_url, post.Id, edit_string.String())
+	if post_info.PostType == "png" || post_info.PostType == "jpg" {
+		send.Text = fmt.Sprintf("Post ID %d\n<a href=\"%s\">Image</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post_info.PostId, post_info.PostURL, post_info.PostId, edit_string.String())
+	} else if post_info.PostType == "gif" {
+		send.Text = fmt.Sprintf("Post ID %d\n<a href=\"%s\">Animation</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post_info.PostId, post_info.PostURL, post_info.PostId, edit_string.String())
+	} else if post_info.PostType == "webm" {
+		send.Text = fmt.Sprintf("Post ID %d (%s file, no preview available)\nView it using the links below.\n\n<a href=\"%s\">Video</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post_info.PostId, post_info.PostType, post_info.PostURL, post_info.PostId, edit_string.String())
 	} else { // SWF, or any other unrecognized file type
-		send.Text = fmt.Sprintf("Post ID %d (%s file, no preview available)\nView it using the links below.\n\n<a href=\"%s\">File</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post.Id, post.File_ext, post.File_url, post.Id, edit_string.String())
+		send.Text = fmt.Sprintf("Post ID %d (%s file, no preview available)\nView it using the links below.\n\n<a href=\"%s\">File</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post_info.PostId, post_info.PostType, post_info.PostURL, post_info.PostId, edit_string.String())
 	}
 
-	if post_info != nil {
-		if len(edit.Prompt) + len(edit.AutoFix) == 0 {
+	if !create_mode {
+		if len(post_info.Edit.Prompt) + len(post_info.Edit.AutoFix) == 0 {
 			bot.Remote.DeleteMessageAsync(data.ODelete{SourceChatId: post_info.ChatId, SourceMessageId: post_info.MsgId}, nil)
 			return nil
 		}
@@ -284,34 +303,33 @@ func (this *Behavior) PromptPost(bot *gogram.TelegramBot, post_info *storage.Pro
 				DisableWebPagePreview: true,
 			}, nil)
 		}
-		post_info.Edit = &edit
 	} else {
-		if len(edit.Prompt) + len(edit.AutoFix) == 0 { return nil }
+		if len(post_info.Edit.Prompt) + len(post_info.Edit.AutoFix) == 0 { return nil }
 
 		var message *data.TMessage
 		var err error
-		if post.File_ext == "png" || post.File_ext == "jpg" {
+		if post_info.PostType == "png" || post_info.PostType == "jpg" {
 			message, err = bot.Remote.SendPhoto(data.OPhoto{
 				SendData: send,
 				MediaData: data.MediaData{
-					File: post.Sample_url,
-					FileName: fmt.Sprintf("%s.%s", post.Md5, post.File_ext),
+					File: post_info.SampleURL,
+					FileName: fmt.Sprintf("%s.%s", post_info.PostMd5, post_info.PostType),
 				},
 			})
-		} else if post.File_ext == "gif" {
+		} else if post_info.PostType == "gif" {
 			message, err = bot.Remote.SendAnimation(data.OAnimation{
 				SendData: send,
 				MediaData: data.MediaData{
-					File: post.File_url,
-					FileName: fmt.Sprintf("%s.%s", post.Md5, post.File_ext),
+					File: post_info.PostURL,
+					FileName: fmt.Sprintf("%s.%s", post_info.PostMd5, post_info.PostType),
 				},
 				ResolutionData: data.ResolutionData{
-					Width: post.Width,
-					Height: post.Height,
+					Width: post_info.PostWidth,
+					Height: post_info.PostHeight,
 				},
 			})
 		} else {
-			send.Text = fmt.Sprintf("%s", post.Id, post.File_ext, send.Text)
+			send.Text = fmt.Sprintf("%s", post_info.PostId, post_info.PostType, send.Text) // fixme
 			message, err = bot.Remote.SendMessage(data.OMessage{
 				SendData: send,
 				DisableWebPagePreview: true,
@@ -323,16 +341,37 @@ func (this *Behavior) PromptPost(bot *gogram.TelegramBot, post_info *storage.Pro
 			return nil
 		}
 
-		post_info = &storage.PromptPostInfo{
-			PostId: id,
-			MsgId: message.Id,
-			ChatId: message.Chat.Id,
-			Timestamp: time.Unix(message.Date, 0),
-			Captioned: message.Text == nil,
-			Edit: &edit,
-		}
+		post_info.MsgId = message.Id
+		post_info.ChatId = message.Chat.Id
+		post_info.Captioned = (message.Text == nil)
+		post_info.Timestamp = time.Unix(message.Date, 0)
 	}
 	return post_info
+}
+
+func DismissPromptPost(bot *gogram.TelegramBot, post_info *storage.PromptPostInfo, diff apitypes.TagDiff, settings storage.UpdaterSettings) error {
+	if post_info == nil { return nil }
+
+	bot.Remote.DeleteMessageAsync(data.ODelete{SourceChatId: post_info.ChatId, SourceMessageId: post_info.MsgId}, nil)
+
+	if !diff.IsZero() {
+		edit_string := fmt.Sprintf("Applied the following tags:\n<pre>%s</pre>", diff.APIString())
+		message := ""
+		// figure out what the message should be
+		if post_info.PostType == "png" || post_info.PostType == "jpg" {
+			message = fmt.Sprintf("Post ID %d\n<a href=\"%s\">Image</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post_info.PostId, post_info.PostURL, post_info.PostId, edit_string)
+		} else if post_info.PostType == "gif" {
+			message = fmt.Sprintf("Post ID %d\n<a href=\"%s\">Animation</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post_info.PostId, post_info.PostURL, post_info.PostId, edit_string)
+		} else if post_info.PostType == "webm" {
+			message = fmt.Sprintf("Post ID %d (%s file, no preview available)\nView it using the links below.\n\n<a href=\"%s\">Video</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post_info.PostId, post_info.PostType, post_info.PostURL, post_info.PostId, edit_string)
+		} else { // SWF, or any other unrecognized file type
+			message = fmt.Sprintf("Post ID %d (%s file, no preview available)\nView it using the links below.\n\n<a href=\"%s\">File</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post_info.PostId, post_info.PostType, post_info.PostURL, post_info.PostId, edit_string)
+		}
+
+		bot.Remote.SendMessageAsync(data.OMessage{SendData: data.SendData{TargetData: data.TargetData{ChatId: post_info.ChatId}, Text: message, ParseMode: data.ParseHTML, DisableNotification: true}, DisableWebPagePreview: true}, nil)
+	}
+
+	return storage.SavePromptPost(post_info.PostId, nil, settings)
 }
 
 // inline query, do tag search.

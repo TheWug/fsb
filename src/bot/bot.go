@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"io"
 	"sync"
+	"botbehavior"
 
 	"github.com/kballard/go-shellquote"
 )
@@ -660,6 +661,95 @@ func (this *HelpState) Handle(ctx *gogram.MessageCtx) {
 		topic = ctx.Cmd.Argstr
 	}
 	ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: ShowHelp(topic), ParseMode: data.ParseHTML}}, nil)
+}
+
+type AutofixState struct {
+}
+
+func (this *AutofixState) GetInterval() int64 {
+	return 60 * 60 // 1 hour
+}
+
+func (this *AutofixState) DoMaintenance(bot *gogram.TelegramBot) {
+	// clear prompt_post table of entries that are older than 24 hours
+}
+
+func (this *AutofixState) Handle(ctx *gogram.MessageCtx) {
+	return // ignore messages
+}
+
+func (this *AutofixState) HandleCallback(ctx *gogram.CallbackCtx) {
+	go func() {
+		defer ctx.AnswerAsync(data.OCallback{}, nil) // non-specific acknowledge if we return without answering explicitly
+		// don't bother with any callbacks that are so old their message is no longer available
+		if ctx.MsgCtx == nil { return }
+
+		var err error
+		settings := storage.UpdaterSettings{}
+		settings.Transaction, err = storage.NewTxBox()
+		if err != nil {
+			ctx.Bot.Log.Println("Error in maintenance loop:", err.Error())
+			return
+		}
+		defer settings.Transaction.Finalize(true)
+
+		user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Cb.From.Id)
+		if err == storage.ErrNoLogin {
+			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F512 You need to login to do that!\n(use /login, in PM)", ShowAlert: true}, nil)
+			return
+		}
+
+		if !janitor {
+			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F512 Sorry, this feature is currently limited to janitors.", ShowAlert: true}, nil)
+			return
+		}
+
+		post_info, err := storage.FindPromptPostByMessage(ctx.MsgCtx.Msg.Chat.Id, ctx.MsgCtx.Msg.Id, storage.UpdaterSettings{})
+		if post_info == nil { return }
+
+		// handle toggling possible edits on and off
+		if ctx.Cmd.Command == "/af-toggle" && len(ctx.Cmd.Args) == 3 {
+			set := (ctx.Cmd.Args[2] == "1")
+			if ctx.Cmd.Args[0] == "everything" {
+				if set {
+					post_info.Edit.SelectAll()
+				} else {
+					post_info.Edit.DeselectAll()
+				}
+			} else if ctx.Cmd.Args[0] == "autofix" || ctx.Cmd.Args[0] == "prompt" {
+				index, err := strconv.Atoi(ctx.Cmd.Args[1])
+				if err != nil { return } // this should only happen if users are spoofing callback data, so ignore it.
+				if set {
+					post_info.Edit.Select(ctx.Cmd.Args[0], index)
+				} else {
+					post_info.Edit.Deselect(ctx.Cmd.Args[0], index)
+				}
+			}
+			err = storage.SavePromptPost(post_info.PostId, post_info, settings)
+			botbehavior.PromptPost(ctx.Bot, post_info, post_info.PostId, nil, nil)
+		} else if ctx.Cmd.Command == "/af-commit" {
+			diff := post_info.Edit.GetChangeToApply()
+			if diff.IsZero() {
+				ctx.AnswerAsync(data.OCallback{Notification: "\u2139 No changes to apply."}, nil)
+				return
+			}
+			reason := "Manual tag cleanup: typos and concatenations (via KnottyBot)"
+			_, err = api.UpdatePost(user, api_key, post_info.PostId, diff, nil, nil, nil, nil, &reason)
+			if err != nil {
+				ctx.AnswerAsync(data.OCallback{Notification: "\u26A0 An error occurred when trying to update the post! Try again later."}, nil)
+				return
+			}
+
+			post_info.Edit.Apply()
+			botbehavior.DismissPromptPost(ctx.Bot, post_info, diff, settings)
+			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F539 Changes saved."}, nil)
+		} else if ctx.Cmd.Command == "/af-dismiss" {
+			botbehavior.DismissPromptPost(ctx.Bot, post_info, apitypes.TagDiff{}, settings)
+			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F539 Dismissed without changes."}, nil)
+		}
+
+		settings.Transaction.MarkForCommit()
+	}()
 }
 
 type lookup_votes struct {
