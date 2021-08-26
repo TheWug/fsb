@@ -179,6 +179,10 @@ func (this *WizardRule) DoImplicit(tags *api.TagSet) {
 	}
 }
 
+func strPtr(a string) (*string) {
+	return &a
+}
+
 func (this *WizardRule) GetButtons(tags *api.TagSet) ([]data.TInlineKeyboardButton) {
 	var out []data.TInlineKeyboardButton
 	for _, o := range this.options {
@@ -192,7 +196,7 @@ func (this *WizardRule) GetButtons(tags *api.TagSet) ([]data.TInlineKeyboardButt
 			}
 			tag_display := tag
 			if strings.HasPrefix(strings.ToLower(tag), "meta:") { tag_display = strings.Replace(tag_display[5:], "_", " ", -1) }
-			btn := data.TInlineKeyboardButton{Text: decor + " " + tag_display + " " + decor, Data: "/z " + tag}
+			btn := data.TInlineKeyboardButton{Text: decor + " " + tag_display + " " + decor, Data: strPtr("/z " + tag)}
 			out = append(out, btn)
 		}
 	}
@@ -353,36 +357,36 @@ func (this *TagWizard) UpdateMenu() {
 	if this.current_rule == nil { return }
 	if (this.wizard_ctx != nil) {
 		var kbd data.TInlineKeyboard
-		kbd.AddButton(data.TInlineKeyboardButton{Text: "\u27a1 Next", Data: "/next"})
-		kbd.AddButton(data.TInlineKeyboardButton{Text: "\U0001f501 Start Over", Data: "/again"})
+		kbd.AddButton(data.TInlineKeyboardButton{Text: "\u27a1 Next", Data: strPtr("/next")})
+		kbd.AddButton(data.TInlineKeyboardButton{Text: "\U0001f501 Start Over", Data: strPtr("/again")})
 		if this.current_rule == &wizard_rule_done {
-			kbd.AddButton(data.TInlineKeyboardButton{Text: "\U0001f197 Done", Data: "/finish"})
+			kbd.AddButton(data.TInlineKeyboardButton{Text: "\U0001f197 Done", Data: strPtr("/finish")})
 		} else { 
 			for _, b := range this.current_rule.GetButtons(this.tags) {
 				kbd.AddRow()
 				kbd.AddButton(b)
 			}
 		}
-		this.wizard_ctx.EditTextAsync(data.OMessage{Text: this.current_rule.Prompt(), ParseMode: data.HTML, ReplyMarkup: kbd}, nil)
+		this.wizard_ctx.EditTextAsync(data.OMessageEdit{SendData: data.SendData{Text: this.current_rule.Prompt(), ParseMode: data.ParseHTML, ReplyMarkup: kbd}}, nil)
 	} else {
 		prompt := "Time for tags!\n\n" + this.current_rule.Prompt()
 		var kbd data.TInlineKeyboard
-		kbd.AddButton(data.TInlineKeyboardButton{Text: "\u27a1 Next", Data: "/next"})
-		kbd.AddButton(data.TInlineKeyboardButton{Text: "\U0001f501 Start Over", Data: "/again"})
+		kbd.AddButton(data.TInlineKeyboardButton{Text: "\u27a1 Next", Data: strPtr("/next")})
+		kbd.AddButton(data.TInlineKeyboardButton{Text: "\U0001f501 Start Over", Data: strPtr("/again")})
 		if this.current_rule == &wizard_rule_done {
-			kbd.AddButton(data.TInlineKeyboardButton{Text: "\U0001f197 Done", Data: "/finish"})
+			kbd.AddButton(data.TInlineKeyboardButton{Text: "\U0001f197 Done", Data: strPtr("/finish")})
 		} else { 
 			for _, b := range this.current_rule.GetButtons(this.tags) {
 				kbd.AddRow()
 				kbd.AddButton(b)
 			}
 		}
-		this.wizard_ctx, _ = this.ctx.Respond(data.OMessage{Text: prompt, ParseMode: data.HTML, ReplyMarkup: kbd})
+		this.wizard_ctx, _ = this.ctx.Respond(data.OMessage{SendData: data.SendData{Text: prompt, ParseMode: data.ParseHTML, ReplyMarkup: kbd}})
 	}
 }
 
 func (this *TagWizard) FinishMenu() { // updates menu with no buttons
-	if this.wizard_ctx != nil { this.wizard_ctx.EditTextAsync(data.OMessage{Text: fmt.Sprintf("Tags:\n\n<pre>%s</pre>", this.TagString()), ParseMode: data.HTML}, nil) }
+	if this.wizard_ctx != nil { this.wizard_ctx.EditTextAsync(data.OMessageEdit{SendData: data.SendData{Text: fmt.Sprintf("Tags:\n\n<pre>%s</pre>", this.TagString()), ParseMode: data.ParseHTML}}, nil) }
 	this.wizard_ctx = nil
 }
 
@@ -398,12 +402,12 @@ func NewTagWizard(ctx *gogram.MessageCtx) (*TagWizard) {
 
 type PostFile struct {
 	mode int
-	file_id string
+	file_id data.FileID
 	url string
 }
 
 type UserState struct {
-	my_id		int
+	my_id		data.UserID
 
 	postmode	int
 	postfile	PostFile
@@ -443,11 +447,11 @@ func NewUserState(ctx *gogram.MessageCtx) (*UserState) {
 	return &u
 }
 
-var states_by_user map[int]*UserState
+var states_by_user map[data.UserID]*UserState
 
 func GetUserState(ctx *gogram.MessageCtx) (*UserState) {
 	if states_by_user == nil {
-		states_by_user = make(map[int]*UserState)
+		states_by_user = make(map[data.UserID]*UserState)
 	}
 
 	if ctx.Msg.From == nil {
@@ -617,7 +621,7 @@ func (this *HelpState) Handle(ctx *gogram.MessageCtx) {
 	if ctx.Msg.Chat.Type == "private" {
 		topic = ctx.Cmd.Argstr
 	}
-	ctx.ReplyAsync(data.OMessage{Text: ShowHelp(topic), ParseMode: data.HTML}, nil)
+	ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: ShowHelp(topic), ParseMode: data.ParseHTML}}, nil)
 }
 
 type LoginState struct {
@@ -630,16 +634,16 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 		return
 	}
 	if ctx.Cmd.Command == "/cancel" {
-		ctx.RespondAsync(data.OMessage{Text: "Command cancelled."}, nil)
+		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Command cancelled."}}, nil)
 		ctx.SetState(nil)
 		return
 	} else if ctx.Msg.Chat.Type != "private" && ctx.Cmd.Command == "/login" {
-		ctx.ReplyAsync(data.OMessage{Text: "You should only use this command in private, to protect the security of your account.\n\nIf you accidentally posted your API key publicly, <a href=\"https://" + api.Endpoint + "/user/api_key\">go here to revoke it.</a>", ParseMode: data.HTML}, nil)
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You should only use this command in private, to protect the security of your account.\n\nIf you accidentally posted your API key publicly, <a href=\"https://" + api.Endpoint + "/user/api_key\">go here to revoke it.</a>", ParseMode: data.ParseHTML}}, nil)
 		ctx.SetState(nil)
 		return
 	} else if ctx.Cmd.Command == "/logout" {
 		storage.WriteUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id, "", "")
-		ctx.ReplyAsync(data.OMessage{Text: "You are now logged out."}, nil)
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You are now logged out."}}, nil)
 		ctx.SetState(nil)
 		return
 	} else {
@@ -657,12 +661,12 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 			if this.user != "" && this.apikey != "" {
 				success, err := api.TestLogin(this.user, this.apikey)
 				if success && err == nil {
-					ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("You are now logged in as <code>%s</code>.", this.user), ParseMode: data.HTML}, nil)
+					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("You are now logged in as <code>%s</code>.", this.user), ParseMode: data.ParseHTML}}, nil)
 					storage.WriteUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id, this.user, this.apikey)
 				} else if err != nil {
-					ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("An error occurred when testing if you were logged in! (%s)", html.EscapeString(err.Error())), ParseMode: data.HTML}, nil)
+					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("An error occurred when testing if you were logged in! (%s)", html.EscapeString(err.Error())), ParseMode: data.ParseHTML}}, nil)
 				} else if !success {
-					ctx.RespondAsync(data.OMessage{Text: "Login failed! (api key invalid?)"}, nil)
+					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Login failed! (api key invalid?)"}}, nil)
 				}
 				ctx.SetState(nil)
 				return
@@ -670,9 +674,9 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 		}
 
 		if this.user == "" {
-			ctx.RespondAsync(data.OMessage{Text: "Please send your " + api.ApiName + " username."}, nil)
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Please send your " + api.ApiName + " username."}}, nil)
 		} else if this.apikey == "" {
-			ctx.RespondAsync(data.OMessage{Text: "Please send your " + api.ApiName + " <a href=\"https://" + api.Endpoint + "/user/api_key\">API Key</a>. (not your password!)", ParseMode: data.HTML}, nil)
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Please send your " + api.ApiName + " <a href=\"https://" + api.Endpoint + "/user/api_key\">API Key</a>. (not your password!)", ParseMode: data.ParseHTML}}, nil)
 		}
 		return
 	}
@@ -688,7 +692,7 @@ func (this *TagRuleState) Handle(ctx *gogram.MessageCtx) {
 		return
 	}
 	if ctx.Cmd.Command == "/cancel" {
-		ctx.RespondAsync(data.OMessage{Text: "Command cancelled."}, nil)
+		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Command cancelled."}}, nil)
 		ctx.SetState(nil)
 		return
 	}
@@ -701,28 +705,32 @@ func (this *TagRuleState) Handle(ctx *gogram.MessageCtx) {
 	var doc *data.TDocument
 	if ctx.Msg.Document != nil {
 		doc = ctx.Msg.Document
-	} else if ctx.Msg.Reply_to_message != nil && ctx.Msg.Reply_to_message.Document != nil {
-		doc = ctx.Msg.Reply_to_message.Document
+	} else if ctx.Msg.ReplyToMessage != nil && ctx.Msg.ReplyToMessage.Document != nil {
+		doc = ctx.Msg.ReplyToMessage.Document
 	}
 
 	if doc != nil {
-		if !strings.HasSuffix(doc.File_name, ".txt") {
-			ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("%s isn't a plain text file.", html.EscapeString(doc.File_name)), ParseMode: data.HTML}, nil)
+		if doc.FileName == nil {
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "File is missing name."}}, nil)
 			return
 		}
-		file, err := ctx.Bot.Remote.GetFile(data.OGetFile{FileID: doc.File_id})
-		if err != nil || file == nil || file.File_path == nil {
-			ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("Error while fetching %s, try sending it again?", html.EscapeString(doc.File_name)), ParseMode: data.HTML}, nil)
+		if !strings.HasSuffix(*doc.FileName, ".txt") {
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("%s isn't a plain text file.", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
 			return
 		}
-		file_data, err := ctx.Bot.Remote.DownloadFile(data.OFile{FilePath: *file.File_path})
+		file, err := ctx.Bot.Remote.GetFile(data.OGetFile{Id: doc.Id})
+		if err != nil || file == nil || file.FilePath == nil {
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while fetching %s, try sending it again?", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
+			return
+		}
+		file_data, err := ctx.Bot.Remote.DownloadFile(data.OFile{FilePath: *file.FilePath})
 		if err != nil || file_data == nil {
-			ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("Error while downloading %s, try sending it again?", html.EscapeString(doc.File_name)), ParseMode: data.HTML}, nil)
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while downloading %s, try sending it again?", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
 			return
 		}
 		b, err := ioutil.ReadAll(file_data)
 		if err != nil || b == nil {
-			ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("Error while reading %s, try sending it again?", html.EscapeString(doc.File_name)), ParseMode: data.HTML}, nil)
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while reading %s, try sending it again?", html.EscapeString(*doc.FileName)), ParseMode: data.ParseHTML}}, nil)
 			return
 		}
 		this.tagwizardrules = string(b)
@@ -730,7 +738,7 @@ func (this *TagRuleState) Handle(ctx *gogram.MessageCtx) {
 	if ctx.Cmd.Argstr != "" {
 		this.tagrulename = ctx.Cmd.Argstr
 	} else {
-		ctx.RespondAsync(data.OMessage{Text: "Send some new tag rules in a text file."}, nil)
+		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Send some new tag rules in a text file."}}, nil)
 		return
 	}
 
@@ -739,10 +747,10 @@ func (this *TagRuleState) Handle(ctx *gogram.MessageCtx) {
 		this.tagwizardrules = strings.Replace(this.tagwizardrules, "\r", "", -1) // pesky windows carriage returns
 		storage.WriteUserTagRules(storage.UpdaterSettings{}, ctx.Msg.From.Id, this.tagrulename, this.tagwizardrules)
 		if err := NewTagWizard(ctx).SetNewRulesFromString(this.tagwizardrules); err != nil {
-			ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("Error while parsing tag rules: %s", html.EscapeString(err.Error())), ParseMode: data.HTML}, nil)
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while parsing tag rules: %s", html.EscapeString(err.Error())), ParseMode: data.ParseHTML}}, nil)
 			return
 		} else {
-			ctx.RespondAsync(data.OMessage{Text: "Set new tag rules."}, nil)
+			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Set new tag rules."}}, nil)
 			ctx.SetState(nil)
 			return
 		}
@@ -768,13 +776,13 @@ func (this *PostState) Reset(ctx *gogram.MessageCtx) {
 	ctx.SetState(nil)
 }
 
-func (this *PostState) SetTagRulesByName(my_id int, name string) {
+func (this *PostState) SetTagRulesByName(my_id data.UserID, name string) {
 	if name == "" { name = "main" }
 	rules, _ := storage.GetUserTagRules(storage.UpdaterSettings{}, my_id, name)
 	this.postwizard.SetNewRulesFromString(rules)
 }
 
-func (this *PostState) WriteUserTagRules(my_id int, tagrules, name string) {
+func (this *PostState) WriteUserTagRules(my_id data.UserID, tagrules, name string) {
 	storage.WriteUserTagRules(storage.UpdaterSettings{}, my_id, name, tagrules)
 }
 
@@ -783,7 +791,7 @@ func (this *PostState) Handle(ctx *gogram.MessageCtx) {
 		return
 	}
 	if ctx.Cmd.Command == "/cancel" {
-		ctx.RespondAsync(data.OMessage{Text: "Command cancelled."}, nil)
+		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Command cancelled."}}, nil)
 		ctx.SetState(nil)
 		return
 	}
@@ -830,7 +838,7 @@ func (this *PostState) Handle(ctx *gogram.MessageCtx) {
 	} else if ctx.Cmd.Command == "/upload" {
 		this.postmode = postupload
 	} else if ctx.Cmd.Command == "/help" {
-		ctx.RespondAsync(data.OMessage{Text: ShowHelp("post"), ParseMode: data.HTML}, nil)
+		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: ShowHelp("post"), ParseMode: data.ParseHTML}}, nil)
 		return
 	} else if ctx.Cmd.Command == "/z" && this.postmode == postwizard {
 		this.postwizard.ToggleTagsFromString(ctx.Cmd.Argstr)
@@ -851,23 +859,23 @@ func (this *PostState) Handle(ctx *gogram.MessageCtx) {
 		} else if ctx.Msg.Document != nil { // inline file
 			prompt = "Preparing to post file sent in this message.\n\n"
 			this.postfile.mode = file_id
-			this.postfile.file_id = ctx.Msg.Document.File_id
+			this.postfile.file_id = ctx.Msg.Document.Id
 			this.postmode = postnext
-		} else if ctx.Msg.Reply_to_message != nil && ctx.Msg.Reply_to_message.Document != nil { // reply to file
-			reply = gogram.NewMessageCtx(ctx.Msg.Reply_to_message, false, ctx.Bot)
+		} else if ctx.Msg.ReplyToMessage != nil && ctx.Msg.ReplyToMessage.Document != nil { // reply to file
+			reply = gogram.NewMessageCtx(ctx.Msg.ReplyToMessage, false, ctx.Bot)
 			prompt = "Preparing to post file sent in this message.\n\n"
 			this.postfile.mode = file_id
-			this.postfile.file_id = ctx.Msg.Reply_to_message.Document.File_id
+			this.postfile.file_id = ctx.Msg.ReplyToMessage.Document.Id
 			this.postmode = postnext
 		} else if strings.HasPrefix(ctx.Cmd.Argstr, "http://") || strings.HasPrefix(ctx.Cmd.Argstr, "https://") { // inline url
 			prompt = fmt.Sprintf("Preparing to post from <a href=\"%s\">this URL</a>.\n\n", ctx.Cmd.Argstr)
 			this.postfile.mode = url
 			this.postfile.url = ctx.Cmd.Argstr
 			this.postmode = postnext
-		} else if ctx.Msg.Reply_to_message != nil && ctx.Msg.Reply_to_message.Photo != nil { // reply to photo
-			reply = gogram.NewMessageCtx(ctx.Msg.Reply_to_message, false, ctx.Bot)
+		} else if ctx.Msg.ReplyToMessage != nil && ctx.Msg.ReplyToMessage.Photo != nil { // reply to photo
+			reply = gogram.NewMessageCtx(ctx.Msg.ReplyToMessage, false, ctx.Bot)
 			prompt = "That photo was compressed by telegram, and its quality may be severely degraded.  Send it as a file instead.\n\n"
-		} else if ctx.Msg.Reply_to_message != nil || ctx.Cmd.Argstr != "" { // reply to unknown, or unknown
+		} else if ctx.Msg.ReplyToMessage != nil || ctx.Cmd.Argstr != "" { // reply to unknown, or unknown
 			prompt = "Sorry, I don't know what to do with that.\n\nPlease send me a file. Either send (or forward) one directly, reply to one you sent earlier, or send a URL."
 		} else {
 			this.postmode = postnext
@@ -950,15 +958,15 @@ func (this *PostState) Handle(ctx *gogram.MessageCtx) {
 			if this.postfile.mode == url {
 				post_url = this.postfile.url
 			} else {
-				file, err := ctx.Bot.Remote.GetFile(data.OGetFile{FileID: this.postfile.file_id})
-				if err != nil || file == nil || file.File_path == nil {
-					ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("Error while fetching %s, try sending it again?", this.postfile.file_id)}, nil)
+				file, err := ctx.Bot.Remote.GetFile(data.OGetFile{Id: this.postfile.file_id})
+				if err != nil || file == nil || file.FilePath == nil {
+					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while fetching %s, try sending it again?", this.postfile.file_id)}}, nil)
 					this.postmode = postnext
 					return
 				}
-				post_filedata, err = ctx.Bot.Remote.DownloadFile(data.OFile{FilePath: *file.File_path})
+				post_filedata, err = ctx.Bot.Remote.DownloadFile(data.OFile{FilePath: *file.FilePath})
 				if err != nil || post_filedata == nil {
-					ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("Error while downloading %s, try sending it again?", this.postfile.file_id)}, nil)
+					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while downloading %s, try sending it again?", this.postfile.file_id)}}, nil)
 					this.postmode = postnext
 					return
 				}
@@ -967,16 +975,16 @@ func (this *PostState) Handle(ctx *gogram.MessageCtx) {
 			result, err := api.UploadFile(post_filedata, post_url, this.postwizard.TagString(), this.postrating, this.postsource, this.postdescription, this.postparent, user, apikey)
 			if err != nil || !result.Success {
 				if result.StatusCode == 403 {
-					ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("It looks like your api key isn't valid, you need to login again.", *result.Reason)}, nil)
+					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("It looks like your api key isn't valid, you need to login again.", *result.Reason)}}, nil)
 					this.Reset(ctx)
 				} else if result.Location != nil && result.StatusCode == 423 {
-					ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("It looks like that file has already been posted. <a href=\"%s\">Check it out here.</a>", *result.Location), ParseMode: data.HTML}, nil)
+					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("It looks like that file has already been posted. <a href=\"%s\">Check it out here.</a>", *result.Location), ParseMode: data.ParseHTML}}, nil)
 					this.Reset(ctx)
 				} else {
-					ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("I'm having issues posting that file. (%s)", *result.Reason)}, nil)
+					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("I'm having issues posting that file. (%s)", *result.Reason)}}, nil)
 				}
 			} else {
-				ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("Upload complete! <a href=\"%s\">Check it out.</a>", *result.Location), ParseMode: data.HTML}, nil)
+				ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Upload complete! <a href=\"%s\">Check it out.</a>", *result.Location), ParseMode: data.ParseHTML}}, nil)
 				this.Reset(ctx)
 			}
 
@@ -1026,9 +1034,9 @@ func (this *PostState) Handle(ctx *gogram.MessageCtx) {
 
 	if prompt != "" {
 		if reply != nil {
-			reply.Reply(data.OMessage{Text: prompt, ParseMode: data.HTML})
+			reply.Reply(data.OMessage{SendData: data.SendData{Text: prompt, ParseMode: data.ParseHTML}})
 		} else {
-			ctx.Respond(data.OMessage{Text: prompt, ParseMode: data.HTML})
+			ctx.Respond(data.OMessage{SendData: data.SendData{Text: prompt, ParseMode: data.ParseHTML}})
 		}
 	}
 
@@ -1042,7 +1050,7 @@ type JanitorState struct {
 }
 
 func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
-	ctx.ReplyOrPMAsync(data.OMessage{Text: "Janitorial features are currently disabled, while I update fsb to match " + api.ApiName + "'s new API.", ParseMode: data.HTML}, nil)
+	ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "Janitorial features are currently disabled, while I update fsb to match " + api.ApiName + "'s new API.", ParseMode: data.ParseHTML}}, nil)
 	return
 
 	/*
@@ -1057,7 +1065,7 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 		return
 	}
 	if err != nil {
-		ctx.ReplyOrPMAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
+		ctx.ReplyOrPMAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}, nil)
 		return
 	}
 

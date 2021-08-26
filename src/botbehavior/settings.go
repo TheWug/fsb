@@ -2,6 +2,7 @@ package botbehavior
 
 import (
 	"github.com/thewug/gogram"
+	"github.com/thewug/gogram/data"
 	"os"
 	"log"
 	"storage"
@@ -12,23 +13,23 @@ const MAX_RESULTS_PER_PAGE = 50
 type Settings struct {
 	gogram.InitSettings
 
-	Logfile string `json:"logfile"`
-	ApiKey  string `json:"apikey"`
-	DbUrl   string `json:"dburl"`
+	Logfile string      `json:"logfile"`
+	ApiKey  string      `json:"apikey"`
+	DbUrl   string      `json:"dburl"`
 	ApiName             string `json:"api_name"`
 	ApiEndpoint         string `json:"api_endpoint"`
 	ApiFilteredEndpoint string `json:"api_filtered_endpoint"`
 	ApiStaticPrefix     string `json:"api_static_prefix"`
 
-	Owner   int    `json:"owner"`
+	Owner   data.UserID `json:"owner"`
 
 	ResultsPerPage int `json:"results_per_page"`
 
 	SearchUser   string `json:"search_user"`
 	SearchAPIKey string `json:"search_apikey"`
 
-	NoResultsPhotoID string `json:"no_results_photo_id"`
-	ErrorPhotoID     string `json:"error_photo_id"`
+	NoResultsPhotoID data.FileID `json:"no_results_photo_id"`
+	ErrorPhotoID     data.FileID `json:"error_photo_id"`
 }
 
 func (s Settings) GetApiName() string {

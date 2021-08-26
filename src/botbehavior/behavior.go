@@ -47,7 +47,7 @@ func (this *Behavior) ProcessCallback(ctx *gogram.CallbackCtx) {
 	m := *ctx.Cb.Message
 	m.Text = ctx.Cb.Data
 	this.ForwardTo.ProcessMessage(gogram.NewMessageCtx(&m, false, ctx.Bot))
-	ctx.Bot.Remote.AnswerCallbackQuery(data.OCallback{QueryID: ctx.Cb.Id})
+	ctx.Bot.Remote.AnswerCallbackQuery(data.OCallback{Id: ctx.Cb.Id})
 }
 
 // inline query, do tag search.
@@ -109,27 +109,27 @@ func (this *Behavior) GetErrorPlaceholder() *data.TInlineQueryResultCachedPhoto 
 	return &data.TInlineQueryResultCachedPhoto{
 		Type: "photo",
 		Id: "no-results",
-		Photo_file_id: this.MySettings.ErrorPhotoID,
-		Input_message_content: &data.TInputMessageTextContent{
-			Message_text: "Oopsie woopsie, somebody did a fucky wucky!",
+		PhotoId: this.MySettings.ErrorPhotoID,
+		InputMessageContent: &data.TInputMessageTextContent{
+			MessageText: "Oopsie woopsie, somebody did a fucky wucky!",
 		},
 	}
 }
 
 func (this *Behavior) GetNoResultsPlaceholder(query string) *data.TInlineQueryResultCachedPhoto {
-	h := data.HTML
+	h := data.ParseHTML
 	if this.MySettings.NoResultsPhotoID == "" { return nil }
 	return &data.TInlineQueryResultCachedPhoto{
 		Type: "photo",
 		Id: "no-results",
-		Photo_file_id: this.MySettings.NoResultsPhotoID,
-		Input_message_content: &data.TInputMessageTextContent{
-			Message_text: fmt.Sprintf("There are no results on " + api.ApiName + " for <code>%s</code> :(", query),
-			Parse_mode: &h,
+		PhotoId: this.MySettings.NoResultsPhotoID,
+		InputMessageContent: &data.TInputMessageTextContent{
+			MessageText: fmt.Sprintf("There are no results on " + api.ApiName + " for <code>%s</code> :(", query),
+			ParseMode: &h,
 		},
 	}
 }
 
 func (this *Behavior) ProcessInlineQueryResult(ctx *gogram.InlineResultCtx) {
-	log.Printf("[behavior] Inline selection: %s (by %d %s)\n", ctx.Result.Result_id, ctx.Result.From.Id, ctx.Result.From.UsernameString())
+	log.Printf("[behavior] Inline selection: %s (by %d %s)\n", ctx.Result.ResultId, ctx.Result.From.Id, ctx.Result.From.UsernameString())
 }

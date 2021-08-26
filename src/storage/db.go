@@ -2,6 +2,7 @@ package storage
 
 import (
 	apitypes "api/types"
+	tgtypes "github.com/thewug/gogram/data"
 
 	"database/sql"
 	"log"
@@ -118,7 +119,7 @@ func DBInit(dburl string) (error) {
 	return nil
 }
 
-func WriteUserCreds(settings UpdaterSettings, id int, username, key string) (error) {
+func WriteUserCreds(settings UpdaterSettings, id tgtypes.UserID, username, key string) (error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }
@@ -131,7 +132,7 @@ func WriteUserCreds(settings UpdaterSettings, id int, username, key string) (err
 	return nil
 }
 
-func GetUserCreds(settings UpdaterSettings, id int) (string, string, bool, error) {
+func GetUserCreds(settings UpdaterSettings, id tgtypes.UserID) (string, string, bool, error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return "", "", false, settings.Transaction.err }
@@ -146,7 +147,7 @@ func GetUserCreds(settings UpdaterSettings, id int) (string, string, bool, error
 	return user, key, privilege, err
 }
 
-func WriteUserTagRules(settings UpdaterSettings, id int, name, rules string) (error) {
+func WriteUserTagRules(settings UpdaterSettings, id tgtypes.UserID, name, rules string) (error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }
@@ -160,7 +161,7 @@ func WriteUserTagRules(settings UpdaterSettings, id int, name, rules string) (er
 	return nil
 }
 
-func GetUserTagRules(settings UpdaterSettings, id int, name string) (string, error) {
+func GetUserTagRules(settings UpdaterSettings, id tgtypes.UserID, name string) (string, error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return "", settings.Transaction.err }

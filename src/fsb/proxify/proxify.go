@@ -53,14 +53,14 @@ func ConvertApiResultToTelegramInline(result types.TSearchResult, force_safe boo
 
 	if result.File_ext == "gif" {
 		foo := data.TInlineQueryResultGif{
-			Type:         "gif",
-			Id:           salt + result.Md5,
-			Gif_url:      raw_url,
-			Thumb_url:    result.Preview_url,
-			Gif_width:    &width,
-			Gif_height:   &height,
-			Caption:      &caption,
-			Title:        &caption,
+			Type:        "gif",
+			Id:          salt + result.Md5,
+			GifUrl:      raw_url,
+			ThumbUrl:    result.Preview_url,
+			GifWidth:    &width,
+			GifHeight:   &height,
+			Caption:     &caption,
+			Title:       &caption,
 		}
 		if debugmode { GenerateDebugText(&foo, result) }
 		return foo
@@ -79,14 +79,14 @@ func ConvertApiResultToTelegramInline(result types.TSearchResult, force_safe boo
 		}
 
 		foo := data.TInlineQueryResultPhoto{
-			Type:         "photo",
-			Id:           salt + result.Md5,
-			Photo_url:    raw_url,
-			Thumb_url:    result.Preview_url,
-			Photo_width:  &width,
-			Photo_height: &height,
-			Caption:      &caption,
-			Title:        &caption,
+			Type:        "photo",
+			Id:          salt + result.Md5,
+			PhotoUrl:    raw_url,
+			ThumbUrl:    result.Preview_url,
+			PhotoWidth:  &width,
+			PhotoHeight: &height,
+			Caption:     &caption,
+			Title:       &caption,
 		}
 
 		if debugmode { GenerateDebugText(&foo, result) }
@@ -104,20 +104,20 @@ func Offset(last string) (int, error) {
 }
 
 func GenerateDebugText(iqr interface{}, result types.TSearchResult) {
-	md := data.Markdown
+	md := data.ParseMarkdown
 	t := true
 	imt := data.TInputMessageTextContent{
-		Message_text: "",
-		Parse_mode: &md,
-		No_preview: &t,
+		MessageText: "",
+		ParseMode: &md,
+		NoPreview: &t,
 	}
 
 	switch v := iqr.(type) {
 	case *data.TInlineQueryResultPhoto:
-		imt.Message_text = fmt.Sprintf("`ID:    `%d\n`MD5:   `%s\n`Size:  `%dx%d\n`Full:  `%s\n`Thumb: `%s\n", result.Id, result.Md5, *v.Photo_width, *v.Photo_height, v.Photo_url, v.Thumb_url)
-		v.Input_message_content = &imt
+		imt.MessageText = fmt.Sprintf("`ID:    `%d\n`MD5:   `%s\n`Size:  `%dx%d\n`Full:  `%s\n`Thumb: `%s\n", result.Id, result.Md5, *v.PhotoWidth, *v.PhotoHeight, v.PhotoUrl, v.ThumbUrl)
+		v.InputMessageContent = &imt
 	case *data.TInlineQueryResultGif:
-		imt.Message_text = fmt.Sprintf("`ID:    `%d\n`MD5:   `%s\n`Size:  `%dx%d\n`Full:  `%s\n`Thumb: `%s\n", result.Id, result.Md5, *v.Gif_width, *v.Gif_height, v.Gif_url, v.Thumb_url)
-		v.Input_message_content = &imt
+		imt.MessageText = fmt.Sprintf("`ID:    `%d\n`MD5:   `%s\n`Size:  `%dx%d\n`Full:  `%s\n`Thumb: `%s\n", result.Id, result.Md5, *v.GifWidth, *v.GifHeight, v.GifUrl, v.ThumbUrl)
+		v.InputMessageContent = &imt
 	}
 }
