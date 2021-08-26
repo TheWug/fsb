@@ -346,16 +346,16 @@ func getTagsWithCount(count int, differentiator string) (apitypes.TTagInfoArray,
 	return out, nil
 }
 
-func GetAliasesFor(tag string) (apitypes.TTagInfoArray, error) {
+func GetAliasesFor(tag string, ctrl EnumerateControl) (apitypes.TTagInfoArray, error) {
 	sql :=	"SELECT a.tag_id, a.tag_name, a.tag_count, a.tag_type, a.tag_type_locked FROM " +
 			"tag_index AS %s INNER JOIN " +
 			"alias_index AS b ON (%s.tag_name = b.alias_name) INNER JOIN " +
 			"tag_index AS %s ON (b.alias_target_id = %s.tag_id) " +
 		"WHERE c.tag_name = $1"
 
-	tx, err := Db_pool.Begin()
-	if err != nil { return nil, err }
-	defer tx.Rollback()
+	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
+	defer ctrl.Transaction.Finalize(mine)
+	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
 
 	var out apitypes.TTagInfoArray
 	var t apitypes.TTagData
@@ -378,6 +378,7 @@ func GetAliasesFor(tag string) (apitypes.TTagInfoArray, error) {
 		out = append(out, t)
 	}
 
+	ctrl.Transaction.commit = mine
 	return out, nil
 }
 

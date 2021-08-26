@@ -1055,7 +1055,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 
 	// now remove any matches which are already aliased to the target tag.
 	sfx <- "(remove aliases)"
-	aliases, err := storage.GetAliasesFor(start_tag)
+	aliases, err := storage.GetAliasesFor(start_tag, ctrl)
 	if err != nil { log.Printf("Error when searching for aliases to %s: %s", start_tag, err.Error()) }
 	for _, item := range aliases {
 		delete(results, item.Name)
