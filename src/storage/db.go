@@ -455,7 +455,7 @@ func PostUpdater(input chan apitypes.TSearchResult, settings UpdaterSettings) (e
 		if err != nil { return err }
 
 		_, err = tx.Exec("INSERT INTO " + suf(table1) + " (SELECT $1 as post_id, tag_name FROM UNNEST($2::varchar[]) as tag_name) ON CONFLICT DO NOTHING",
-				 post.Id, pq.Array(strings.Split(post.Tags, " ")))
+				 post.Id, pq.Array(post.Tags()))
 		if err != nil { return err }
 	}
 
@@ -941,7 +941,7 @@ func LocalTagSearch(tag apitypes.TTagData, ctrl EnumerateControl) (apitypes.TRes
 	if err != nil { return nil, err }
 
 	var out apitypes.TResultArray
-	var item apitypes.TSearchResult
+//	var item apitypes.TSearchResult
 	var intermed map[int][]string = make(map[int][]string)
 	for rows.Next() {
 		var id int
@@ -951,13 +951,15 @@ func LocalTagSearch(tag apitypes.TTagData, ctrl EnumerateControl) (apitypes.TRes
 		intermed[id] = append(intermed[id], tag)
 	}
 
-	for k, v := range intermed {
-		item.Id = k
-		item.Tags = strings.Join(v, " ")
-		out = append(out, item)
-	}
+	panic("needs lots of updates!")
 
-	ctrl.Transaction.commit = mine
+	//for k, v := range intermed {
+	//	item.Id = k
+	//	item.Tags = strings.Join(v, " ")
+	//	out = append(out, item)
+	//}
+
+	//ctrl.Transaction.commit = mine
 	return out, nil
 }
 
@@ -967,10 +969,10 @@ func UpdatePost(oldpost, newpost apitypes.TSearchResult, settings UpdaterSetting
 	if settings.Transaction.err != nil { return settings.Transaction.err }
 
 	count_deltas := make(map[string]int)
-	for _, new_tag := range strings.Split(newpost.Tags, " ") {
+	for _, new_tag := range newpost.Tags() {
 		count_deltas[new_tag] += 1
 	}
-	for _, old_tag := range strings.Split(oldpost.Tags, " ") {
+	for _, old_tag := range oldpost.Tags() {
 		count_deltas[old_tag] -= 1
 	}
 
@@ -986,7 +988,7 @@ func UpdatePost(oldpost, newpost apitypes.TSearchResult, settings UpdaterSetting
 	if err != nil { return err }
 
 	query = "INSERT INTO post_tags SELECT $1 as post_id, tag_id FROM UNNEST($2::varchar[]) AS tag_name INNER JOIN tag_index USING (tag_name)"
-	_, err = tx.Exec(query, oldpost.Id, pq.Array(strings.Split(newpost.Tags, " ")))
+	_, err = tx.Exec(query, oldpost.Id, pq.Array(newpost.Tags()))
 	if err != nil { return err }
 
 	settings.Transaction.commit = mine
