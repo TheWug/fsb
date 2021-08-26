@@ -100,11 +100,10 @@ func Offset(last string) (int, error) {
 }
 
 func GenerateDebugText(iqr interface{}, result types.TPostInfo) {
-	md := data.ParseMarkdown
 	t := true
 	imt := data.TInputMessageTextContent{
 		MessageText: "",
-		ParseMode: &md,
+		ParseMode: data.ParseMarkdown,
 		NoPreview: &t,
 	}
 

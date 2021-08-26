@@ -468,7 +468,6 @@ func (this *Behavior) GetErrorPlaceholder() *data.TInlineQueryResultCachedPhoto 
 }
 
 func (this *Behavior) GetNoResultsPlaceholder(query string) *data.TInlineQueryResultCachedPhoto {
-	h := data.ParseHTML
 	if this.MySettings.NoResultsPhotoID == "" { return nil }
 	return &data.TInlineQueryResultCachedPhoto{
 		Type: "photo",
@@ -476,7 +475,7 @@ func (this *Behavior) GetNoResultsPlaceholder(query string) *data.TInlineQueryRe
 		PhotoId: this.MySettings.NoResultsPhotoID,
 		InputMessageContent: &data.TInputMessageTextContent{
 			MessageText: fmt.Sprintf("There are no results on " + api.ApiName + " for <code>%s</code> :(", query),
-			ParseMode: &h,
+			ParseMode: data.ParseHTML,
 		},
 	}
 }
