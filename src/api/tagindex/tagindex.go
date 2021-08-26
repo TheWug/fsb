@@ -16,9 +16,11 @@ import (
 	"bytes"
 	"html"
 	"sort"
+	"math/rand"
 	"strings"
 	"sync"
 	"errors"
+	"strconv"
 )
 
 func DownloadMessage(id, max_id int, name string) (string) {
@@ -478,8 +480,8 @@ func SyncPostsInternal(user, api_key string, settings storage.UpdaterSettings, m
 	if err := SyncAliasesInternal(user, api_key, settings, msg, sfx); err != nil { return err }
 	msg <- "Resolving post tags..."
 	if err := storage.ImportPostTagsFromNameToID(settings, sfx); err != nil { return err }
-	//if err := RecountTagsInternal(settings, msg, sfx); err != nil { return err }
-	//if err := CalculateAliasedCountsInternal(settings, msg, sfx); err != nil { return err }
+	if err := RecountTagsInternal(settings, msg, sfx); err != nil { return err }
+	if err := CalculateAliasedCountsInternal(settings, msg, sfx); err != nil { return err }
 	sfx <- " done."
 
 	return nil
@@ -663,9 +665,9 @@ type TagEditBox struct {
 	Tag types.TTagData
 }
 
-func NewTagsFromOldTags(oldtags string, deltags, addtags map[string]bool) (string) {
+func NewTagsFromOldTags(oldtags []string, deltags, addtags map[string]bool) (string) {
 	var tags []string
-	for _, tag := range strings.Split(oldtags, " ") {
+	for _, tag := range oldtags {
 		found := deltags[tag] || addtags[tag]
 		if tag == "" || found { continue }
 		tags = append(tags, tag)
@@ -677,7 +679,6 @@ func NewTagsFromOldTags(oldtags string, deltags, addtags map[string]bool) (strin
 	return strings.Join(tags, " ")
 }
 
-/*
 func FindTagTypos(ctx *gogram.MessageCtx) {
 	mode := MODE_READY
 	var distinct, include, exclude []string
@@ -727,7 +728,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 
 	txbox, err := storage.NewTxBox()
 	if err != nil {
-		ctx.ReplyAsync(data.OMessage{Text: fmt.Sprintf("Error opening DB transaction: %s.", err.Error())}, nil)
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error opening DB transaction: %s.", err.Error())}}, nil)
 		return
 	}
 
@@ -741,12 +742,12 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 
 	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{Transaction: ctrl.Transaction}, ctx.Msg.From.Id)
 	if (err != nil || !janitor) && fix {
-		ctx.ReplyAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}, nil)
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
 	}
 
 	if start_tag == "" {
-		ctx.ReplyAsync(data.OMessage{Text: "You must specify a tag.", ParseMode: data.ParseHTML}, nil)
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You must specify a tag.", ParseMode: data.ParseHTML}}, nil)
 		return
 	}
 
@@ -766,7 +767,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 	t1, err := storage.GetTag(ctx.Cmd.Args[0], ctrl)
 	if err != nil { log.Printf("Error occurred when looking up tag: %s", err.Error()) }
 	if t1 == nil {
-		ctx.ReplyAsync(data.OMessage{Text: fmt.Sprintf("Tag doesn't exist: %s.", start_tag)}, nil)
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Tag doesn't exist: %s.", start_tag)}}, nil)
 		return
 	}
 
@@ -846,7 +847,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 	for _, v := range results {
 		alert := "  "
 		if !show_zero && v.Tag.Count == 0 { continue }
-		if v.Tag.Type != types.General { alert = "!!" }
+		if v.Tag.Type != types.TCGeneral { alert = "!!" }
 		buf.WriteString(fmt.Sprintf("%6d %s %s\n", v.Tag.Count, alert, html.EscapeString(v.Tag.Name)))
 	}
 	buf.WriteString("</pre>")
@@ -867,8 +868,9 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 
 			reason := fmt.Sprintf("Bulk retag: %s --> %s (likely typo)", v.Tag.Name, start_tag)
 			for _, p := range posts {
-				newtags := NewTagsFromOldTags(p.Tags, map[string]bool{v.Tag.Name: true}, map[string]bool{start_tag: true})
-				newp, err := api.UpdatePost(user, api_key, p.Id, &p.Tags, &newtags, nil, nil, nil, nil, &reason)
+				newtags := NewTagsFromOldTags(p.Tags(), map[string]bool{v.Tag.Name: true}, map[string]bool{start_tag: true})
+				oldtags := strings.Join(p.Tags(), " ")
+				newp, err := api.UpdatePost(user, api_key, p.Id, &oldtags, &newtags, nil, nil, nil, nil, &reason)
 				if err != nil {
 					sfx <- fmt.Sprintf(" (error: %s)", err.Error())
 					return
@@ -895,7 +897,6 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 	ctrl.Transaction.MarkForCommit()
 	_ = save
 }
-*/
 
 func Blits(ctx *gogram.MessageCtx) {
 	txbox, err := storage.NewTxBox()
@@ -1029,11 +1030,10 @@ type Triplet struct {
 	tag, subtag1, subtag2 types.TTagData
 }
 
-/*
 func Concatenations(ctx *gogram.MessageCtx) {
 	txbox, err := storage.NewTxBox()
 	if err != nil {
-		ctx.ReplyAsync(data.OMessage{Text: fmt.Sprintf("Error opening DB transaction: %s.", err.Error())}, nil)
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error opening DB transaction: %s.", err.Error())}}, nil)
 		return
 	}
 
@@ -1050,8 +1050,8 @@ func Concatenations(ctx *gogram.MessageCtx) {
 
 	var cats []Triplet
 	header := "Here are some random concatenated tags:"
-	if ctx.Msg.Reply_to_message != nil {
-		text := ctx.Msg.Reply_to_message.Text
+	if ctx.Msg.ReplyToMessage != nil {
+		text := ctx.Msg.ReplyToMessage.Text
 		if text != nil {
 			prev_cats := strings.Split(*text, "\n")
 			if prev_cats[0] == header {
@@ -1110,7 +1110,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 		}
 
 		if manual_ignore != nil || manual_unignore != nil {
-			ctx.ReplyAsync(data.OMessage{Text: message.String(), ParseMode: data.ParseHTML}, nil)
+			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: message.String(), ParseMode: data.ParseHTML}}, nil)
 			return
 		}
 
@@ -1134,12 +1134,12 @@ func Concatenations(ctx *gogram.MessageCtx) {
 
 		for k, v := range tagmap {
 			if v.Count == 0 { continue } // skip anything with no posts.
-			if v.Type != types.General { continue } // skip anything that's not a general tag.
+			if v.Type != types.TCGeneral { continue } // skip anything that's not a general tag.
 			runes := []rune(k)
 			for i := 1; i < len(runes) - 1; i++ {
 				prefix, prefix_ok := tagmap[string(runes[:i])]
 				suffix, suffix_ok := tagmap[string(runes[i:])]
-				if prefix_ok && suffix_ok && ratio * v.Count < prefix.Count && ratio * v.Count < suffix.Count && v.Type == types.General {
+				if prefix_ok && suffix_ok && ratio * v.Count < prefix.Count && ratio * v.Count < suffix.Count && v.Type == types.TCGeneral {
 					candidates = append(candidates, Triplet{tag: v, subtag1: prefix, subtag2: suffix})
 				}
 			}
@@ -1155,7 +1155,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 			message.WriteString(fmt.Sprintf("%d: <code>%s</code>, <code>%s</code> (%d)\n", i, t.subtag1.Name, t.subtag2.Name, t.tag.Count))
 		}
 
-		ctx.ReplyAsync(data.OMessage{Text: message.String(), ParseMode: data.ParseHTML}, nil)
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: message.String(), ParseMode: data.ParseHTML}}, nil)
 		return
 	}
 
@@ -1180,8 +1180,9 @@ func Concatenations(ctx *gogram.MessageCtx) {
 
 		reason := fmt.Sprintf("Bulk retag: %s --> %s, %s (fixed concatenated tags)", cats[i].tag.Name, cats[i].subtag1.Name, cats[i].subtag2.Name)
 		for _, p := range posts {
-			newtags := NewTagsFromOldTags(p.Tags, map[string]bool{cats[i].tag.Name: true}, map[string]bool{cats[i].subtag1.Name: true, cats[i].subtag2.Name: true})
-			newp, err := api.UpdatePost(user, api_key, p.Id, &p.Tags, &newtags, nil, nil, nil, nil, &reason)
+			newtags := NewTagsFromOldTags(p.Tags(), map[string]bool{cats[i].tag.Name: true}, map[string]bool{cats[i].subtag1.Name: true, cats[i].subtag2.Name: true})
+			oldtags := strings.Join(p.Tags(), " ")
+			newp, err := api.UpdatePost(user, api_key, p.Id, &oldtags, &newtags, nil, nil, nil, nil, &reason)
 			err = nil
 			if err != nil {
 				sfx <- fmt.Sprintf(" (error: %s)", err.Error())
@@ -1206,11 +1207,9 @@ func Concatenations(ctx *gogram.MessageCtx) {
 		message.WriteString(fmt.Sprintf("Fixing %d: <code>%s</code> -> <code>%s, %s</code>\n", i, cats[i].tag.Name, cats[i].subtag1.Name, cats[i].subtag2.Name))
 	}
 
-	ctx.ReplyAsync(data.OMessage{Text: message.String(), ParseMode: data.ParseHTML}, nil)
+	ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: message.String(), ParseMode: data.ParseHTML}}, nil)
 	ctrl.Transaction.MarkForCommit()
 }
-*/
-
 
 /*
 func BulkRetag(searchtags, applytags string) {

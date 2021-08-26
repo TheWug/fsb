@@ -1054,7 +1054,7 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 	}
 
 	log.Printf("first:\n")
-	_, _, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+	user, apikey, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
 	log.Printf("over.\n")
 	if !janitor {
 		// commands from non-authorized users are silently ignored
@@ -1071,16 +1071,14 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 		go tagindex.SyncAliasesCommand(ctx)
 	} else if ctx.Cmd.Command == "/syncposts" {
 		go tagindex.SyncPostsCommand(ctx)
-	} 
-
-	/* else if ctx.Cmd.Command == "/cats" {
+	} else if ctx.Cmd.Command == "/cats" {
 		go tagindex.Concatenations(ctx)
 	} else if ctx.Cmd.Command == "/blits" {
 		go tagindex.Blits(ctx)
 	} else if ctx.Cmd.Command == "/findtagtypos" {
 		go tagindex.FindTagTypos(ctx)
 	} else if ctx.Cmd.Command == "/recounttags" {
-		go tagindex.RecountTagsExternal(ctx)
+		go tagindex.RecountTagsCommand(ctx)
 	} else if ctx.Cmd.Command == "/editposttest" {
 		post := 2893902 // https://api-host/post/show/2893902
 		newtags := "1:1 2021 anthro beastars canid canine canis clothed clothing fur grey_body grey_fur hi_res javigameboy legoshi_(beastars) male mammal simple_background solo teeth wolf"
@@ -1092,21 +1090,5 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 	
 		reason := "API Update Test (should be NOOP)"
 		api.UpdatePost(user, apikey, post, &oldtags, &newtags, &rating, &parent_post, &sources, &description, &reason)
-	} else if ctx.Cmd.Command == "/parseexpression" {
-		if len(ctx.Cmd.Args) < 1 { return }
-		tokens := tagindex.Tokenize(ctx.Cmd.Args[0])
-		e := tagindex.Parse(tokens)
-		str, replace := tagindex.Serialize(e)
-		for k, v := range replace {
-			replace[k] = pq.QuoteLiteral(v)
-		}
-		replace["tag_id"] = "tag_id"
-		replace["tag_index"] = "tag_index"
-		replace["tag_name"] = "tag_name"
-		replace["temp"] = "x"
-		var buf bytes.Buffer
-		template.Must(template.New("decoder").Parse(str)).Execute(&buf, replace)
-		fmt.Printf("%s\n", buf.String())
 	}
-	*/
 }
