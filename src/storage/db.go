@@ -96,14 +96,6 @@ func handle_transaction(c *committer, tx *sql.Tx) {
 	}
 }
 
-func suffix(table, suffix string) string {
-	if suffix == "" {
-		return table
-	} else {
-		return table + "__" + suffix
-	}
-}
-
 // initialize the DAL. Closing it might be important at some point, but who cares right now.
 func DBInit(dburl string) (error) {
 	var err error
@@ -219,15 +211,11 @@ func GetTag(name string, ctrl EnumerateControl) (*apitypes.TTagData, error) {
 }
 
 func GetLastTag(settings UpdaterSettings) (*apitypes.TTagData, error) {
-	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
-
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
 
-	table := "tag_index"
-
-	sq := "SELECT tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM " + suf(table) + " WHERE tag_id = (SELECT MAX(tag_id) FROM tag_index) LIMIT 1"
+	sq := "SELECT tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM tag_index WHERE tag_id = (SELECT MAX(tag_id) FROM tag_index) LIMIT 1"
 	row := tx.QueryRow(sq)
 
 	var tag apitypes.TTagData
@@ -247,47 +235,34 @@ func ClearTagIndex(settings UpdaterSettings) (error) {
 	// don't delete phantom tags. phantom tags have an id less than zero, and that id is transient, so if the
 	// tag database has phantom tags applied to any posts and they are deleted from here they will become dangling.
 	// instead, keep them. they may conflict later with real tags, in which case they will be de-phantomified.
-	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
 
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }
 
-	table := "tag_index"
-
-	_, err := tx.Exec("DELETE FROM " + suf(table) + " WHERE tag_id > 0")
+	_, err := tx.Exec("DELETE FROM tag_index WHERE tag_id > 0")
 
 	settings.Transaction.commit = mine
 	return err
 }
 
 func ClearAliasIndex(settings UpdaterSettings) (error) {
-	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
-
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }
 
-	table := "alias_index"
-
-	_, err := tx.Exec("TRUNCATE " + suf(table))
+	_, err := tx.Exec("TRUNCATE alias_index")
 
 	settings.Transaction.commit = mine
 	return err
 }
 
 func ClearPosts(settings UpdaterSettings) (error) {
-	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
-
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }
 
-	table1 := "post_tags"
-	table2 := "post_tags_by_name"
-	table3 := "post_index"
-
-	_, err := tx.Exec("TRUNCATE " + suf(table1) + ", " + suf(table2) + ", " + suf(table3))
+	_, err := tx.Exec("TRUNCATE post_tags, post_tags_by_name, post_index")
 
 	settings.Transaction.commit = mine && (err != nil)
 	return err
@@ -405,20 +380,17 @@ func GetAliasedTags() (apitypes.TTagInfoArray, error) {
 
 func AliasUpdater(input chan apitypes.TAliasData, settings UpdaterSettings) (error) {
 	defer func(){ for _ = range input {} }()
-	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
-
-	table := "alias_index"
 
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }
 
 	for alias := range input {
-		sql := "DELETE FROM " + suf(table) + " WHERE alias_id = $1"
+		sql := "DELETE FROM alias_index WHERE alias_id = $1"
 		_, err := tx.Exec(sql, alias.Id)
 		if err != nil { return err }
 
-		sql = "INSERT INTO " + suf(table) + " (alias_id, alias_name, alias_target_id) SELECT $1, $2, tag_id FROM tag_index WHERE tag_name = $3"
+		sql = "INSERT INTO alias_index (alias_id, alias_name, alias_target_id) SELECT $1, $2, tag_id FROM tag_index WHERE tag_name = $3"
 		_, err = tx.Exec(sql, alias.Id, alias.Name, alias.Alias)
 		if err != nil { return err }
 	}
@@ -430,15 +402,10 @@ func AliasUpdater(input chan apitypes.TAliasData, settings UpdaterSettings) (err
 type UpdaterSettings struct {
 	Full bool
 	Transaction TransactionBox
-	TableSuffix string
 }
 
 func PostUpdater(input chan apitypes.TPostInfo, settings UpdaterSettings) (error) {
 	defer func(){ for _ = range input {} }()
-	suf := func(table string) string { return table }
-
-	table1 := "post_tags_by_name"
-	table2 := "post_index"
 
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
@@ -447,15 +414,15 @@ func PostUpdater(input chan apitypes.TPostInfo, settings UpdaterSettings) (error
 	i := 0
 	for post := range input {
 		i++
-		_, err := tx.Exec("DELETE FROM " + suf(table1) + " WHERE post_id = $1", post.Id)
+		_, err := tx.Exec("DELETE FROM post_tags_by_name WHERE post_id = $1", post.Id)
 		if err != nil { return err }
-		_, err = tx.Exec("DELETE FROM " + suf(table2) + " WHERE post_id = $1", post.Id)
+		_, err = tx.Exec("DELETE FROM post_index WHERE post_id = $1", post.Id)
 		if err != nil { return err }
 
-		_, err = tx.Exec("INSERT INTO " + suf(table1) + " (SELECT $1 as post_id, tag_name FROM UNNEST($2::varchar[]) as tag_name) ON CONFLICT DO NOTHING",
+		_, err = tx.Exec("INSERT INTO post_tags_by_name (SELECT $1 as post_id, tag_name FROM UNNEST($2::varchar[]) as tag_name) ON CONFLICT DO NOTHING",
 				 post.Id, pq.Array(post.Tags()))
 		if err != nil { return err }
-		_, err = tx.Exec("INSERT INTO " + suf(table2) + " (post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+		_, err = tx.Exec("INSERT INTO post_index (post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted) VALUES ($1, $2, $3, $4, $5, $6, $7)",
 				 post.Id, post.Change, post.Rating, post.Description, strings.Join(post.Sources, " "), post.Md5, post.Deleted)
 		if err != nil { return err }
 	}
@@ -466,7 +433,6 @@ func PostUpdater(input chan apitypes.TPostInfo, settings UpdaterSettings) (error
 
 func PostDeleter(input chan []int, settings UpdaterSettings) (error) {
 	defer func(){ for _ = range input {} }()
-
 
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
@@ -494,11 +460,7 @@ func MarkPostDeleted(post_id int, settings UpdaterSettings) error {
 }
 
 func GetHighestStagedPostID(settings UpdaterSettings) (int) {
-	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
-
-	table := "post_tags_by_name"
-
-	row := Db_pool.QueryRow("SELECT MAX(post_id) FROM " + suf(table))
+	row := Db_pool.QueryRow("SELECT MAX(post_id) FROM post_tags_by_name")
 	var result int
 	_ = row.Scan(&result)
 	return result
@@ -520,10 +482,6 @@ func GetHighestPostID(settings UpdaterSettings) (int) {
 }
 
 func TagUpdater(input chan apitypes.TTagData, settings UpdaterSettings) (error) {
-	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
-
-	table := "tag_index"
-
 	mine, _ := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }
@@ -531,13 +489,13 @@ func TagUpdater(input chan apitypes.TTagData, settings UpdaterSettings) (error) 
 	defer func(){ for _ = range input {} }()
 
 	for tag := range input {
-		_, err := settings.Transaction.tx.Exec("DELETE FROM " + suf(table) + " WHERE tag_id = $1", tag.Id)
+		_, err := settings.Transaction.tx.Exec("DELETE FROM tag_index WHERE tag_id = $1", tag.Id)
 		if err != nil { return err }
 
 		f := false
 		if tag.Locked == nil { tag.Locked = &f }
 
-		_, err = settings.Transaction.tx.Exec("INSERT INTO " + suf(table) + " (tag_id, tag_name, tag_count, tag_type, tag_type_locked) VALUES ($1, $2, $3, $4, $5)", tag.Id, tag.Name, tag.Count, tag.Type, *tag.Locked)
+		_, err = settings.Transaction.tx.Exec("INSERT INTO tag_index (tag_id, tag_name, tag_count, tag_type, tag_type_locked) VALUES ($1, $2, $3, $4, $5)", tag.Id, tag.Name, tag.Count, tag.Type, *tag.Locked)
 		if err != nil { return err }
 	}
 
@@ -546,29 +504,24 @@ func TagUpdater(input chan apitypes.TTagData, settings UpdaterSettings) (error) 
 }
 
 func ResolvePhantomTags(settings UpdaterSettings) (error) {
-	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
-
-	table1 := "post_tags"
-	table2 := "tag_index"
-
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }
 
 	// this one merits a tiny bit of explaining
 	// fetches the phantom id and the real id using the name and the newest ID of all doubly duplicate tags (by name), then swaps all phantom ids with their associated real id in post_tags.
-	_, err := tx.Exec("UPDATE " + suf(table1) + " SET tag_id = map.mapto FROM " + suf(table2) + " INNER JOIN (" +
+	_, err := tx.Exec("UPDATE post_tags SET tag_id = map.mapto FROM tag_index INNER JOIN (" +
 				"WITH b AS (" +
 					"WITH a AS (" +
-						"SELECT COUNT(tag_name), tag_name FROM " + suf(table2) + " GROUP BY tag_name" +
-					") SELECT tag_name, MAX(tag_id) FROM a INNER JOIN " + suf(table2) + " USING (tag_name) WHERE count = 2 GROUP BY tag_name" +
-				") SELECT tag_id, max FROM b INNER JOIN " + suf(table2) + " USING (tag_name) WHERE max > 0 AND tag_id < 0" +
-			") AS map(tag_id, mapto) USING (tag_id) WHERE " + suf(table2) + ".tag_id = " + suf(table1) + ".tag_id")
+						"SELECT COUNT(tag_name), tag_name FROM tag_index GROUP BY tag_name" +
+					") SELECT tag_name, MAX(tag_id) FROM a INNER JOIN tag_index USING (tag_name) WHERE count = 2 GROUP BY tag_name" +
+				") SELECT tag_id, max FROM b INNER JOIN tag_index USING (tag_name) WHERE max > 0 AND tag_id < 0" +
+			") AS map(tag_id, mapto) USING (tag_id) WHERE tag_index.tag_id = post_tags.tag_id")
 	if err != nil { return err }
 
-	_, err = tx.Exec("DELETE FROM " + suf(table2) + " WHERE tag_id < 0")
+	_, err = tx.Exec("DELETE FROM tag_index WHERE tag_id < 0")
 	if err != nil { return err }
-	_, err = tx.Exec("DELETE FROM " + suf(table1) + " WHERE tag_id < 0")
+	_, err = tx.Exec("DELETE FROM post_tags WHERE tag_id < 0")
 	if err != nil { return err }
 
 	settings.Transaction.commit = mine
@@ -584,9 +537,6 @@ func FixTagsWhichTheAPIManglesByAccident(settings UpdaterSettings) (error) {
 	// thankfully there are only a small number of (known) ones.
 
 	// these are all the ones i've found. there's probably more.
-	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
-
-	table := "tag_index"
 
 	fix_map := map[int]string{
 		407005: "samochan" + "\U0001F49F" + "iluvml",
@@ -604,7 +554,7 @@ func FixTagsWhichTheAPIManglesByAccident(settings UpdaterSettings) (error) {
 	if settings.Transaction.err != nil { return settings.Transaction.err }
 
 	for k, v := range fix_map {
-		query := "UPDATE " + suf(table) + " SET tag_name = $1 WHERE tag_id = $2"
+		query := "UPDATE tag_index SET tag_name = $1 WHERE tag_id = $2"
 		_, err := tx.Exec(query, v, k)
 		if err != nil { return err }
 	}
@@ -744,17 +694,11 @@ func GetMostRecentlyUpdatedPost(settings UpdaterSettings) (*apitypes.TPostInfo, 
 }
 
 func ImportPostTagsFromNameToID(settings UpdaterSettings, sfx chan string) (error) {
-	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
-	suf2 := func(table, extrasuffix string) string { return suffix(table, settings.TableSuffix) + extrasuffix }
 	status := func(s string) {
 		if sfx != nil {
 			sfx <- s
 		}
 	}
-
-	table1 := "post_tags"
-	table2 := "post_tags_by_name"
-	table3 := "tag_index"
 
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
@@ -762,8 +706,8 @@ func ImportPostTagsFromNameToID(settings UpdaterSettings, sfx chan string) (erro
 
 	var new_count, existing_count int64
 	var err error
-	if err = tx.QueryRow("SELECT COUNT(*) FROM " + suf(table2)).Scan(&new_count); err != nil { return err }
-	if err = tx.QueryRow("SELECT n_live_tup FROM pg_stat_all_tables WHERE relname = '" + suf(table1) + "'").Scan(&existing_count); err != nil { return err }
+	if err = tx.QueryRow("SELECT COUNT(*) FROM post_tags_by_name").Scan(&new_count); err != nil { return err }
+	if err = tx.QueryRow("SELECT n_live_tup FROM pg_stat_all_tables WHERE relname = 'post_tags'").Scan(&existing_count); err != nil { return err } // estimate, but super fast
 
 	// check if the amount of new data is large relative to the size of the existing dataset (1% or more out of 10s of millions of rows usually)
 	if new_count * 20 > existing_count {
@@ -780,49 +724,49 @@ func ImportPostTagsFromNameToID(settings UpdaterSettings, sfx chan string) (erro
 
 		// delete existing tag records before removing indices because it will be a lot slower without them
 		status(" (1/4 tag clear overrides)")
-		query = "DELETE FROM " + suf(table1) + " WHERE post_id IN (SELECT DISTINCT post_id FROM " + suf(table2) + ")"
+		query = "DELETE FROM post_tags WHERE post_id IN (SELECT DISTINCT post_id FROM post_tags_by_name)"
 		_, err = tx.Exec(query)
 		if err != nil { return err }
 
 		// drop the index and the primary key constraint
 		status(" (2/4 drop indices)")
-		query = "DROP INDEX " + suf2(table1, "_tag_id_idx")
+		query = "DROP INDEX post_tags_tag_id_idx"
 		_, err = tx.Exec(query)
 		if err != nil { return err }
 
-		query = "ALTER TABLE " + suf(table1) + " DROP CONSTRAINT " + suf2(table1, "_pkey")
+		query = "ALTER TABLE post_tags DROP CONSTRAINT post_tags_pkey"
 		_, err = tx.Exec(query)
 		if err != nil { return err }
 
 		// slurp all of the data into the table (very slow if indexes are present, which is why we killed them)
 		status(" (3/4 import data)")
-		query = "INSERT INTO " + suf(table1) + " SELECT post_id, tag_id FROM " + suf(table2) + " INNER JOIN " + suf(table3) + " USING (tag_name)"
+		query = "INSERT INTO post_tags SELECT post_id, tag_id FROM post_tags_by_name INNER JOIN tag_index USING (tag_name)"
 		_, err = tx.Exec(query)
 		if err != nil { return err }
 
 		// add the index and primary key constraint back to the table
 		status(" (4/4 re-index)")
-		query = "ALTER TABLE " + suf(table1) + " ADD PRIMARY KEY (post_id, tag_id)"
+		query = "ALTER TABLE post_tags ADD CONSTRAINT post_tags_pkey PRIMARY KEY (post_id, tag_id)"
 		_, err = tx.Exec(query)
 		if err != nil { return err }
 
-		query = "CREATE INDEX ON " + suf(table1) + " (tag_id)"
+		query = "CREATE INDEX post_tags_tag_id_idx ON post_tags (tag_id)"
 		_, err = tx.Exec(query)
 		if err != nil { return err }
 	} else {
 		// if the amount of new data is not large compared to the amount of existing data, just one-by-one plunk them into the table.
 		status(" (1/2 tag clear overrides)")
-		query := "DELETE FROM " + suf(table1) + " WHERE post_id IN (SELECT DISTINCT post_id FROM " + suf(table2) + ")"
+		query := "DELETE FROM post_tags WHERE post_id IN (SELECT DISTINCT post_id FROM post_tags_by_name)"
 		_, err = tx.Exec(query)
 		if err != nil { return err }
 
 		status(" (2/2 tag gross-reference)")
-		query = "INSERT INTO " + suf(table1) + " SELECT post_id, tag_id FROM " + suf(table2) + " INNER JOIN " + suf(table3) + " USING (tag_name)"
+		query = "INSERT INTO post_tags SELECT post_id, tag_id FROM post_tags_by_name INNER JOIN tag_index USING (tag_name)"
 		_, err = tx.Exec(query)
 		if err != nil { return err }
 	}
 
-	_, err = tx.Exec("TRUNCATE " + suf(table2))
+	_, err = tx.Exec("TRUNCATE post_tags_by_name")
 	if err != nil { return err }
 
 	settings.Transaction.commit = mine
