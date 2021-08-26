@@ -220,10 +220,14 @@ type EnumerateControl struct {
 }
 
 func GetTag(name string, ctrl EnumerateControl) (*apitypes.TTagData, error) {
+	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
+	defer ctrl.Transaction.Finalize(mine)
+	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
+
 	sq := "SELECT tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM tag_index WHERE LOWER(tag_name) = LOWER($1) LIMIT 1"
 	name, typ := PrefixedTagToTypedTag(name)
 
-	row := Db_pool.QueryRow(sq, name)
+	row := tx.QueryRow(sq, name)
 
 	var tag apitypes.TTagData
 	err := row.Scan(&tag.Id, &tag.Name, &tag.Count, &tag.Type, &tag.Locked)
@@ -231,7 +235,7 @@ func GetTag(name string, ctrl EnumerateControl) (*apitypes.TTagData, error) {
 	if err == sql.ErrNoRows {
 		if !ctrl.CreatePhantom { return nil, nil } // don't create phantom tag, so just return nil for "not found"
 		// otherwise, insert a phantom tag
-		row = Db_pool.QueryRow("INSERT INTO tag_index (tag_id, tag_name, tag_count, tag_type, tag_type_locked) VALUES (nextval('phantom_tag_seq'), $1, 0, $2, false) RETURNING *", name, typ)
+		row = tx.QueryRow("INSERT INTO tag_index (tag_id, tag_name, tag_count, tag_type, tag_type_locked) VALUES (nextval('phantom_tag_seq'), $1, 0, $2, false) RETURNING *", name, typ)
 		err = row.Scan(&tag.Id, &tag.Name, &tag.Count, &tag.Type, &tag.Locked)
 		if err == sql.ErrNoRows { return nil, nil } // this really shouldn't happen, but just in case.
 	}
@@ -239,6 +243,7 @@ func GetTag(name string, ctrl EnumerateControl) (*apitypes.TTagData, error) {
 		return nil, err
 	}
 
+	ctrl.Transaction.commit = mine
 	return &tag, err
 }
 
