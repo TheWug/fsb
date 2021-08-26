@@ -40,9 +40,9 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 	salt := "x_"
 	postURL := ""
 	if force_safe {
-		postURL = fmt.Sprintf("https://%s/post/show/%d", api.FilteredEndpoint, result.Id)
+		postURL = fmt.Sprintf("https://%s/posts/%d", api.FilteredEndpoint, result.Id)
 	} else {
-		postURL = fmt.Sprintf("https://%s/post/show/%d", api.Endpoint, result.Id)
+		postURL = fmt.Sprintf("https://%s/posts/%d", api.Endpoint, result.Id)
 	}
 
 	raw_url := result.File_url
