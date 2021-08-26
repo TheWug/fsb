@@ -464,6 +464,23 @@ func PostUpdater(input chan apitypes.TPostInfo, settings UpdaterSettings) (error
 	return nil
 }
 
+func PostDeleter(input chan []int, settings UpdaterSettings) (error) {
+	defer func(){ for _ = range input {} }()
+
+
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
+
+	for list := range input {
+		_, err := tx.Exec("UPDATE post_index SET post_deleted = true WHERE post_id = ANY($1::int[])", pq.Array(list))
+		if err != nil { log.Println(err.Error()); return err }
+	}
+
+	settings.Transaction.commit = mine
+	return nil
+}
+
 func MarkPostDeleted(post_id int, settings UpdaterSettings) error {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
@@ -484,6 +501,21 @@ func GetHighestStagedPostID(settings UpdaterSettings) (int) {
 	row := Db_pool.QueryRow("SELECT MAX(post_id) FROM " + suf(table))
 	var result int
 	_ = row.Scan(&result)
+	return result
+}
+
+func GetHighestPostID(settings UpdaterSettings) (int) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return 0 }
+
+	query := "SELECT MAX(post_id) FROM post_index"
+
+	row := tx.QueryRow(query)
+	var result int
+	err := row.Scan(&result)
+
+	settings.Transaction.commit = mine && (err == nil || err == sql.ErrNoRows)
 	return result
 }
 
@@ -677,6 +709,16 @@ func RecalculateAliasedCounts(settings UpdaterSettings) (error) {
 	_, err := tx.Exec(sql)
 	if err != nil { return err }
 
+	sql = 	"UPDATE tag_index " +
+			"SET tag_count_full = subquery.tag_count_full " +
+		"FROM (SELECT a.tag_id, c.tag_count_full " +
+			"FROM tag_index AS a INNER JOIN " +
+				"alias_index AS b ON (a.tag_name = b.alias_name) INNER JOIN " +
+				"tag_index AS c ON (b.alias_target_id = c.tag_id)) AS subquery " +
+		"WHERE tag_index.tag_id = subquery.tag_id"
+	_, err = tx.Exec(sql)
+	if err != nil { return err }
+
 	settings.Transaction.commit = mine
 	return nil
 }
@@ -813,13 +855,18 @@ func CountTags(settings UpdaterSettings, sfx chan string) (error) {
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }
 
-	status(" (1/2 reset cached counts)")
+	status(" (1/3 reset cached counts)")
 	query := "UPDATE tag_index SET tag_count = 0"
 	_, err := tx.Exec(query)
 	if err != nil { return err }
 
-	status(" (2/2 calculate actual tag counts)")
-	query = "WITH subq AS (SELECT tag_id, COUNT(tag_id) AS real_count FROM post_tags GROUP BY tag_id) UPDATE tag_index SET tag_count = subq.real_count FROM subq WHERE subq.tag_id = tag_index.tag_id"
+	status(" (2/3 calculate full tag counts)")
+	query = "WITH subq AS (SELECT tag_id, COUNT(tag_id) AS real_count FROM post_tags GROUP BY tag_id) UPDATE tag_index SET tag_count_full = subq.real_count FROM subq WHERE subq.tag_id = tag_index.tag_id"
+	_, err = tx.Exec(query)
+	if err != nil { return err }
+
+	status(" (3/3 calculate visible tag counts)")
+	query = "WITH subq AS (SELECT tag_id, COUNT(tag_id) AS real_count FROM post_tags INNER JOIN post_index USING (post_id) WHERE NOT post_deleted GROUP BY tag_id) UPDATE tag_index SET tag_count = subq.real_count FROM subq WHERE subq.tag_id = tag_index.tag_id"
 	_, err = tx.Exec(query)
 	if err != nil { return err }
 

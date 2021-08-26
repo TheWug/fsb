@@ -67,6 +67,10 @@ func PostsAfterChangeSeq(change int) (string) {
 	return fmt.Sprintf("status:any order:change_asc change:>%d", change)
 }
 
+func DeletedPostsAfterId(id int) (string) {
+	return fmt.Sprintf("status:deleted order:id_asc id:>%d", id)
+}
+
 func (this PageSelector) String() string {
 	if this.After != nil {
 		return fmt.Sprintf("a%d", *this.After)

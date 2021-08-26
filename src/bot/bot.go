@@ -1302,6 +1302,8 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 		go tagindex.FindTagTypos(ctx)
 	} else if ctx.Cmd.Command == "/recounttags" {
 		go tagindex.RecountTagsCommand(ctx)
+	} else if ctx.Cmd.Command == "/resyncdeleted" {
+		go tagindex.RefetchDeletedPostsCommand(ctx)
 	} else if ctx.Cmd.Command == "/editposttest" {
 		post := 2893902 // https://api-host/post/show/2893902
 		newtags := "1:1 2021 anthro beastars canid canine canis clothed clothing fur grey_body grey_fur hi_res javigameboy legoshi_(beastars) male mammal simple_background solo teeth wolf"

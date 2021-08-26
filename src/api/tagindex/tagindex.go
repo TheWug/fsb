@@ -934,6 +934,107 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 	_ = save
 }
 
+func RefetchDeletedPostsCommand(ctx *gogram.MessageCtx) {
+	var err error
+	settings := storage.UpdaterSettings{}
+	settings.Transaction, err = storage.NewTxBox()
+	if err != nil { log.Println(err.Error(), "newtxbox") }
+
+	err = RefetchDeletedPosts(ctx, settings, nil, nil)
+	if err == storage.ErrNoLogin {
+		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
+		return
+	} else if err != nil {
+		ctx.Bot.Log.Println("Error occurred syncing deleted posts: %s", err.Error())
+		return
+	}
+
+	settings.Transaction.MarkForCommit()
+	settings.Transaction.Finalize(true)
+}
+
+func RefetchDeletedPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+	user, api_key, janitor, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
+	if err != nil || !janitor { return err }
+
+	if msg == nil || sfx == nil {
+		msg, sfx = ProgressMessage(ctx, "", "")
+		defer close(msg)
+		defer close(sfx)
+	}
+
+	return RefetchDeletedPostsInternal(user, api_key, settings, msg, sfx)
+}
+
+func RefetchDeletedPostsInternal(user, api_key string, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+	message := func(x string) {
+		if msg != nil {
+			msg <- x
+		}
+	}
+	suffix := func(x string) {
+		if sfx != nil {
+			sfx <- x
+		}
+	}
+
+	message("Syncing deleted posts... ")
+
+	api_timeout := time.NewTicker(750 * time.Millisecond)
+	defer api_timeout.Stop()
+
+	fixed_posts := make(chan []int)
+
+	limit := 10000
+	consecutive_errors := 0
+	latest_id := 0
+	highest_id := storage.GetHighestPostID(settings)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		err := storage.PostDeleter(fixed_posts, settings)
+		wg.Done()
+		if err != nil { log.Println(err.Error()) }
+	}()
+
+	for {
+		list, err := api.ListPosts(user, api_key, types.ListPostOptions{Limit: limit, SearchQuery: types.DeletedPostsAfterId(latest_id)})
+		if err != nil {
+			if consecutive_errors++; consecutive_errors == 10 {
+				// transient API errors are okay, they might be because of network issues or whatever, but give up if they last too long.
+				close(fixed_posts)
+				return errors.New(fmt.Sprintf("Repeated failure while calling " + api.ApiName + " API (%s)", err.Error()))
+			}
+			time.Sleep(30 * time.Second)
+			continue
+		}
+
+		consecutive_errors = 0
+
+		if len(list) == 0 { break }
+
+		// return results in ascending order, unlike many similar queries
+		latest_id = list[len(list) - 1].Id
+		var post_ids []int
+
+		for _, p := range list {
+			post_ids = append(post_ids, p.Id)
+		}
+		fixed_posts <- post_ids
+
+		suffix(fmt.Sprintf("%.1f%%", float32(latest_id) * 100.0 / float32(highest_id)))
+
+		<- api_timeout.C
+	}
+
+	close(fixed_posts)
+	wg.Wait()
+
+	suffix(" done.")
+	return nil
+}
+
 func Blits(ctx *gogram.MessageCtx) {
 	txbox, err := storage.NewTxBox()
 	if err != nil {
