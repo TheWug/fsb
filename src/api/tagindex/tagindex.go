@@ -169,7 +169,6 @@ func (this *ProgMessage) run() {
 // if our target message is different from the last one we wrote,
 // trigger an update. otherwise, reset the timer to wait for a change.
 func (this *ProgMessage) update() {
-	this.Bot.Log.Println("howdy")
 	if this.target != this.actual {
 		if this.Ctx == nil {
 			msg, err := this.MessageCallback(this.target, this.ParseMode)
@@ -329,7 +328,6 @@ func SyncTagsInternal(user, api_key string, settings storage.UpdaterSettings, ms
 		storage.ClearTagIndex(settings)
 	}
 
-	api_timeout := time.NewTicker(750 * time.Millisecond)
 	fixed_tags := make(chan types.TTagData)
 
 	limit := 1000
@@ -347,7 +345,6 @@ func SyncTagsInternal(user, api_key string, settings storage.UpdaterSettings, ms
 		if err != nil { log.Println(err.Error()) }
 		wg.Done()
 	}()
-	defer api_timeout.Stop()
 
 	for {
 		list, err := api.ListTags(user, api_key, types.ListTagsOptions{Page: types.After(last_existing_tag_id), Order: types.TSONewest, Limit: limit})
@@ -371,8 +368,6 @@ func SyncTagsInternal(user, api_key string, settings storage.UpdaterSettings, ms
 		}
 
 		if len(list) < limit { break }
-
-		<- api_timeout.C
 	}
 
 	close(fixed_tags)
@@ -869,7 +864,6 @@ func NewTagsFromOldTags(oldtags []string, deltags, addtags map[string]bool) (str
 }
 
 func FindTagTypos(ctx *gogram.MessageCtx) {
-	defer ctx.Bot.Log.Println("yay done")
 	mode := MODE_READY
 	var distinct, include, exclude []string
 	var threshhold int = -1
