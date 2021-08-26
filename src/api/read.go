@@ -4,6 +4,8 @@ import (
 	"api/types"
 	"strconv"
 	"log"
+	"errors"
+	"strings"
 	"fmt"
 )
 
@@ -41,31 +43,10 @@ func TagSearch(user, apitoken string, tags string, page int, limit int) (types.T
 }
 
 func TestLogin(user, apitoken string) (bool, error) {
-	url := "/dmails.json"
-	var canary interface{}
-
-	r, e := api.New(url).
-			BasicAuthentication(user, apitoken).
-			Into(&canary).
-			Do()
-
-	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
-
-	if e != nil {
-		return false, e
-	}
-
-	switch v := canary.(type) {
-	case map[string]interface{}:
-	        switch w := v["success"].(type) {
-	        case bool:
-	                return w, nil
-	        default:
-	                return true, nil
-	        }
-	default:
-	        return true, nil
-	}
+	u, err := FetchUser(user, apitoken)
+	if err != nil { return false, err }
+	// email is only populated if we are logged into the account we are querying.
+	return (u != nil && u.Email != ""), nil
 }
 
 func ListTagHistory(user, apitoken string, limit int, before, after *int) (types.THistoryArray, error) { // moved to post_versions, requires rework
@@ -210,4 +191,43 @@ func GetTagData(user, apitoken string, id int) (*types.TTagData, error) {
 	}
 
 	return &tag, nil
+}
+
+func FetchUser(username, api_key string) (*types.TUserInfo, error) {
+	url := "/users.json"
+
+	var user types.TUserInfoArray
+	var status types.TApiStatus = types.TApiStatus{Success: true}
+
+	req := api.New(url).
+			Arg("search[name_matches]", username).
+			Into(&user).
+			Into(&status)
+
+	if api_key != "" {
+		req.BasicAuthentication(username, api_key)
+	}
+
+	r, e := req.Do()
+
+	caller := "unauthenticated"
+	if api_key != "" {
+		caller = fmt.Sprintf("as %s", username)
+	}
+
+	log.Printf("[api     ] API call: %s [%s] (%s)\n", url, caller, r.Status)
+
+	if e != nil {
+		return nil, e
+	} else if !status.Success {
+		return nil, nil
+	} else if len(user) == 0 {
+		return nil, nil 
+	} else if len(user) > 1 {
+		return nil, errors.New("Got wrong number of users?")
+	} else if strings.ToLower(user[0].Name) != strings.ToLower(username) {
+		return nil, errors.New("Got non-matching user?")
+	}
+
+	return &user[0], e
 }

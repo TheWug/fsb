@@ -7,8 +7,11 @@ import (
 	"storage"
 	"api"
 	"api/tagindex"
+	apitypes "api/types"
+	"apiextra"
 
 	"fmt"
+	"time"
 	"strings"
 	"bytes"
 	"regexp"
@@ -18,6 +21,7 @@ import (
 	"io/ioutil"
 	"log"
 	"io"
+	"sync"
 
 	"github.com/kballard/go-shellquote"
 )
@@ -623,6 +627,188 @@ func (this *HelpState) Handle(ctx *gogram.MessageCtx) {
 	ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: ShowHelp(topic), ParseMode: data.ParseHTML}}, nil)
 }
 
+type lookup_votes struct {
+	user data.UserID
+	score apitypes.PostVote
+	date time.Time
+}
+
+type lookup_faves struct {
+	user data.UserID
+	date time.Time
+}
+
+type VoteState struct {
+	votes map[data.UserID]lookup_votes
+	faves map[data.UserID]lookup_faves
+	lock sync.Mutex
+}
+
+func (this *VoteState) GetInterval() int64 {
+	return 30
+}
+
+func (this *VoteState) DoMaintenance() {
+	go func(){
+		now := time.Now()
+
+		this.lock.Lock()
+		for k, v := range this.votes {
+			if now.Sub(v.date) > 30 * time.Second { delete(this.votes, k) }
+		}
+
+		for k, v := range this.faves {
+			if now.Sub(v.date) > 30 * time.Second { delete(this.faves, k) }
+		}
+		this.lock.Unlock()
+	}()
+}
+
+func (this *VoteState) Handle(ctx *gogram.MessageCtx) {
+	if ctx.Msg.From == nil { return }
+	go func() {
+		msg, _ := this.HandleCmd(ctx.Msg.From, &ctx.Cmd, ctx.Msg.ReplyToMessage, ctx.Bot)
+		if msg.ReplyToId == nil { msg.ReplyToId = &ctx.Msg.Id }
+		ctx.RespondAsync(msg, nil)
+	}()
+}
+
+func (this *VoteState) HandleCallback(ctx *gogram.CallbackCtx) {
+	go func() {
+		msg, alert := this.HandleCmd(&ctx.Cb.From, &ctx.Cmd, nil, ctx.Bot)
+		ctx.AnswerAsync(data.OCallback{Notification: msg.Text, ShowAlert: alert}, nil)
+	}()
+}
+
+func (this *VoteState) MarkAndTestRecentlyVoted(tg_user data.UserID, vote apitypes.PostVote, post_id int) bool {
+	this.lock.Lock()
+	if this.votes == nil { this.votes = make(map[data.UserID]lookup_votes) }
+	entry, voted := this.votes[tg_user]
+	// true if there is an entry, AND the entry is less than 30 seconds old, AND the vote is the same
+	voted = (voted && time.Now().Sub(entry.date) < 30 * time.Second && entry.score == vote)
+	if voted {
+		delete(this.votes, tg_user)
+	} else {
+		this.votes[tg_user] = lookup_votes{user: tg_user, score: vote, date: time.Now()}
+	}
+	this.lock.Unlock()
+	return voted
+}
+
+func (this *VoteState) MarkAndTestRecentlyFaved(tg_user data.UserID, post_id int) bool {
+	this.lock.Lock()
+	if this.faves == nil { this.faves = make(map[data.UserID]lookup_faves) }
+	entry, faved := this.faves[tg_user]
+	// true if there is an entry, AND the entry is less than 30 seconds old
+	faved = (faved && time.Now().Sub(entry.date) < 30 * time.Second)
+	if faved {
+		delete(this.faves, tg_user)
+	} else {
+		this.faves[tg_user] = lookup_faves{user: tg_user, date: time.Now()}
+	}
+	this.lock.Unlock()
+	return faved
+}
+
+func (this *VoteState) HandleCmd(from *data.TUser, cmd *gogram.CommandData, reply_message *data.TMessage, bot *gogram.TelegramBot) (data.OMessage, bool) {
+	var response data.OMessage
+
+	user, api_key, _, err := storage.GetUserCreds(storage.UpdaterSettings{}, from.Id)
+	if err == storage.ErrNoLogin {
+		response.Text = "\U0001F512 You need to login to do that!\n(use /login, in PM)"
+		return response, true
+	} else if err != nil {
+		bot.ErrorLog.Printf("Failed to get credentials for user %d: %s\n", from.Id, err.Error())
+		response.Text = "An error occurred while fetching up your " + api.ApiName + " credentials."
+		return response, true
+	}
+
+	var id int
+	if len(cmd.Args) > 0 {
+		id, err = strconv.Atoi(cmd.Args[0])
+		if err != nil {
+			response.Text = fmt.Sprintf("Error parsing post ID: %s", err.Error())
+			return response, true
+		}
+	} else {
+		if reply_message != nil {
+			text := reply_message.Text
+			if text == nil { text = reply_message.Caption }
+			if text != nil {
+				potential_id := apiextra.GetPostIDFromURLInText(*text)
+				if potential_id != nil {
+					// if we are a reply to a message, AND that message has text or a caption, AND that text contains a post URL, yoink it.
+					id = *potential_id
+				}
+			}
+		}
+	}
+
+	// if after all that, the id is still the zero value, that means we didn't find one, so die
+	if id == 0 {
+		response.Text = "You must to specify a post ID."
+		return response, true
+	}
+
+	if cmd.Command == "/upvote" {
+		if this.MarkAndTestRecentlyVoted(from.Id, apitypes.Upvote, id) {
+			err = api.UnvotePost(user, api_key, id)
+			if err != nil {
+				response.Text = "An error occurred when removing your vote! (Is " + api.ApiName + " down?)"
+				bot.ErrorLog.Printf("Error when unvoting post %d: %s\n", id, err.Error())
+			} else {
+				response.Text = "\U0001F5D1 You have deleted your vote."
+			}
+		} else {
+			_, err := api.VotePost(user, api_key, id, apitypes.Upvote, true)
+			if err != nil {
+				response.Text = "An error occurred when voting! (Is " + api.ApiName + " down?)"
+				bot.ErrorLog.Printf("Error when voting post %d: %s\n", id, err.Error())
+			} else {
+				response.Text = "\U0001F7E2 You have upvoted this post! (Click again to cancel your vote)"
+			}
+		}
+	} else if cmd.Command == "/downvote" {
+		if this.MarkAndTestRecentlyVoted(from.Id, apitypes.Downvote, id) {
+			err = api.UnvotePost(user, api_key, id)
+			if err != nil {
+				response.Text = "An error occurred when removing your vote! (Is " + api.ApiName + " down?)"
+				bot.ErrorLog.Printf("Error when unvoting post %d: %s\n", id, err.Error())
+			} else {
+				response.Text = "\U0001F5D1 You have deleted your vote."
+			}
+		} else {
+			_, err := api.VotePost(user, api_key, id, apitypes.Downvote, true)
+			if err != nil {
+				response.Text = "An error occurred when voting! (Is " + api.ApiName + " down?)"
+				bot.ErrorLog.Printf("Error when voting post %d: %s\n", id, err.Error())
+			} else {
+				response.Text = "\U0001F534 You have downvoted this post! (Click again to cancel your vote)"
+			}
+		}
+	} else if cmd.Command == "/favorite" {
+		if this.MarkAndTestRecentlyFaved(from.Id, id) {
+			err = api.UnfavoritePost(user, api_key, id)
+			if err != nil {
+				response.Text = "An error occurred when unfavoriting the post! (Is " + api.ApiName + " down?)"
+				bot.ErrorLog.Printf("Error when unfaving post %d: %s\n", id, err.Error())
+			} else {
+				response.Text = "\U0001F5D1 You have unfavorited this post."
+			}
+		} else {
+			_, err = api.FavoritePost(user, api_key, id)
+			if err != nil {
+				response.Text = "An error occurred when favoriting the post! (Is " + api.ApiName + " down?)"
+				bot.ErrorLog.Printf("Error when faving post %d: %s\n", id, err.Error())
+			} else {
+				response.Text = "\U0001F49B You have favorited this post! (Click again to unfavorite)"
+			}
+		}
+	}
+
+	return response, false
+}
+
 type LoginState struct {
 	gogram.StateIgnoreCallbacks
 
@@ -639,7 +825,7 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 		ctx.SetState(nil)
 		return
 	} else if ctx.Msg.Chat.Type != "private" && ctx.Cmd.Command == "/login" {
-		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You should only use this command in private, to protect the security of your account.\n\nIf you accidentally posted your API key publicly, <a href=\"https://" + api.Endpoint + "/user/api_key\">go here to revoke it.</a>", ParseMode: data.ParseHTML}}, nil)
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You should only use this command in private, to protect the security of your account.\n\nIf you accidentally posted your API key publicly, <a href=\"https://" + api.Endpoint + "/users/home\">open your account settings</a> and go to \"Manage API Access\" to revoke it.", ParseMode: data.ParseHTML}}, nil)
 		ctx.SetState(nil)
 		return
 	} else if ctx.Cmd.Command == "/logout" {
@@ -658,18 +844,22 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 				this.user = token
 			} else if this.apikey == "" {
 				this.apikey = token
+				ctx.DeleteAsync(nil)
 			}
 			if this.user != "" && this.apikey != "" {
 				success, err := api.TestLogin(this.user, this.apikey)
 				if success && err == nil {
-					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("You are now logged in as <code>%s</code>.", this.user), ParseMode: data.ParseHTML}}, nil)
+					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("You are now logged in as <code>%s</code>.\n\nTo protect the security of your account, I have deleted the message containing your API key.", this.user), ParseMode: data.ParseHTML}}, nil)
 					storage.WriteUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id, this.user, this.apikey)
+					ctx.SetState(nil)
 				} else if err != nil {
 					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("An error occurred when testing if you were logged in! (%s)", html.EscapeString(err.Error())), ParseMode: data.ParseHTML}}, nil)
+					ctx.SetState(nil)
 				} else if !success {
-					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Login failed! (api key invalid?)"}}, nil)
+					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Login failed! (api key invalid?)\n\nLet's try again. Please send your " + api.Endpoint + " username."}}, nil)
+					this.user = ""
+					this.apikey = ""
 				}
-				ctx.SetState(nil)
 				return
 			}
 		}
@@ -677,7 +867,16 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 		if this.user == "" {
 			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Please send your " + api.ApiName + " username."}}, nil)
 		} else if this.apikey == "" {
-			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Please send your " + api.ApiName + " <a href=\"https://" + api.Endpoint + "/user/api_key\">API Key</a>. (not your password!)", ParseMode: data.ParseHTML}}, nil)
+			account, err := api.FetchUser(this.user, "")
+			if err != nil {
+				ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "There was an error looking up that username."}}, nil)
+				ctx.Bot.ErrorLog.Printf("Error looking up user [%s]: %s\n", this.user, err.Error())
+			} else if account == nil {
+				ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "That username doesn't seem to exist. Please double check, and send it again."}}, nil)
+				this.user = ""
+			} else {
+				ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Please send your " + api.ApiName + " API Key.\n\nYour api key can be found <a href=\"https://" + api.Endpoint + "/users/%d/api_key\">in your account settings</a>. It is used to allow bots and services (such as me!) to access site features on your behalf. Do not share it in public.", account.Id), ParseMode: data.ParseHTML}}, nil)
+			}
 		}
 		return
 	}

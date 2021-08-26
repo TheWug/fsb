@@ -58,6 +58,7 @@ func main() {
 	var login bot.LoginState
 	var post bot.PostState
 	var janitor bot.JanitorState
+	var votes bot.VoteState
 	machine.AddCommand("/help", &help)
 	machine.AddCommand("/login", &login)
 	machine.AddCommand("/logout", &login)
@@ -72,6 +73,9 @@ func main() {
 	machine.AddCommand("/syncposts", &janitor)
 	machine.AddCommand("/editposttest", &janitor)
 	machine.AddCommand("/parseexpression", &janitor)
+	machine.AddCommand("/upvote", &votes)
+	machine.AddCommand("/downvote", &votes)
+	machine.AddCommand("/favorite", &votes)
 
 	thebot.SetMessageCallback(machine)
 	thebot.SetStateMachine(machine)

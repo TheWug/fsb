@@ -4,6 +4,7 @@ import (
 	"api/types"
 	"strconv"
 	"errors"
+	"io/ioutil"
 	"log"
 	"github.com/thewug/reqtify"
 	"io"
@@ -86,6 +87,117 @@ func UpdatePost(user, apitoken string,
 	}
 
 	return &post, e
+}
+
+func VotePost(user, apitoken string,
+              id int,
+              vote types.PostVote,
+              no_unvote bool) (*types.TPostScore, error) {
+	url := fmt.Sprintf("/posts/%d/votes.json", id)
+
+	var score types.TPostScore
+
+	r, e := api.New(url).
+			Method(reqtify.POST).
+			BasicAuthentication(user, apitoken).
+			FormArg("score", vote.Value()).
+			FormArgDefault("no_unvote", no_unvote, false).
+			Into(&score).
+			Do()
+
+	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
+
+	// this returns HTML, but 200, if you pick an ID which doesn't exist, so ??? i guess
+
+	if e != nil {
+		return nil, e
+	}
+
+	return &score, e
+}
+
+func UnvotePost(user, apitoken string,
+		id int) (error) {
+	url := fmt.Sprintf("/posts/%d/votes.json", id)
+
+	r, e := api.New(url).
+			Method(reqtify.DELETE).
+			BasicAuthentication(user, apitoken).
+			Do()
+
+	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
+
+	// this returns HTML, but 200, if you pick an ID which doesn't exist, so ??? i guess
+
+	if e != nil {
+		return e
+	}
+
+	bytes, e := ioutil.ReadAll(r.Body)
+	r.Body.Close()
+	if len(bytes) != 0 {
+		return errors.New("Got a response when none was expected (nonexistent post id?)")
+	}
+
+	return nil
+}
+
+// you shouldn't depend on this to return anything useful, as it will return nil if you favorite the same post twice
+func FavoritePost(user, apitoken string,
+		id int) (*types.TPostInfo, error) {
+	url := "/favorites.json"
+
+	post := struct {
+		Post    types.TPostInfo `json:"post"`
+		Success bool            `json:"success"`
+		Message string          `json:"message"`
+	}{Success: true}
+
+	r, e := api.New(url).
+		Method(reqtify.POST).
+		BasicAuthentication(user, apitoken).
+		FormArg("post_id", id).
+		Into(&post).
+		DebugPrint().
+		Do()
+
+	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
+
+	// this means the post was already favorited, which the api treats as an error, but we want to treat it as OK
+	if post.Success == false && post.Message == "You have already favorited this post" {
+		return nil, nil
+	} else if e != nil {
+		return nil, e
+	}
+
+	return &post.Post, e
+}
+
+func UnfavoritePost(user, apitoken string,
+		id int) (error) {
+	// i know this isn't the same as the other one, i promise it's correct right now though
+	url := fmt.Sprintf("/favorites/%d.json", id)
+
+	r, e := api.New(url).
+		Method(reqtify.DELETE).
+		BasicAuthentication(user, apitoken).
+		DebugPrint().
+		Do()
+
+	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
+
+	// this returns HTML, but 200, if you pick an ID which doesn't exist, so ??? i guess
+
+	if e != nil {
+		return e
+	}
+
+	bytes, e := ioutil.ReadAll(r.Body)
+	if len(bytes) != 0 {
+		return errors.New("Got a response when none was expected (nonexistent post id?)")
+	}
+
+	return e
 }
 
 // this is a little trick given to me by kiranoot. sometimes the post count for a tag will get fudged up, and it can be fixed by

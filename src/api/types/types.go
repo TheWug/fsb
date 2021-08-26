@@ -86,9 +86,10 @@ type TTagHistory struct {
 type THistoryArray []TTagHistory
 
 type TPostScore struct {
-	Upvotes   int `json:"up"`
-	Downvotes int `json:"down"`
-	Score     int `json:"total"`
+	Upvotes   int      `json:"up"`
+	Downvotes int      `json:"down"`
+	Score     int      `json:"total"`
+	OurScore  PostVote `json:"our_score"` // only shown when actually voting
 }
 
 type TPostFile struct {
@@ -166,6 +167,22 @@ type TPostInfo struct {
 //	Artist      []string `json:"artist,omitempty"`
 }
 
+type TUserInfo struct {
+	Id              int    `json:"id"`
+	CreatedAt       string `json:"created_at"`
+	Name            string `json:"name"`
+	Level           int    `json:"level"`
+	BaseUploadLimit int    `json:"base_upload_limit"`
+	PostUploadCount int    `json:"post_upload_count"`
+	PostUpdateCount int    `json:"post_update_count"`
+	NoteUpdateCount int    `json:"note_update_count"`
+	IsBanned        bool   `json:"is_banned"`
+	CanApprovePosts bool   `json:"can_approve_posts"`
+	CanUploadFree   bool   `json:"can_upload_free"`
+	LevelString     string `json:"level_string"`
+	Email           string `json:"email"` // only present when logged in, and only for your own account
+}
+
 func (this *TPostInfo) Tags() ([]string) {
 	var tags []string
 	tags = append(tags, this.General...)
@@ -179,8 +196,15 @@ func (this *TPostInfo) Tags() ([]string) {
 	return tags
 }
 
+type TUserInfoArray []TUserInfo
+
 type TPostInfoArray []TPostInfo
 
+type TApiStatus struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Code   *string `json:"code"`
+}
 
 type TPostListing struct {
 	Posts TPostInfoArray `json:"posts"`

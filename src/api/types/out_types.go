@@ -39,6 +39,11 @@ const ASRetired    AliasStatus = "Retired"
 const ASProcessing AliasStatus = "Processing"
 const ASQueued     AliasStatus = "Queued"
 
+type PostVote int
+func (this PostVote) Value() int { return int(this) }
+const Upvote   PostVote = 1
+const Downvote PostVote = -1
+const Neutral  PostVote = 0 // this can show up in API responses but you can't vote by specifying it, if you want to delete your vote, use the endpoint for that
 
 type PageSelector struct {
 	Before *int
