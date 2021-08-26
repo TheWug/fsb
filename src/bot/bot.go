@@ -6,7 +6,6 @@ import (
 
 	"storage"
 	"api"
-	"api/tagindex"
 
 	"fmt"
 	"strings"
@@ -17,14 +16,8 @@ import (
 	"html"
 	"io/ioutil"
 	"io"
-	"text/template"
-
-	"errors"
-
-	"errors"
 
 	"github.com/kballard/go-shellquote"
-	"github.com/lib/pq"
 )
 
 const (
@@ -1049,6 +1042,10 @@ type JanitorState struct {
 }
 
 func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
+	ctx.ReplyOrPMAsync(data.OMessage{Text: "Janitorial features are currently disabled, while I update fsb to match " + api.ApiName + "'s new API.", ParseMode: data.HTML}, nil)
+	return
+
+	/*
 	if ctx.Msg.From == nil {
 		// ignore messages not sent by a user.
 		return
@@ -1107,4 +1104,5 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 		template.Must(template.New("decoder").Parse(str)).Execute(&buf, replace)
 		fmt.Printf("%s\n", buf.String())
 	}
+	*/
 }
