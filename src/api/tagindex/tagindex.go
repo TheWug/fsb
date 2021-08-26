@@ -9,7 +9,6 @@ import (
 	"storage"
 	"wordset"
 
-	"strconv"
 	"time"
 	"fmt"
 	"log"
@@ -19,6 +18,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"errors"
 )
 
 func DownloadMessage(id, max_id int, name string) (string) {
@@ -46,7 +46,7 @@ func ProgressMessageRoutine(ctx *gogram.MessageCtx, initial_status, initial_suff
 	var sent_message *gogram.MessageCtx
 
 	if initial_status != "" {
-		sent_message, err = ctx.Reply(data.OMessage{Text: fmt.Sprintf("%s%s", initial_status, initial_suffix), ParseMode: data.HTML})
+		sent_message, err = ctx.Reply(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("%s%s", initial_status, initial_suffix), ParseMode: data.ParseHTML}})
 	}
 
 	edit_timer := time.NewTicker(1000 * time.Millisecond)
@@ -68,9 +68,9 @@ func ProgressMessageRoutine(ctx *gogram.MessageCtx, initial_status, initial_suff
 			}
 
 			if sent_message == nil {
-				sent_message, err = ctx.Reply(data.OMessage{Text: fmt.Sprintf("%s%s", message, suffix), ParseMode: data.HTML})
+				sent_message, err = ctx.Reply(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("%s%s", message, suffix), ParseMode: data.ParseHTML}})
 			} else {
-				sent_message.EditTextAsync(data.OMessage{Text: fmt.Sprintf("%s%s", message, suffix), ParseMode: data.HTML}, nil)
+				sent_message.EditTextAsync(data.OMessageEdit{SendData: data.SendData{Text: fmt.Sprintf("%s%s", message, suffix), ParseMode: data.ParseHTML}}, nil)
 			}
 			last_update = now
 			changed = false
@@ -107,7 +107,7 @@ func ProgressMessage(ctx *gogram.MessageCtx, initial_status, initial_suffix stri
 	return new_status, new_suffix
 }
 
-func SyncTagsExternal(ctx *gogram.MessageCtx) {
+func SyncTagsCommand(ctx *gogram.MessageCtx) {
 	full := false
 	for _, token := range ctx.Cmd.Args {
 		if token == "--full" {
@@ -117,10 +117,10 @@ func SyncTagsExternal(ctx *gogram.MessageCtx) {
 
 	err := SyncTags(ctx, storage.UpdaterSettings{Full: full}, nil, nil)
 	if err == storage.ErrNoLogin {
-		ctx.ReplyOrPMAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
+		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
 	} else if err != nil {
-		log.Println("Error occurred syncing tags: %s", err.Error())
+		ctx.Bot.Log.Println("Error occurred syncing tags: %s", err.Error())
 	}
 }
 
@@ -128,15 +128,34 @@ func SyncTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx
 	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
 	if err != nil || !janitor { return err }
 
-	m := "Syncing tag database..."
-	if settings.Full { m = "Full syncing tag database..." }
 	if msg == nil || sfx == nil {
-		msg, sfx = ProgressMessage(ctx, m, "")
+		msg, sfx = ProgressMessage(ctx, "", "")
 		defer close(msg)
 		defer close(sfx)
-	} else {
-		msg <- m
 	}
+
+	return SyncTagsInternal(user, api_key, settings, msg, sfx)
+}
+
+
+func SyncTagsInternal(user, api_key string, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+	message := func(x string) {
+		if msg != nil {
+			msg <- x
+		}
+	}
+	suffix := func(x string) {
+		if sfx != nil {
+			sfx <- x
+		}
+	}
+
+	m := "Syncing tag database..."
+	if settings.Full {
+		m = "Full syncing tag database..."
+	}
+
+	message(m)
 
 	if settings.Full {
 		storage.ClearTagIndex(settings)
@@ -145,31 +164,32 @@ func SyncTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx
 	api_timeout := time.NewTicker(750 * time.Millisecond)
 	fixed_tags := make(chan types.TTagData)
 
-	var list types.TTagInfoArray
-	var cont bool
-	page := 1
-	last_id := -1
-	max_tag_id := 0
-	last_existing_tag_id := -1
+	limit := 10000
+	last_existing_tag_id := 0
 	consecutive_errors := 0
 	last, err := storage.GetLastTag(settings)
+	if err != nil { return err }
 	if last != nil { last_existing_tag_id = last.Id }
+	if last_existing_tag_id < 0 { last_existing_tag_id = 0 }
+	log.Println("last_existing_tag_id:", last_existing_tag_id)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		storage.TagUpdater(fixed_tags, settings)
+		err := storage.TagUpdater(fixed_tags, settings)
+		if err != nil { log.Println(err.Error()) }
 		wg.Done()
 	}()
 	defer api_timeout.Stop()
-	defer storage.FixTagsWhichTheAPIManglesByAccident(settings)
 
 	for {
-		list, cont, page, err = api.ListOnePageOfTags(user, api_key, page, nil)
+		list, err := api.ListTags(user, api_key, types.ListTagsOptions{Page: types.After(last_existing_tag_id), Order: types.TSONewest, Limit: limit})
+		log.Println("list of", len(list))
 		if err != nil {
-			fmt.Printf("Error when calling api, waiting 30 seconds before retrying (%s)", err.Error())
 			if consecutive_errors++; consecutive_errors == 10 {
 				// transient API errors are okay, they might be because of network issues or whatever, but give up if they last too long.
+				close(fixed_tags)
+				return errors.New(fmt.Sprintf("Repeated failure while calling " + api.ApiName + " API (%s)", err.Error()))
 			}
 			time.Sleep(30 * time.Second)
 			continue
@@ -177,38 +197,27 @@ func SyncTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx
 
 		consecutive_errors = 0
 
-		for i, t := range list {
-			if t.Id <= last_existing_tag_id {
-				cont = false
-				break
-			}
-			if max_tag_id < t.Id {
-				last_id = t.Id + 1
-				max_tag_id = t.Id
-			}
-			if i == 0 { sfx <- Percent(max_tag_id - t.Id, max_tag_id - last_existing_tag_id) }
-			if t.Id < last_id {
-				fixed_tags <- t
-			}
+		if len(list) == 0 { break }
+
+		last_existing_tag_id = list[0].Id
+		for _, t := range list {
+			fixed_tags <- t
 		}
 
-		if !cont { break }
-
 		<- api_timeout.C
-		_ = page
 	}
 
 	close(fixed_tags)
 	wg.Wait()
 
-	msg <- "Resolving phantom tags..."
+	message("Resolving phantom tags...")
 	storage.ResolvePhantomTags(settings)
 
-	sfx <- " done."
+	suffix(" done.")
 	return nil
 }
 
-func RecountTagsExternal(ctx *gogram.MessageCtx) {
+func RecountTagsCommand(ctx *gogram.MessageCtx) {
 	real_counts := false
 	alias_counts := false
 	for _, token := range ctx.Cmd.Args {
@@ -223,29 +232,82 @@ func RecountTagsExternal(ctx *gogram.MessageCtx) {
 	defer close(msg)
 	defer close(sfx)
 
-	if (real_counts) {
-		RecountTags(ctx, msg, sfx)
-	}
-	if (alias_counts) {
-		CalculateAliasedCounts(ctx, msg, sfx)
+	err := RecountTags(ctx, storage.UpdaterSettings{}, msg, sfx, real_counts, alias_counts)
+	if err == storage.ErrNoLogin {
+		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
+		return
+	} else {
+		ctx.Bot.Log.Println("Error occurred syncing tags: %s", err.Error())
 	}
 }
 
-func RecountTags(ctx *gogram.MessageCtx, msg, sfx chan string) (error) {
-	m := "Recounting tags..."
+func RecountTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string, real_counts, alias_counts bool) (error) {
+	_, _, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+	if err != nil { return err }
+	if !janitor { return errors.New("You need to be a janitor to use this command.") }
+
 	if msg == nil || sfx == nil {
-		msg, sfx = ProgressMessage(ctx, m, "")
+		msg, sfx = ProgressMessage(ctx, "", "")
 		defer close(msg)
 		defer close(sfx)
-	} else {
-		msg <- m
 	}
 
-	err := storage.CountTags(sfx)
+	if real_counts {
+		err = RecountTagsInternal(settings, msg, sfx)
+		if err != nil { return err }
+	}
+
+	if alias_counts {
+		err = CalculateAliasedCountsInternal(settings, msg, sfx)
+		if err != nil { return err }
+	}
+
+	return nil
+}
+
+func RecountTagsInternal(settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+	message := func(x string) {
+		if msg != nil {
+			msg <- x
+		}
+	}
+	suffix := func(x string) {
+		if sfx != nil {
+			sfx <- x
+		}
+	}
+
+	message("Recounting tags...")
+
+	err := storage.CountTags(settings, sfx)
 	if err != nil {
-		sfx <- fmt.Sprintf(" (error: %s)", err.Error())
+		suffix(fmt.Sprintf(" (error: %s)", err.Error()))
 	} else {
-		sfx <- " done."
+		suffix(" done.")
+	}
+
+	return err
+}
+
+func CalculateAliasedCountsInternal(settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+	message := func(x string) {
+		if msg != nil {
+			msg <- x
+		}
+	}
+	suffix := func(x string) {
+		if sfx != nil {
+			sfx <- x
+		}
+	}
+
+	message("Mapping counts between aliased tags...")
+
+	err := storage.RecalculateAliasedCounts(settings)
+	if err != nil {
+		suffix(fmt.Sprintf(" (error: %s)", err.Error()))
+	} else {
+		suffix(" done.")
 	}
 
 	return err
@@ -273,425 +335,240 @@ const (
 )
 
 type SearchChanBox struct {
-	Channel chan types.TSearchResult
+	Channel chan types.TPostInfo
 }
 
 func (this *SearchChanBox) Close() {
 	close(this.Channel)
 }
 
-/*
-func SyncPosts(ctx *gogram.MessageCtx) {
-	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
-	if err != nil || !janitor {
-		ctx.ReplyAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
-		return
-	}
-
-	settings := storage.UpdaterSettings{}
+func SyncPostsCommand(ctx *gogram.MessageCtx) {
+	full := false
 	for _, token := range ctx.Cmd.Args {
 		if token == "--full" {
-			settings.Full = true
+			full = true
 		}
 	}
 
-	msg, sfx := ProgressMessage(ctx, "Syncing post database...", "")
-	defer close(msg)
-	defer close(sfx)
+	var err error
+	settings := storage.UpdaterSettings{Full: full}
+	settings.Transaction, err = storage.NewTxBox()
+	if err != nil { log.Println(err.Error(), "newtxbox") }
 
-	state, substate := SYNC_BEGIN, 0
-	checkpoint, err := storage.GetTagHistoryCheckpoint()
-
-	if err != nil {
-		m := fmt.Sprintf("Error during storage.GetTagHistoryCheckpoint: %s", err.Error())
-		ctx.Bot.ErrorLog.Println(m)
-		msg <- m
+	log.Println("syncposts")
+	err = SyncPosts(ctx, settings, nil, nil)
+	log.Println("syncposts done")
+	if err == storage.ErrNoLogin {
+		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
+		return
+	} else if err != nil {
+		ctx.Bot.Log.Println("Error occurred syncing psts: %s", err.Error())
 		return
 	}
 
-	// we don't need to do a full sync if one wasn't requested, or if we have a saved checkpoint.
-	if !settings.Full && checkpoint != 0 {
-		// attempt to resume a sync in progress
-		state, substate, settings.Full = storage.GetMigrationState(settings)
+	settings.Transaction.MarkForCommit()
+	settings.Transaction.Finalize(true)
+}
 
-		// if we're resuming a full sync, bodge in the correct staging suffix.
-		if settings.Full {
-			settings.TableSuffix = "staging"
+
+func SyncPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+	user, api_key, janitor, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
+	if err != nil || !janitor { return err }
+
+	if msg == nil || sfx == nil {
+		msg, sfx = ProgressMessage(ctx, "", "")
+		defer close(msg)
+		defer close(sfx)
+	}
+
+	return SyncPostsInternal(user, api_key, settings, msg, sfx)
+}
+
+func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+	message := func(x string) {
+		if msg != nil {
+			msg <- x
 		}
 	}
+	suffix := func(x string) {
+		if sfx != nil {
+			sfx <- x
+		}
+	}
+
+	message("Syncing posts... ")
+	log.Println("syncposts start")
+
+	if settings.Full {
+		err := storage.ClearPosts(settings)
+		if err != nil {
+			log.Println(err.Error(), "clearposts")
+		}
+	}
+
+	log.Println("syncposts cleared posts")
+
+	api_timeout := time.NewTicker(750 * time.Millisecond)
+	defer api_timeout.Stop()
+
+	fixed_posts := make(chan types.TPostInfo)
+
+	limit := 10000
+	latest_change_seq := 0
+	consecutive_errors := 0
+	last, err := storage.GetMostRecentlyUpdatedPost(settings)
+	if err != nil { return err }
+	if last != nil { latest_change_seq = last.Change }
+	log.Println("syncposts really going now")
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		err := storage.PostUpdater(fixed_posts, settings)
+		wg.Done()
+		if err != nil { log.Println(err.Error()) }
+	}()
 
 	for {
-		switch state {
-
-		// beginning states (non-resumes SHOULD start in one of these)
-		case SYNC_BEGIN:
-			if settings.Full {
-				state = SYNC_BEGIN_FULL
-			} else {
-				state = SYNC_BEGIN_INCREMENTAL
+		list, err := api.ListPosts(user, api_key, types.ListPostOptions{Limit: limit, SearchQuery: types.PostsAfterChangeSeq(latest_change_seq)})
+		if err != nil {
+			if consecutive_errors++; consecutive_errors == 10 {
+				// transient API errors are okay, they might be because of network issues or whatever, but give up if they last too long.
+				close(fixed_posts)
+				return errors.New(fmt.Sprintf("Repeated failure while calling " + api.ApiName + " API (%s)", err.Error()))
 			}
-			storage.SetMigrationState(settings, state, 0, settings.Full)
-		case SYNC_BEGIN_FULL:
-			settings.TableSuffix = "staging"
-			state = SYNC_RESETSTAGING
-			storage.SetMigrationState(settings, state, 0, settings.Full)
-		case SYNC_BEGIN_INCREMENTAL:
-			state = SYNC_INCREMENTAL_HISTORY
-			storage.SetMigrationState(settings, state, 0, settings.Full)
-
-		// full sync states
-		case SYNC_RESETSTAGING:
-			msg <- "Preparing sync environment..."
-			storage.SetupSyncStagingEnvironment(settings)
-			state = SYNC_TAGCHECKPOINT
-			storage.SetMigrationState(settings, state, 0, settings.Full)
-		case SYNC_TAGCHECKPOINT:
-			msg <- "Updating tag history checkpoint..."
-			hist, err := api.ListTagHistory(user, api_key, 1, nil, nil)
-			if err != nil || len(hist) == 0 {
-				if err == nil { err = errors.New("Got zero tag history entries from a successful request!") }
-				msg <- html.EscapeString(fmt.Sprintf("An error occurred: %s", err.Error()))
-				return
-			}
-
-			storage.SetTagHistoryCheckpoint(hist[0].Id, settings)
-			checkpoint = hist[0].Id
-
-			state = SYNC_VISIBLE
-			storage.SetMigrationState(settings, state, 0, settings.Full)
-		case SYNC_VISIBLE:
-			success := func() bool {
-			msg <- "Downloading visible posts..."
-			api_timeout := time.NewTicker(750 * time.Millisecond)
-
-			defer api_timeout.Stop()
-
-			before := substate
-			cont := true
-			max_post_id := storage.GetHighestStagedPostID(settings)
-			var list types.TResultArray
-			var err error
-			var wg sync.WaitGroup
-
-			for {
-				list, cont, before, err = api.ListOnePageOfPosts(user, api_key, before)
-				if err != nil {
-					m := fmt.Sprintf("Error when calling api: %s", err.Error())
-					msg <- m
-					ctx.Bot.ErrorLog.Println(m)
-					return false
-				}
-
-				posts := make(chan types.TSearchResult)
-				wg.Add(1)
-				go func(_state, _substate int) {
-					storage.PostUpdater(posts, settings)
-					wg.Done()
-					storage.SetMigrationState(settings, _state, _substate, settings.Full)
-				}(state, before)
-
-				for i, p := range list {
-					if max_post_id < p.Id {
-						max_post_id = p.Id
-					}
-					if i == 0 { sfx <- Percent(max_post_id - p.Id, max_post_id) }
-					posts <- p
-				}
-
-				close(posts)
-
-				if !cont { break }
-				<- api_timeout.C
-			}
-
-			sfx <- "done."
-			wg.Wait()
-			state = SYNC_DELETED
-			substate = 0
-			storage.SetMigrationState(settings, state, 0, settings.Full)
-			return true
-			}()
-			if !success { state = SYNC_ERROR }
-		case SYNC_DELETED:
-			success := func() bool {
-			msg <- "Downloading deleted posts..."
-			api_timeout := time.NewTicker(750 * time.Millisecond)
-
-			defer api_timeout.Stop()
-
-			page := substate
-			if page == 0 { page = 1 }
-			cont := true
-			max_post_id := 0
-			var list types.TResultArray
-			var err error
-			var wg sync.WaitGroup
-
-			for {
-				list, cont, page, err = api.ListOnePageOfDeletedPosts(user, api_key, page)
-				if err != nil {
-					m := fmt.Sprintf("Error when calling api: %s", err.Error())
-					msg <- m
-					ctx.Bot.ErrorLog.Println(m)
-					return false
-				}
-
-				posts := make(chan types.TSearchResult)
-				wg.Add(1)
-				go func(_state, _substate int) {
-					storage.PostUpdater(posts, settings)
-					wg.Done()
-					storage.SetMigrationState(settings, _state, _substate, settings.Full)
-				}(state, page)
-
-				for i, p := range list {
-					if max_post_id < p.Id {
-						max_post_id = p.Id
-					}
-					if i == 0 { sfx <- fmt.Sprintf(" Page %d", page) }
-					posts <- p
-				}
-
-				close(posts)
-
-				if !cont { break }
-				<- api_timeout.C
-			}
-
-			sfx <- " done."
-			wg.Wait()
-			state = SYNC_GHOSTED
-			substate = 0
-			storage.SetMigrationState(settings, state, 0, settings.Full)
-			return true
-			}()
-			if !success { state = SYNC_ERROR }
-		case SYNC_GHOSTED:
-			// this process is intrinsically resumable and no special logic is needed to accomplish that
-			success := func() bool {
-			msg <- "Scanning post gaps for stragglers..."
-			api_timeout := time.NewTicker(750 * time.Millisecond)
-
-			defer api_timeout.Stop()
-
-			gap_ids, err := storage.FindPostGaps(substate, settings)
-			if (err != nil) {
-				m := fmt.Sprintf("An error occurred when fetching post gaps: %s", err.Error())
-				msg <- m
-				ctx.Bot.ErrorLog.Println(m)
-				return false
-			}
-
-			var wg sync.WaitGroup
-
-			for partition := range gopart.Partition(len(gap_ids), 10) {
-				posts := make(chan types.TSearchResult)
-				wg.Add(1)
-				go func(_state, _substate int) {
-					storage.PostUpdater(posts, settings)
-					wg.Done()
-					storage.SetMigrationState(settings, _state, _substate, settings.Full)
-				}(state, gap_ids[partition.High - 1])
-
-				for i, id := range gap_ids[partition.Low: partition.High] {
-					post, err := api.FetchOnePost(user, api_key, id)
-					if err != nil {
-						m := fmt.Sprintf("Error when calling api: %s", err.Error())
-						msg <- m
-						ctx.Bot.ErrorLog.Println(m)
-						close(posts)
-						return false
-					}
-
-					if post != nil {
-						posts <- *post
-					}
-
-					sfx <- Percent(i + partition.Low, len(gap_ids))
-
-					<- api_timeout.C
-				}
-
-				close(posts)
-			}
-
-			sfx <- " done."
-			wg.Wait()
-			state = SYNC_INCREMENTAL_HISTORY
-			substate = 0
-			storage.SetMigrationState(settings, state, 0, settings.Full)
-			return true
-			}()
-			if !success { state = SYNC_ERROR }
-
-		// incremental sync states
-		case SYNC_INCREMENTAL_HISTORY:
-			success := func() bool {
-			msg <- "Fetching history delta since last checkpoint..."
-			api_timeout := time.NewTicker(750 * time.Millisecond)
-			var wg sync.WaitGroup
-
-			defer api_timeout.Stop()
-
-			history_updates := make(map[int]int)
-
-			var new_checkpoint int
-			var last *int
-			if substate != 0 { last = &substate }
-			for {
-				history, err := api.ListTagHistory(user, api_key, 10000, nil, last)
-				if len(history) == 0 { err = errors.New("api.ListTagHistory produced an empty list") }
-				if err != nil {
-					m := fmt.Sprintf("Error when calling api: %s", err.Error())
-					msg <- m
-					ctx.Bot.ErrorLog.Println(m)
-					return false
-				}
-
-				last = &history[len(history) - 1].Id
-
-				posts := make(chan types.TSearchResult)
-				wg.Add(1)
-				go func(_state, _substate int) {
-					storage.PostUpdater(posts, settings)
-					wg.Done()
-					storage.SetMigrationState(settings, _state, _substate, settings.Full)
-				}(state, *last)
-
-				if new_checkpoint == 0 { new_checkpoint = history[0].Id }
-
-				var h types.TTagHistory
-				for _, h = range history {
-					if h.Id <= checkpoint { break }
-
-					_, ok := history_updates[h.Post_id]
-					if ok { continue }
-
-					history_updates[h.Post_id] = h.Post_id
-					posts <- types.TSearchResult{Id: h.Post_id, Tags: h.Tags}
-				}
-				sfx <- Percent(new_checkpoint - *last, new_checkpoint - checkpoint)
-				close(posts)
-				if h.Id == checkpoint { break }
-
-				<- api_timeout.C
-			}
-
-			sfx <- " done."
-
-			msg <- "Writing new checkpoint..."
-			storage.SetTagHistoryCheckpoint(new_checkpoint, settings)
-			wg.Wait()
-			state = SYNC_TAGS
-			return true
-			}()
-			if !success { state = SYNC_ERROR }
-		case SYNC_TAGS:
-			SyncTags(ctx, settings, msg, sfx)
-			state = SYNC_TAGNORMALIZE
-			storage.SetMigrationState(settings, state, 0, settings.Full)
-		case SYNC_TAGNORMALIZE:
-			msg <- "Resolving post tags..."
-			err := storage.ImportPostTagsFromNameToID(settings, sfx)
-			if (err != nil) {
-				m := fmt.Sprintf("An error occurred when normalizing post tags: %s", err.Error())
-				msg <- m
-				ctx.Bot.ErrorLog.Println(m)
-				state = SYNC_BREAK
-				break
-			}
-			state = SYNC_STAGEPROMOTE
-			storage.SetMigrationState(settings, state, 0, settings.Full)
-
-		// promotion stages
-		case SYNC_STAGEPROMOTE:
-			msg <- "Promoting staging tablespace..."
-			// this is a no-op if you're not using a staging environment, e.g. if you do an incremental
-			// sync by itself (which is instead clumped into one giant transaction)
-			err := storage.ResetIntermediateEnvironment(settings)
-			if err != nil {
-				err = storage.PromoteStagingEnvironment(settings)
-			}
-			if (err != nil) {
-				m := fmt.Sprintf("An error occurred when promoting stage space: %s", err.Error())
-				msg <- m
-				ctx.Bot.ErrorLog.Println(m)
-				state = SYNC_BREAK
-				break
-			}
-			state = SYNC_DONE
-			storage.SetMigrationState(settings, state, 0, settings.Full)
-
-		// finish-success stage
-		case SYNC_DONE:
-			RecountTags(ctx, msg, sfx)
-			CalculateAliasedCounts(ctx, msg, sfx)
-			sfx <- " done."
-			storage.SetMigrationState(settings, SYNC_BEGIN, 0, false)
-			state = SYNC_BREAK
-			break
-
-		// finish-error stage
-		case SYNC_ERROR:
-			// put some proper error reporting mechanism here
-			state = SYNC_BREAK
-			break
-
+			time.Sleep(30 * time.Second)
+			continue
 		}
 
-		if state == SYNC_BREAK {
-			break
+		consecutive_errors = 0
+
+		if len(list) == 0 { break }
+
+		// unlike most other calls, quirks of api require that this call return results in ID:ascending
+		// order instead of ID:descending, so the highest ID is the last one, not the first.
+		latest_change_seq = list[len(list) - 1].Change
+		i := 0
+		for _, p := range list {
+			fixed_posts <- p
+			i++
 		}
+
+		<- api_timeout.C
+	}
+
+	close(fixed_posts)
+	wg.Wait()
+
+	suffix(" done.")
+	return nil
+}
+
+func SyncPostsInternal(user, api_key string, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+	message := func(x string) {
+		if msg != nil {
+			msg <- x
+		}
+	}
+
+	message("Syncing activity... ")
+
+	if err := SyncOnlyPostsInternal(user, api_key, settings, msg, sfx); err != nil { return err }
+	if err := SyncTagsInternal(user, api_key, settings, msg, sfx); err != nil { return err }
+	if err := SyncAliasesInternal(user, api_key, settings, msg, sfx); err != nil { return err }
+	//msg <- "Resolving post tags..."
+	//if err := storage.ImportPostTagsFromNameToID(settings, sfx); err != nil { return err }
+	//if err := RecountTagsInternal(settings, msg, sfx); err != nil { return err }
+	//if err := CalculateAliasedCountsInternal(settings, msg, sfx); err != nil { return err }
+	sfx <- " done."
+
+	return nil
+}
+
+func SyncAliasesCommand(ctx *gogram.MessageCtx) {
+	err := SyncAliases(ctx, storage.UpdaterSettings{}, nil, nil)
+	if err == storage.ErrNoLogin {
+		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
+		return
+	} else if err != nil {
+		ctx.Bot.Log.Println("Error occurred syncing tags: %s", err.Error())
 	}
 }
-*/
 
-func UpdateAliases(ctx *gogram.MessageCtx) {
-	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
-	if err != nil || !janitor {
-		ctx.ReplyAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
-		return
+func SyncAliases(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+	user, api_key, janitor, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
+	if err != nil || !janitor { return err }
+
+	if msg == nil || sfx == nil {
+		msg, sfx = ProgressMessage(ctx, "", "")
+		defer close(msg)
+		defer close(sfx)
 	}
 
-	sent_message, err := ctx.Reply(data.OMessage{Text: DownloadMessage(0, 0, "alias"), ParseMode: data.HTML})
-	if err != nil {
-		ctx.Bot.ErrorLog.Printf("Couldn't send message to update requestor. ???")
-		return
-	}
+	return SyncAliasesInternal(user, api_key, settings, msg, sfx)
+}
 
-	list, cont, page, err := api.ListOnePageOfAliases(user, api_key, 1, nil)
-	if err != nil {
-		fmt.Printf("Error when calling api: %s", err.Error())
-	}
-	if len(list) != 0 {
-		for cont {
-			if page % 5 == 0 { // every 5 pages, update the percentage
-				sent_message.EditTextAsync(data.OMessage{Text: DownloadMessage(list[len(list) - 1].Id, list[0].Id, "alias"), ParseMode: data.HTML}, nil)
-			}
-			time.Sleep(750 * time.Millisecond) // 750ms per request, just above the hard limit of 500
-			list, cont, page, err = api.ListOnePageOfAliases(user, api_key, page, list)
+func SyncAliasesInternal(user, api_key string, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+	message := func(x string) {
+		if msg != nil {
+			msg <- x
 		}
-		sent_message.EditTextAsync(data.OMessage{Text: DBMessage(false, "alias"), ParseMode: data.HTML}, nil)
 	}
-
-	storage.ClearAliasIndex()
-
-	if len(list) != 0 {
-		fixed_aliases := make(chan types.TAliasData)
-		go storage.AliasUpdater(fixed_aliases)
-
-		last_id := list[0].Id + 1
-		for _, x := range list {
-			// entries should be fetched in descending order by ID but because of the non-atomicity of the fetching process
-			// duplicate runs of entries can exist, and you can weed them out by ignoring entries where the ID suddenly jumps back upwards.
-			if x.Id < last_id {
-				fixed_aliases <- x
-				last_id = x.Id
-			}
+	suffix := func(x string) {
+		if sfx != nil {
+			sfx <- x
 		}
-		close(fixed_aliases)
 	}
-	sent_message.EditTextAsync(data.OMessage{Text: DBMessage(true, "alias"), ParseMode: data.HTML}, nil)
+
+	message("Syncing alias list...")
+
+	storage.ClearAliasIndex(settings)
+
+	consecutive_errors := 0
+	page := types.After(0)
+	api_timeout := time.NewTicker(750 * time.Millisecond)
+	defer api_timeout.Stop()
+
+	fixed_aliases := make(chan types.TAliasData)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		err := storage.AliasUpdater(fixed_aliases, settings)
+		if err != nil { log.Println(err.Error()) }
+		wg.Done()
+	}()
+
+	for {
+		list, err := api.ListTagAliases(user, api_key, types.ListTagAliasOptions{Limit: 10000, Page: page, Order: types.ASOCreated, Status: types.ASActive})
+		log.Println("got aliases", len(list))
+		if err != nil {
+			if consecutive_errors++; consecutive_errors == 10 {
+				// transient API errors are okay, they might be because of network issues or whatever, but give up if they last too long.
+				close(fixed_aliases)
+				return errors.New(fmt.Sprintf("Repeated failure while calling " + api.ApiName + " API (%s)", err.Error()))
+			}
+			time.Sleep(30 * time.Second)
+			continue
+		}
+
+		consecutive_errors = 0
+
+		if len(list) == 0 { break }
+
+		page = types.After(list[0].Id)
+		for _, a := range list {
+			fixed_aliases <- a
+		}
+
+		<- api_timeout.C
+	}
+
+	close(fixed_aliases)
+	wg.Wait()
+
+	suffix("done.")
+	return nil
 }
 
 const (
@@ -701,99 +578,6 @@ const (
 
 func Percent(current, max int) (string) {
 	return fmt.Sprintf(" (%.1f%%)", float32(current * 100) / float32(max))
-}
-
-func RecountNegativeReal(user, api_key string, skip_update bool, broken_tags types.TTagInfoArray, message string, sent_message *gogram.MessageCtx) (string) {
-	for i, tag := range broken_tags {
-		if i % 5 == 0 { // every 5 pages, update the percentage
-			sent_message.EditTextAsync(data.OMessage{Text: fmt.Sprintf("%s (%s)...", message, Percent(i, len(broken_tags))), ParseMode: data.HTML}, nil)
-		}
-		err := api.FixPostcountForTag(user, api_key, tag.Name)
-		if err != nil {
-			sent_message.Bot.ErrorLog.Printf("Error jiggling tag: %s\n", err.Error())
-			continue
-		}
-		time.Sleep(750 * time.Millisecond)
-	}
-
-
-	if !skip_update {
-		// you have to wait a bit for the number to update, so force a delay.
-		time.Sleep(3250 * time.Millisecond)
-
-		fixed_tags := make(chan types.TTagData)
-		go storage.TagUpdater(fixed_tags, storage.UpdaterSettings{})
-
-		message = fmt.Sprintf("%s (done).\nRefetching jiggled tags", message)
-
-		for i, tag := range broken_tags {
-			if i % 5 == 0 { // every 5 pages, update the percentage
-				sent_message.EditTextAsync(data.OMessage{Text: fmt.Sprintf("%s (%s)...", message, Percent(i, len(broken_tags))), ParseMode: data.HTML}, nil)
-			}
-			td, err := api.GetTagData(user, api_key, tag.Id)
-			if err != nil {
-				sent_message.Bot.ErrorLog.Printf("Error updating tag: %s\n", err.Error())
-				continue
-			}
-			time.Sleep(750 * time.Millisecond)
-
-			fixed_tags <- *td
-		}
-		close(fixed_tags)
-	}
-
-	message = fmt.Sprintf("%s (done).\n", message)
-	sent_message.EditTextAsync(data.OMessage{Text: message, ParseMode: data.HTML}, nil)
-	return message
-}
-
-func RecountNegative(ctx *gogram.MessageCtx) {
-	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
-	if err != nil || !janitor {
-		ctx.ReplyAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
-		return
-	}
-
-	skip_update := false
-	aliased := false
-	count := 0
-	state := STATE_READY
-
-	for _, token := range ctx.Cmd.Args {
-		if state == STATE_COUNT {
-			temp, err := strconv.Atoi(token)
-			if err == nil { count = temp }
-			state = STATE_READY
-		} else if token == "--skipupdate" {
-			skip_update = true
-		} else if token == "--lessthan" {
-			state = STATE_COUNT
-		} else if token == "--aliased" {
-			aliased = true
-		}
-	}
-
-	var broken_tags types.TTagInfoArray
-	m := ""
-	if aliased {
-		broken_tags, err = storage.GetAliasedTags()
-		m = fmt.Sprintf("Jiggling tags that are aliases of other tags")
-	} else {
-		broken_tags, err = storage.GetTagsWithCountLess(count)
-		m = fmt.Sprintf("Jiggling tags with (count &lt; %d)", count)
-	}
-	if err != nil {
-		ctx.Bot.ErrorLog.Printf("Couldn't enumerate tags.")
-		return
-	}
-
-	sent_message, err := ctx.Reply(data.OMessage{Text: fmt.Sprintf("%s...", m), ParseMode: data.HTML})
-	if err != nil {
-		ctx.Bot.ErrorLog.Printf("Couldn't send message to update requestor. %s\n", err.Error())
-		return
-	}
-
-	RecountNegativeReal(user, api_key, skip_update, broken_tags, m, sent_message)
 }
 
 const (
@@ -839,7 +623,7 @@ func FindTagConcatenations(ctx *gogram.MessageCtx) {
 	var long_tags []string
 	for _, t := range tags {
 		if len(t.Name) == 0 { continue }
-		if utf8.RuneCountInString(t.Name) >= MINLENGTH && t.Type == types.General {
+		if utf8.RuneCountInString(t.Name) >= MINLENGTH && t.Type == types.TCGeneral {
 			long_general_tags = append(long_general_tags, t.Name)
 		}
 		if utf8.RuneCountInString(t.Name) >= MINLENGTH {
@@ -859,26 +643,6 @@ func FindTagConcatenations(ctx *gogram.MessageCtx) {
 
 	for _ = range solutions {
 	}
-}
-
-func CalculateAliasedCounts(ctx *gogram.MessageCtx, msg, sfx chan string) (error) {
-	m := "Mapping counts between aliased tags..."
-	if msg == nil || sfx == nil {
-		msg, sfx = ProgressMessage(ctx, m, "")
-		defer close(msg)
-		defer close(sfx)
-	} else {
-		msg <- m
-	}
-
-	err := storage.RecalculateAliasedCounts()
-	if err != nil {
-		sfx <- fmt.Sprintf(" (error: %s)", err.Error())
-	} else {
-		sfx <- " done."
-	}
-
-	return err
 }
 
 const (
@@ -977,12 +741,12 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 
 	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{Transaction: ctrl.Transaction}, ctx.Msg.From.Id)
 	if (err != nil || !janitor) && fix {
-		ctx.ReplyAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
+		ctx.ReplyAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}, nil)
 		return
 	}
 
 	if start_tag == "" {
-		ctx.ReplyAsync(data.OMessage{Text: "You must specify a tag.", ParseMode: data.HTML}, nil)
+		ctx.ReplyAsync(data.OMessage{Text: "You must specify a tag.", ParseMode: data.ParseHTML}, nil)
 		return
 	}
 
@@ -1136,7 +900,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 func Blits(ctx *gogram.MessageCtx) {
 	txbox, err := storage.NewTxBox()
 	if err != nil {
-		ctx.ReplyAsync(data.OMessage{Text: fmt.Sprintf("Error opening DB transaction: %s.", err.Error())}, nil)
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error opening DB transaction: %s.", err.Error())}}, nil)
 		return
 	}
 
@@ -1172,7 +936,7 @@ func Blits(ctx *gogram.MessageCtx) {
 	if mode == MODE_LIST {
 		allblits, err := storage.GetMarkedAndUnmarkedBlits(ctrl)
 		if err != nil {
-			ctx.ReplyAsync(data.OMessage{Text: "Whoops! " + err.Error(), ParseMode: data.HTML}, nil)
+			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Whoops! " + err.Error(), ParseMode: data.ParseHTML}}, nil)
 			return
 		}
 
@@ -1195,7 +959,7 @@ func Blits(ctx *gogram.MessageCtx) {
 			buf.WriteString("</pre>")
 		}
 
-		ctx.ReplyAsync(data.OMessage{Text: buf.String(), ParseMode: data.HTML}, nil)
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: buf.String(), ParseMode: data.ParseHTML}}, nil)
 		return
 	}
 
@@ -1216,7 +980,7 @@ func Blits(ctx *gogram.MessageCtx) {
 	allknownblits := make(map[int]bool)
 	allblits, err := storage.GetMarkedAndUnmarkedBlits(ctrl)
 	if err != nil {
-		ctx.ReplyAsync(data.OMessage{Text: "Whoops! " + err.Error(), ParseMode: data.HTML}, nil)
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Whoops! " + err.Error(), ParseMode: data.ParseHTML}}, nil)
 		return
 	}
 
@@ -1236,22 +1000,28 @@ func Blits(ctx *gogram.MessageCtx) {
 	for _, t := range blits {
 		if t.Count <= 0 { continue }
 		tagtype := "UNKNOWN"
-		if t.Type == types.General {
+		if t.Type == types.TCGeneral {
 			tagtype = "GENERAL"
-		} else if t.Type == types.Species {
+		} else if t.Type == types.TCSpecies {
 			tagtype = "SPECIES"
-		} else if t.Type == types.Artist {
+		} else if t.Type == types.TCArtist {
 			tagtype = "ARTIST "
-		} else if t.Type == types.Copyright {
+		} else if t.Type == types.TCCopyright {
 			tagtype = "CPYRIGT"
-		} else if t.Type == types.Character {
+		} else if t.Type == types.TCCharacter {
 			tagtype = "CHARCTR"
+		} else if t.Type == types.TCInvalid {
+			tagtype = "INVALID"
+		} else if t.Type == types.TCLore {
+			tagtype = "LORE   "
+		} else if t.Type == types.TCMeta {
+			tagtype = "META   "
 		}
 		newstr := fmt.Sprintf("%5d (%s) %s\n", t.Count, tagtype, t.Name)
 		if len(newstr) + buf.Len() > 4096 - 12 { break }
 		buf.WriteString(html.EscapeString(newstr))
 	}
-	ctx.ReplyAsync(data.OMessage{Text: "<pre>" + buf.String() + "</pre>", ParseMode: data.HTML}, nil)
+	ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "<pre>" + buf.String() + "</pre>", ParseMode: data.ParseHTML}}, nil)
 	ctrl.Transaction.MarkForCommit()
 }
 
@@ -1340,7 +1110,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 		}
 
 		if manual_ignore != nil || manual_unignore != nil {
-			ctx.ReplyAsync(data.OMessage{Text: message.String(), ParseMode: data.HTML}, nil)
+			ctx.ReplyAsync(data.OMessage{Text: message.String(), ParseMode: data.ParseHTML}, nil)
 			return
 		}
 
@@ -1385,7 +1155,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 			message.WriteString(fmt.Sprintf("%d: <code>%s</code>, <code>%s</code> (%d)\n", i, t.subtag1.Name, t.subtag2.Name, t.tag.Count))
 		}
 
-		ctx.ReplyAsync(data.OMessage{Text: message.String(), ParseMode: data.HTML}, nil)
+		ctx.ReplyAsync(data.OMessage{Text: message.String(), ParseMode: data.ParseHTML}, nil)
 		return
 	}
 
@@ -1436,12 +1206,11 @@ func Concatenations(ctx *gogram.MessageCtx) {
 		message.WriteString(fmt.Sprintf("Fixing %d: <code>%s</code> -> <code>%s, %s</code>\n", i, cats[i].tag.Name, cats[i].subtag1.Name, cats[i].subtag2.Name))
 	}
 
-	ctx.ReplyAsync(data.OMessage{Text: message.String(), ParseMode: data.HTML}, nil)
+	ctx.ReplyAsync(data.OMessage{Text: message.String(), ParseMode: data.ParseHTML}, nil)
 	ctrl.Transaction.MarkForCommit()
 }
 */
 
-// func BulkSearch(searchtags string)
 
 /*
 func BulkRetag(searchtags, applytags string) {

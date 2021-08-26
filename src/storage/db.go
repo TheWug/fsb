@@ -28,10 +28,12 @@ type TransactionBox struct {
 }
 
 func (this *TransactionBox) Commit() error {
+	log.Printf("Committing transaction.\n")
 	return this.tx.Commit()
 }
 
 func (this *TransactionBox) Rollback() error {
+	log.Printf("Aborting transaction.\n")
 	return this.tx.Rollback()
 }
 
@@ -42,7 +44,7 @@ func (this *TransactionBox) Rollback() error {
 // own transaction and is expected to close it, and situations where a function is
 // given a pre-existing transaction and is expected to leave it open.
 
-// Finalize is idempotent. The first call will commit the transaction, subsequent
+// is idempotent. The first call will commit the transaction, subsequent
 // ones are no-ops.
 
 // use it like this:
@@ -56,9 +58,10 @@ func (this *TransactionBox) Finalize(is_transaction_mine bool) {
 			this.Rollback()
 		}
 		*this = TransactionBox{}
-	}
+	} else {
 	// if the transaction isn't ours, or there is no transaction (maybe because
 	// this isn't the first call), do nothing.
+	}
 }
 
 func (this *TransactionBox) MarkForCommit() {
@@ -91,6 +94,7 @@ func handle_transaction(c *committer, tx *sql.Tx) {
 	if c.commit {
 		tx.Commit()
 	} else {
+		log.Println("wtf?")
 		tx.Rollback()
 	}
 }
@@ -142,6 +146,12 @@ func GetUserCreds(settings UpdaterSettings, id tgtypes.UserID) (string, string, 
 	var privilege bool
 	err := row.Scan(&user, &key, &privilege)
 	if err == sql.ErrNoRows || len(user) == 0 || len(key) == 0 { err = ErrNoLogin }
+
+	if err == nil {
+		log.Println("user creds no error")
+	} else {
+		log.Println("user creds", err.Error())
+	}
 
 	settings.Transaction.commit = mine
 	return user, key, privilege, err
@@ -211,12 +221,15 @@ func GetMigrationState(settings UpdaterSettings) (int, int, bool) {
 }
 
 func PrefixedTagToTypedTag(name string) (string, int) {
-	if trimmed := strings.TrimPrefix(name, "general:"); trimmed != name { return trimmed, apitypes.General }
-	if trimmed := strings.TrimPrefix(name, "character:"); trimmed != name { return trimmed, apitypes.Character }
-	if trimmed := strings.TrimPrefix(name, "artist:"); trimmed != name { return trimmed, apitypes.Artist }
-	if trimmed := strings.TrimPrefix(name, "copyright:"); trimmed != name { return trimmed, apitypes.Copyright }
-	if trimmed := strings.TrimPrefix(name, "species:"); trimmed != name { return trimmed, apitypes.Species }
-	return name, apitypes.General
+	if trimmed := strings.TrimPrefix(name, "general:"); trimmed != name { return trimmed, apitypes.TCGeneral.Value() }
+	if trimmed := strings.TrimPrefix(name, "character:"); trimmed != name { return trimmed, apitypes.TCCharacter.Value() }
+	if trimmed := strings.TrimPrefix(name, "artist:"); trimmed != name { return trimmed, apitypes.TCArtist.Value() }
+	if trimmed := strings.TrimPrefix(name, "copyright:"); trimmed != name { return trimmed, apitypes.TCCopyright.Value() }
+	if trimmed := strings.TrimPrefix(name, "species:"); trimmed != name { return trimmed, apitypes.TCSpecies.Value() }
+	if trimmed := strings.TrimPrefix(name, "invalid:"); trimmed != name { return trimmed, apitypes.TCInvalid.Value() }
+	if trimmed := strings.TrimPrefix(name, "meta:"); trimmed != name { return trimmed, apitypes.TCMeta.Value() }
+	if trimmed := strings.TrimPrefix(name, "lore:"); trimmed != name { return trimmed, apitypes.TCLore.Value() }
+	return name, apitypes.TCGeneral.Value()
 }
 
 type EnumerateControl struct {
@@ -256,10 +269,14 @@ func GetTag(name string, ctrl EnumerateControl) (*apitypes.TTagData, error) {
 func GetLastTag(settings UpdaterSettings) (*apitypes.TTagData, error) {
 	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
 
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
+
 	table := "tag_index"
 
 	sq := "SELECT tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM " + suf(table) + " WHERE tag_id = (SELECT MAX(tag_id) FROM tag_index) LIMIT 1"
-	row := Db_pool.QueryRow(sq)
+	row := tx.QueryRow(sq)
 
 	var tag apitypes.TTagData
 	err := row.Scan(&tag.Id, &tag.Name, &tag.Count, &tag.Type, &tag.Locked)
@@ -270,6 +287,7 @@ func GetLastTag(settings UpdaterSettings) (*apitypes.TTagData, error) {
 		return nil, err
 	}
 
+	settings.Transaction.commit = mine
 	return &tag, nil
 }
 
@@ -291,8 +309,38 @@ func ClearTagIndex(settings UpdaterSettings) (error) {
 	return err
 }
 
-func ClearAliasIndex() (error) {
-	_, err := Db_pool.Exec("TRUNCATE alias_index")
+func ClearAliasIndex(settings UpdaterSettings) (error) {
+	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
+
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
+
+	table := "alias_index"
+
+	_, err := tx.Exec("TRUNCATE " + suf(table))
+
+	settings.Transaction.commit = mine
+	return err
+}
+
+func ClearPosts(settings UpdaterSettings) (error) {
+	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
+
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
+
+	table1 := "post_tags"
+	table2 := "post_tags_by_name"
+	table3 := "post_index"
+
+	log.Println("doing truncate")
+	_, err := tx.Exec("TRUNCATE " + suf(table1) + ", " + suf(table2) + ", " + suf(table3))
+
+	log.Println("clear posts")
+
+	settings.Transaction.commit = mine && (err != nil)
 	return err
 }
 
@@ -406,31 +454,27 @@ func GetAliasedTags() (apitypes.TTagInfoArray, error) {
 	return out, nil
 }
 
-func AliasUpdater(input chan apitypes.TAliasData) (error) {
+func AliasUpdater(input chan apitypes.TAliasData, settings UpdaterSettings) (error) {
 	defer func(){ for _ = range input {} }()
-	tx, err := Db_pool.Begin()
-	if err != nil { return err }
+	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
 
-	var c committer
-	defer handle_transaction(&c, tx)
+	table := "alias_index"
+
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
 
 	for alias := range input {
-		sql := "DELETE FROM alias_index WHERE alias_id = $1"
+		sql := "DELETE FROM " + suf(table) + " WHERE alias_id = $1"
 		_, err := tx.Exec(sql, alias.Id)
-		if err != nil { 
-			log.Printf("Error: %s", err.Error())
-			return err
-		}
+		if err != nil { return err }
 
-		sql = "INSERT INTO alias_index (alias_id, alias_name, alias_target_id) VALUES ($1, $2, $3)"
+		sql = "INSERT INTO " + suf(table) + " (alias_id, alias_name, alias_target_id) SELECT $1, $2, tag_id FROM tag_index WHERE tag_name = $3"
 		_, err = tx.Exec(sql, alias.Id, alias.Name, alias.Alias)
-		if err != nil { 
-			log.Printf("Error: %s", err.Error())
-			return err
-		}
+		if err != nil { return err }
 	}
 
-	c.commit = true
+	settings.Transaction.commit = mine
 	return nil
 }
 
@@ -440,27 +484,35 @@ type UpdaterSettings struct {
 	TableSuffix string
 }
 
-func PostUpdater(input chan apitypes.TSearchResult, settings UpdaterSettings) (error) {
-	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
+func PostUpdater(input chan apitypes.TPostInfo, settings UpdaterSettings) (error) {
+	defer func(){ for _ = range input {} }()
+	suf := func(table string) string { return table }
 
 	table1 := "post_tags_by_name"
+	table2 := "post_index"
 
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }
 
-	defer func(){ for _ = range input {} }()
-
+	i := 0
 	for post := range input {
+		i++
 		_, err := tx.Exec("DELETE FROM " + suf(table1) + " WHERE post_id = $1", post.Id)
+		if err != nil { return err }
+		_, err = tx.Exec("DELETE FROM " + suf(table2) + " WHERE post_id = $1", post.Id)
 		if err != nil { return err }
 
 		_, err = tx.Exec("INSERT INTO " + suf(table1) + " (SELECT $1 as post_id, tag_name FROM UNNEST($2::varchar[]) as tag_name) ON CONFLICT DO NOTHING",
 				 post.Id, pq.Array(post.Tags()))
 		if err != nil { return err }
+		_, err = tx.Exec("INSERT INTO " + suf(table2) + " (post_id, post_change_seq, post_rating, post_description, post_sources, post_hash) VALUES ($1, $2, $3, $4, $5, $6)",
+				 post.Id, post.Change, post.Rating, post.Description, strings.Join(post.Sources, " "), post.Md5)
+		if err != nil { return err }
 	}
 
 	settings.Transaction.commit = mine
+	log.Println("postupdater normal exit")
 	return nil
 }
 
@@ -650,12 +702,10 @@ func ClearCatsException(tag string, ctrl EnumerateControl) (error) {
 	return err
 }
 
-func RecalculateAliasedCounts() (error) {
-	tx, err := Db_pool.Begin()
-	if err != nil { return err }
-
-	var c committer
-	defer handle_transaction(&c, tx)
+func RecalculateAliasedCounts(settings UpdaterSettings) (error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
 
 	sql := 	"UPDATE tag_index " +
 			"SET tag_count = subquery.tag_count " +
@@ -664,44 +714,35 @@ func RecalculateAliasedCounts() (error) {
 				"alias_index AS b ON (a.tag_name = b.alias_name) INNER JOIN " +
 				"tag_index AS c ON (b.alias_target_id = c.tag_id)) AS subquery " +
 		"WHERE tag_index.tag_id = subquery.tag_id"
-	_, err = tx.Exec(sql)
+	_, err := tx.Exec(sql)
 	if err != nil { return err }
 
-	c.commit = true
-
+	settings.Transaction.commit = mine
 	return nil
 }
 
-func SetTagHistoryCheckpoint(id int, settings UpdaterSettings) (error) {
-	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
+func GetMostRecentlyUpdatedPost(settings UpdaterSettings) (*apitypes.TPostInfo, error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
 
-	table := "tag_history_checkpoint"
+	var p apitypes.TPostInfo
+	row := tx.QueryRow("SELECT post_id, post_change_seq, post_rating, post_description, post_hash FROM post_index ORDER BY post_change_seq DESC LIMIT 1")
+	err := row.Scan(&p.Id, &p.Change, &p.Rating, &p.Description, &p.Md5)
 
-	tx, err := Db_pool.Begin()
-	if err != nil { return err }
-
-	var c committer
-	defer handle_transaction(&c, tx)
-
-	_, err = tx.Exec("DELETE FROM " + suf(table))
-	if err != nil { return err }
-
-	_, err = tx.Exec("INSERT INTO " + suf(table) + " VALUES ($1)", id)
-	if err != nil { return err }
-
-	c.commit = true
-	return nil
-}
-
-func GetTagHistoryCheckpoint() (int, error) {
-	var out int
-	err := Db_pool.QueryRow("SELECT * FROM tag_history_checkpoint LIMIT 1").Scan(&out)
+	log.Println("get most recently updated post")
 
 	if err == sql.ErrNoRows {
-		return 0, nil
+		log.Println("no rows")
+		return nil, nil
+	} else if err != nil {
+		return nil, err
 	}
 
-	return out, err
+	log.Println("yes rows")
+
+	settings.Transaction.commit = mine
+	return &p, err
 }
 
 func ImportPostTagsFromNameToID(settings UpdaterSettings, status chan string) (error) {
@@ -911,16 +952,14 @@ func ResetIntermediateEnvironment(settings UpdaterSettings) (error) {
 	return nil
 }
 
-func CountTags(status chan string) (error) {
-	tx, err := Db_pool.Begin()
-	if err != nil { return err }
-
-	var c committer
-	defer handle_transaction(&c, tx)
+func CountTags(settings UpdaterSettings, status chan string) (error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
 
 	status <- " (1/2 reset cached counts)"
 	query := "UPDATE tag_index SET tag_count = 0"
-	_, err = tx.Exec(query)
+	_, err := tx.Exec(query)
 	if err != nil { return err }
 
 	status <- " (2/2 calculate actual tag counts)"
@@ -928,11 +967,11 @@ func CountTags(status chan string) (error) {
 	_, err = tx.Exec(query)
 	if err != nil { return err }
 
-	c.commit = true
+	settings.Transaction.commit = mine
 	return nil
 }
 
-func LocalTagSearch(tag apitypes.TTagData, ctrl EnumerateControl) (apitypes.TResultArray, error) {
+func LocalTagSearch(tag apitypes.TTagData, ctrl EnumerateControl) (apitypes.TPostInfoArray, error) {
 	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
 	defer ctrl.Transaction.Finalize(mine)
 	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
@@ -941,8 +980,8 @@ func LocalTagSearch(tag apitypes.TTagData, ctrl EnumerateControl) (apitypes.TRes
 	rows, err := tx.Query(query, tag.Id)
 	if err != nil { return nil, err }
 
-	var out apitypes.TResultArray
-//	var item apitypes.TSearchResult
+	var out apitypes.TPostInfoArray
+//	var item apitypes.TPostInfo
 	var intermed map[int][]string = make(map[int][]string)
 	for rows.Next() {
 		var id int
@@ -964,7 +1003,7 @@ func LocalTagSearch(tag apitypes.TTagData, ctrl EnumerateControl) (apitypes.TRes
 	return out, nil
 }
 
-func UpdatePost(oldpost, newpost apitypes.TSearchResult, settings UpdaterSettings) (error) {
+func UpdatePost(oldpost, newpost apitypes.TPostInfo, settings UpdaterSettings) (error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }

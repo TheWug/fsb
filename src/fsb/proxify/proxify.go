@@ -36,7 +36,7 @@ func ContainsSafeRatingTag(tags string) (bool) {
 	return false
 }
 
-func ConvertApiResultToTelegramInline(result types.TSearchResult, force_safe bool, query string, debugmode bool) (interface{}) {
+func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, query string, debugmode bool) (interface{}) {
 	salt := "x_"
 	postURL := ""
 	if force_safe {
@@ -103,7 +103,7 @@ func Offset(last string) (int, error) {
 	return strconv.Atoi(last)
 }
 
-func GenerateDebugText(iqr interface{}, result types.TSearchResult) {
+func GenerateDebugText(iqr interface{}, result types.TPostInfo) {
 	md := data.ParseMarkdown
 	t := true
 	imt := data.TInputMessageTextContent{

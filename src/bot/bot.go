@@ -6,6 +6,7 @@ import (
 
 	"storage"
 	"api"
+	"api/tagindex"
 
 	"fmt"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"sort"
 	"html"
 	"io/ioutil"
+	"log"
 	"io"
 
 	"github.com/kballard/go-shellquote"
@@ -506,10 +508,6 @@ janitor. <code>      --posts     -</code> [D] Fetch posts and tags.
 janitor. <code>      --tags      -</code> [D] Fetch aliases and tags.
 janitor. <code>      --aliases   -</code> [D] Fetch tags only.
 janitor. <code>      --refetch   -</code> [D] Refetch everything, discard local copy.
-janitor. <code>/recountnegative  -</code> Triggers remote tagged post recount.
-janitor. <code>  --skipupdate    -</code> Don't refetch counts.
-janitor. <code>  --aliased       -</code> Apply to aliased tags instead of by count.
-janitor. <code>  --lessthan N    -</code> Apply to tags with count &lt; N (default 0)
 janitor. <code>/cats             -</code> [D] Deal with concatenated tags.
 janitor. <code>    --exclude T   -</code> [D] Flag T as not-a-cat.
 janitor. <code>    --mark C X Y  -</code> [D] Flag C as a cat of X and Y.
@@ -1050,32 +1048,32 @@ type JanitorState struct {
 }
 
 func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
-	ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "Janitorial features are currently disabled, while I update fsb to match " + api.ApiName + "'s new API.", ParseMode: data.ParseHTML}}, nil)
-	return
-
-	/*
 	if ctx.Msg.From == nil {
 		// ignore messages not sent by a user.
 		return
 	}
 
-	user, apikey, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+	log.Printf("first:\n")
+	_, _, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+	log.Printf("over.\n")
 	if !janitor {
 		// commands from non-authorized users are silently ignored
 		return
 	}
 	if err != nil {
-		ctx.ReplyOrPMAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}, nil)
+		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
 	}
 
 	if ctx.Cmd.Command == "/indextags" {
-		go tagindex.SyncTagsExternal(ctx)
+		go tagindex.SyncTagsCommand(ctx)
 	} else if ctx.Cmd.Command == "/indextagaliases" {
-		go tagindex.UpdateAliases(ctx)
-	} else if ctx.Cmd.Command == "/recountnegative" {
-		go tagindex.RecountNegative(ctx)
-	} else if ctx.Cmd.Command == "/cats" {
+		go tagindex.SyncAliasesCommand(ctx)
+	} else if ctx.Cmd.Command == "/syncposts" {
+		go tagindex.SyncPostsCommand(ctx)
+	} 
+
+	/* else if ctx.Cmd.Command == "/cats" {
 		go tagindex.Concatenations(ctx)
 	} else if ctx.Cmd.Command == "/blits" {
 		go tagindex.Blits(ctx)
@@ -1083,8 +1081,6 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 		go tagindex.FindTagTypos(ctx)
 	} else if ctx.Cmd.Command == "/recounttags" {
 		go tagindex.RecountTagsExternal(ctx)
-	} else if ctx.Cmd.Command == "/syncposts" {
-		go tagindex.SyncPosts(ctx)
 	} else if ctx.Cmd.Command == "/editposttest" {
 		post := 2893902 // https://api-host/post/show/2893902
 		newtags := "1:1 2021 anthro beastars canid canine canis clothed clothing fur grey_body grey_fur hi_res javigameboy legoshi_(beastars) male mammal simple_background solo teeth wolf"

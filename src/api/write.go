@@ -62,10 +62,10 @@ func UpdatePost(user, apitoken string,
 		parent *int,					// nil to leave parent unchanged, -1 to UNSET parent
 		source *string,					// nil to leave source unchanged
 		description *string,				// nil to leave description unchanged
-		reason *string) (*types.TSearchResult, error) {
+		reason *string) (*types.TPostInfo, error) {
 	url := fmt.Sprintf("/post/%s.json", id)
 
-	var post types.TSearchResult
+	var post types.TPostInfo
 
 	req := api.New(url).
 			Method(reqtify.PATCH).

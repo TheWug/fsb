@@ -11,9 +11,9 @@ type FailedCall struct {
 	Success bool `json:"success"`
 }
 
-func TagSearch(user, apitoken string, tags string, page int, limit int) (types.TResultArray, error) {
+func TagSearch(user, apitoken string, tags string, page int, limit int) (types.TPostInfoArray, error) {
 	temp := struct {
-		Posts types.TResultArray `json:"posts"`
+		Posts types.TPostInfoArray `json:"posts"`
 	}{}
 
 	url := "/posts.json"
@@ -89,81 +89,84 @@ func ListTagHistory(user, apitoken string, limit int, before, after *int) (types
 	return hist, nil
 }
 
-func ListOnePageOfTags(user, apitoken string, page int, list types.TTagInfoArray) (types.TTagInfoArray, bool, int, error) {
+func ListTags(user, apitoken string, options types.ListTagsOptions) (types.TTagInfoArray, error) {
 	url := "/tags.json"
 
-	var results types.TTagInfoArray
+	var results types.TTagListing
 
 	r, e := api.New(url).
 			BasicAuthentication(user, apitoken).
-			URLArg("limit", "10000").
-			URLArg("page", strconv.Itoa(page)).
-			URLArg("[search]order", "date").
-			URLArg("[search]hide_empty", "no").
+			URLArgDefault("page", options.Page, "").
+			URLArgDefault("limit", options.Limit, 0).
+			URLArgDefault("search[name_matches]", options.MatchTags, "").
+			URLArgDefault("search[order]", options.Order.String(), "").
+			URLArg("search[category]", (*int)(options.Category)).
+			URLArg("search[hide_empty]", options.HideEmpty).
+			URLArg("search[has_wiki]", options.HasWiki).
+			URLArg("search[has_artist]", options.HasArtist).
 			Into(&results).
 			Do()
 
 	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
 
 	if e != nil {
-		return list, true, page, e
+		return nil, e
 	}
 
-	list = append(list, results...)
-	return list, len(results) != 0, page + 1, nil
+	return results.Tags, nil
 }
 
-func ListOnePageOfAliases(user, apitoken string, page int, list types.TAliasInfoArray) (types.TAliasInfoArray, bool, int, error) {
+func ListTagAliases(user, apitoken string, options types.ListTagAliasOptions) (types.TAliasInfoArray, error) {
 	url := "/tag_aliases.json"
 
-	var aliases types.TAliasInfoArray
+	var results types.TAliasListing
 
 	r, e := api.New(url).
 			BasicAuthentication(user, apitoken).
-			URLArg("limit", "10000").
-			URLArg("page", strconv.Itoa(page)).
-			URLArg("[search]order", "date").
-			URLArg("[search]status", "approved").
-			Into(&aliases).
+			URLArgDefault("page", options.Page, "").
+			URLArgDefault("limit", options.Limit, 0).
+			URLArgDefault("search[name_matches]", options.MatchAliases, "").
+			URLArgDefault("search[status]", options.Status, "").
+			URLArgDefault("search[order]", options.Order, "").
+			Into(&results).
 			Do()
 
 	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
 
 	if e != nil {
-		return list, true, page, e
+		return nil, e
 	}
 
-	list = append(list, aliases...)
-	return list, len(aliases) != 0, page + 1, nil
+	return results.Aliases, nil
 }
 
-func ListOnePageOfPosts(user, apitoken string, before int) (types.TResultArray, bool, int, error) {
+func ListPosts(user, apitoken string, options types.ListPostOptions) (types.TPostInfoArray, error) {
 	url := "/posts.json"
 
-	var posts types.TResultArray
+	var results types.TPostListing
 
-	req := api.New(url).
+	r, e := api.New(url).
 			BasicAuthentication(user, apitoken).
-			URLArg("limit", "10000").
-			Into(&posts)
-	if before > 0 { req.URLArg("page", fmt.Sprintf("b%d", before)) }
-	r, e := req.Do()
+			URLArgDefault("tags", options.SearchQuery, "").
+			URLArgDefault("limit", options.Limit, "0").
+			URLArgDefault("page", options.Page, "").
+			Into(&results).
+			Do()
 
 	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
 
 	if e != nil {
-		return posts, true, before, e
+		return nil, e
 	}
 
-	if len(posts) != 0 { before = posts[len(posts) - 1].Id }
-	return posts, len(posts) != 0, before, nil
+	return results.Posts, nil
 }
 
 
-func FetchOnePost(user, apitoken string, id int) (*types.TSearchResult, error) {
+func FetchOnePost(user, apitoken string, id int) (*types.TPostInfo, error) {
 	url := fmt.Sprintf("/posts/%d.json", id)
 
-	var post types.TSearchResult
+	var post types.TPostInfo
 
 	r, e := api.New(url).
 			BasicAuthentication(user, apitoken).
@@ -180,7 +183,7 @@ func FetchOnePost(user, apitoken string, id int) (*types.TSearchResult, error) {
 	return nil, nil
 }
 
-func ListOnePageOfDeletedPosts(user, apitoken string, page int) (types.TResultArray, bool, int, error) {
+func ListOnePageOfDeletedPosts(user, apitoken string, page int) (types.TPostInfoArray, bool, int, error) {
 	posts, err := TagSearch(user, apitoken, "status:deleted", page, 10000)
 
 	if err != nil {

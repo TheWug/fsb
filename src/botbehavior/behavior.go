@@ -79,7 +79,7 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 	ctx.AnswerAsync(iqa, nil)
 }
 
-func (this *Behavior) ApiResultsToInlineResponse(query string, search_results apitypes.TResultArray, current_offset int, err error, debugmode bool) data.OInlineQueryAnswer {
+func (this *Behavior) ApiResultsToInlineResponse(query string, search_results apitypes.TPostInfoArray, current_offset int, err error, debugmode bool) data.OInlineQueryAnswer {
 	iqa := data.OInlineQueryAnswer{CacheTime: 30}
 	if err != nil {
 		if placeholder := this.GetErrorPlaceholder(); placeholder != nil {

@@ -1,23 +1,16 @@
 package types
 
-// tag info
-const (
-	General = 0
-	Artist = 1
-	Unused = 2
-	Copyright = 3
-	Character = 4
-	Species = 5
-	Invalid = 6
-	Meta = 7
-	Lore = 8
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
 )
 
 type TTagData struct {
 	Id int `json:"id"`
 	Name string `json:"name"`
 	Count int `json:"post_count"`
-	Type int `json:"category"`
+	Type TagCategory `json:"category"`
 	Locked *bool `json:"is_locked"`
 
 	// created_at
@@ -28,10 +21,30 @@ type TTagData struct {
 
 type TTagInfoArray []TTagData
 
+type TTagListing struct {
+	Tags TTagInfoArray `json:"tags"`
+}
+
+func (this *TTagListing) UnmarshalJSON(b []byte) (error) {
+	
+	type TTagListingAlt TTagListing
+	var temp TTagListingAlt
+	err1 := json.Unmarshal(b, &temp)
+	if err1 == nil {
+		*this = TTagListing(temp)
+		return nil
+	}
+	err2 := json.Unmarshal(b, &this.Tags)
+	if err2 == nil {
+		return nil
+	}
+	return errors.New(fmt.Sprintf("Couldn't figure out how to parse json response (%s) (%s)", err1.Error(), err2.Error()))
+}
+
 type TAliasData struct {
-	Id int `json:"id"`
-	Name string `json:"consequent_name"`
-	Alias int `json:"antecedent_name"`
+	Id int       `json:"id"`
+	Name string  `json:"consequent_name"`
+	Alias string `json:"antecedent_name"`
 
 	// reason
 	// creator_id
@@ -42,6 +55,26 @@ type TAliasData struct {
 }
 
 type TAliasInfoArray []TAliasData
+
+type TAliasListing struct {
+	Aliases TAliasInfoArray `json:"tag_aliases"`
+}
+
+func (this *TAliasListing) UnmarshalJSON(b []byte) (error) {
+	
+	type TAliasListingAlt TAliasListing
+	var temp TAliasListingAlt
+	err1 := json.Unmarshal(b, &temp)
+	if err1 == nil {
+		*this = TAliasListing(temp)
+		return nil
+	}
+	err2 := json.Unmarshal(b, &this.Aliases)
+	if err2 == nil {
+		return nil
+	}
+	return errors.New(fmt.Sprintf("Couldn't figure out how to parse json response (%s) (%s)", err1.Error(), err2.Error()))
+}
 
 type TTagHistory struct {
 	Id int `json:"id"`
@@ -107,7 +140,7 @@ type TPostTags struct {
 	Meta      []string `json:"meta"`
 }
 
-type TSearchResult struct {
+type TPostInfo struct {
 	// anonymous nested subcomponents
 	TPostScore         `json:"score"`
 	TPostFile          `json:"file"`
@@ -133,7 +166,7 @@ type TSearchResult struct {
 //	Artist      []string `json:"artist,omitempty"`
 }
 
-func (this *TSearchResult) Tags() ([]string) {
+func (this *TPostInfo) Tags() ([]string) {
 	var tags []string
 	tags = append(tags, this.General...)
 	tags = append(tags, this.Species...)
@@ -146,4 +179,25 @@ func (this *TSearchResult) Tags() ([]string) {
 	return tags
 }
 
-type TResultArray []TSearchResult
+type TPostInfoArray []TPostInfo
+
+
+type TPostListing struct {
+	Posts TPostInfoArray `json:"posts"`
+}
+
+func (this *TPostListing) UnmarshalJSON(b []byte) (error) {
+	
+	type TPostListingAlt TPostListing
+	var temp TPostListingAlt
+	err1 := json.Unmarshal(b, &temp)
+	if err1 == nil {
+		*this = TPostListing(temp)
+		return nil
+	}
+	err2 := json.Unmarshal(b, &this.Posts)
+	if err2 == nil {
+		return nil
+	}
+	return errors.New(fmt.Sprintf("Couldn't figure out how to parse json response (%s) (%s)", err1.Error(), err2.Error()))
+}
