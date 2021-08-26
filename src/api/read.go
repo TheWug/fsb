@@ -147,7 +147,9 @@ func ListPosts(user, apitoken string, options types.ListPostOptions) (types.TPos
 func FetchOnePost(user, apitoken string, id int) (*types.TPostInfo, error) {
 	url := fmt.Sprintf("/posts/%d.json", id)
 
-	var post types.TPostInfo
+	var post struct {
+		Post types.TPostInfo `json:"post"`
+	}
 
 	r, e := api.New(url).
 			BasicAuthentication(user, apitoken).
@@ -160,7 +162,7 @@ func FetchOnePost(user, apitoken string, id int) (*types.TPostInfo, error) {
 		return nil, e
 	}
 
-	if post.Id != 0 { return &post, nil }
+	if post.Post.Id != 0 { return &post.Post, nil }
 	return nil, nil
 }
 

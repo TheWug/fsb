@@ -166,7 +166,7 @@ func SyncTagsInternal(user, api_key string, settings storage.UpdaterSettings, ms
 	api_timeout := time.NewTicker(750 * time.Millisecond)
 	fixed_tags := make(chan types.TTagData)
 
-	limit := 10000
+	limit := 1000
 	last_existing_tag_id := 0
 	consecutive_errors := 0
 	last, err := storage.GetLastTag(settings)
@@ -203,6 +203,8 @@ func SyncTagsInternal(user, api_key string, settings storage.UpdaterSettings, ms
 		for _, t := range list {
 			fixed_tags <- t
 		}
+
+		if len(list) < limit { break }
 
 		<- api_timeout.C
 	}
@@ -386,10 +388,10 @@ func SyncPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, aliases
 		defer close(sfx)
 	}
 
-	return SyncPostsInternal(user, api_key, settings, aliases_too, recount_too, msg, sfx)
+	return SyncPostsInternal(user, api_key, settings, aliases_too, recount_too, msg, sfx, nil)
 }
 
-func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSettings, msg, sfx chan string, post_updates chan []types.TPostInfo) (error) {
 	message := func(x string) {
 		if msg != nil {
 			msg <- x
@@ -398,6 +400,11 @@ func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSetting
 	suffix := func(x string) {
 		if sfx != nil {
 			sfx <- x
+		}
+	}
+	update := func(p []types.TPostInfo) {
+		if post_updates != nil {
+			post_updates <- p
 		}
 	}
 
@@ -415,7 +422,7 @@ func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSetting
 
 	fixed_posts := make(chan types.TPostInfo)
 
-	limit := 10000
+	limit := 320
 	latest_change_seq := 0
 	consecutive_errors := 0
 	last, err := storage.GetMostRecentlyUpdatedPost(settings)
@@ -454,6 +461,9 @@ func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSetting
 			fixed_posts <- p
 			i++
 		}
+		update(list)
+
+		if len(list) < limit { break }
 
 		<- api_timeout.C
 	}
@@ -465,7 +475,7 @@ func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSetting
 	return nil
 }
 
-func SyncPostsInternal(user, api_key string, settings storage.UpdaterSettings, aliases_too, recount_too bool, msg, sfx chan string) (error) {
+func SyncPostsInternal(user, api_key string, settings storage.UpdaterSettings, aliases_too, recount_too bool, msg, sfx chan string, post_updates chan []types.TPostInfo) (error) {
 	message := func(x string) {
 		if msg != nil {
 			msg <- x
@@ -479,7 +489,7 @@ func SyncPostsInternal(user, api_key string, settings storage.UpdaterSettings, a
 
 	message("Syncing activity... ")
 
-	if err := SyncOnlyPostsInternal(user, api_key, settings, msg, sfx); err != nil { return err }
+	if err := SyncOnlyPostsInternal(user, api_key, settings, msg, sfx, post_updates); err != nil { return err }
 	if err := SyncTagsInternal(user, api_key, settings, msg, sfx); err != nil { return err }
 
 	if aliases_too {

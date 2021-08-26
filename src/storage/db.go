@@ -5,10 +5,13 @@ import (
 	tgtypes "github.com/thewug/gogram/data"
 
 	"database/sql"
+	"database/sql/driver"
 	"log"
 	"fmt"
 	"strings"
 	"errors"
+	"time"
+	"encoding/json"
 
 	"github.com/lib/pq"
 )
@@ -834,7 +837,24 @@ func PostsWithTag(tag apitypes.TTagData, ctrl EnumerateControl) (apitypes.TPostI
 		out = append(out, item)
 	}
 
+	ctrl.Transaction.commit = mine
 	return out, nil	
+}
+
+func PostByID(id int, ctrl UpdaterSettings) (*apitypes.TPostInfo, error) {
+	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
+	defer ctrl.Transaction.Finalize(mine)
+	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
+
+	var item apitypes.TPostInfo
+	var sources string
+	query := "SELECT post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted, ARRAY(SELECT tag_name FROM tag_index INNER JOIN post_tags USING (tag_id) WHERE post_id = $1) AS post_tags FROM post_index WHERE post_id = $1;"
+	err := tx.QueryRow(query, id).Scan(&item.Id, &item.Change, &item.Rating, &item.Description, &sources, &item.Md5, &item.Deleted, pq.Array(&item.General))
+	if err != sql.ErrNoRows && err != nil  { return nil, err }
+	item.Sources = strings.Split(sources, " ")
+
+	ctrl.Transaction.commit = mine
+	return &item, nil	
 }
 
 func LocalTagSearch(tag apitypes.TTagData, ctrl EnumerateControl) (apitypes.TPostInfoArray, error) {
@@ -1022,31 +1042,122 @@ func GetTagTypos(tag string, ctrl EnumerateControl) (map[string]TypoData, error)
 }
 
 type PostSuggestedEdit struct {
-	Prompt, AutoFix apitypes.TagDiff
+	Prompt        apitypes.TagDiffArray `json:"prompt"`
+	AutoFix       apitypes.TagDiffArray `json:"autofix"`
+	SelectedEdits map[string]bool        `json:"selected_edits"`
+	AppliedEdits  map[string]bool        `json:"applied_edits"`
 }
 
-func GetSuggestedPostEdits(posts []int, settings UpdaterSettings) (map[int]*PostSuggestedEdit, error) {
+func (this *PostSuggestedEdit) Select(api_string string) {
+	if this.SelectedEdits == nil {
+		this.SelectedEdits = make(map[string]bool)
+	}
+	this.SelectedEdits[api_string] = true
+}
+
+func (this *PostSuggestedEdit) Deselect(api_string string) {
+	delete(this.SelectedEdits, api_string)
+}
+
+func (this *PostSuggestedEdit) Apply(api_string string) {
+	if this.AppliedEdits == nil {
+		this.AppliedEdits = make(map[string]bool)
+	}
+	this.AppliedEdits[api_string] = true
+}
+
+func (this *PostSuggestedEdit) Deapply(api_string string) {
+	delete(this.AppliedEdits, api_string)
+}
+
+func (this PostSuggestedEdit) Value() (driver.Value, error) {
+	return json.Marshal(this)
+}
+
+func (this *PostSuggestedEdit) Scan(value interface{}) error {
+	b, ok := value.([]byte)
+	if !ok {
+		return errors.New("type assertion to []byte failed")
+	}
+
+	return json.Unmarshal(b, &this)
+}
+
+// merge two edit lists, with certain requirements.
+// the edit list of `this` must remain index-stable, that is to say, items in
+// its prompt and autofix lists should keep the same indices in the output.
+// this allows us to merge multiple edit lists onto one, while not breaking
+// the user experience by making buttons move around if we edit a post while
+// they're pushing them.
+func (this PostSuggestedEdit) Append(other PostSuggestedEdit) PostSuggestedEdit {
+	var new_pse PostSuggestedEdit
+
+	// build a membership map, and add everything from `this.Prompt`
+	membership := make(map[string]bool)
+	for _, diff := range this.Prompt {
+		membership[diff.APIString()] = true
+		new_pse.Prompt = append(new_pse.Prompt, diff)
+	}
+
+	// add everything from `other.Prompt` that isn't already a member
+	for _, diff := range other.Prompt {
+		api_string := diff.APIString()
+		if membership[api_string] { continue }
+		new_pse.Prompt = append(new_pse.Prompt, diff)
+		membership[api_string] = true
+	}
+
+	// build a membership map, and add everything from `this.AutoFix`
+	membership = make(map[string]bool)
+	for _, diff := range this.AutoFix {
+		membership[diff.APIString()] = true
+		new_pse.AutoFix = append(new_pse.AutoFix, diff)
+	}
+
+	// add everything from `other.AutoFix` that isn't already a member
+	for _, diff := range other.AutoFix {
+		api_string := diff.APIString()
+		if membership[api_string] { continue }
+		new_pse.AutoFix = append(new_pse.AutoFix, diff)
+		membership[api_string] = true
+	}
+
+	// merge the selected/applied edit lists.
+	for k := range this.SelectedEdits { new_pse.Select(k) }
+	for k := range other.SelectedEdits { new_pse.Select(k) }
+	for k := range this.AppliedEdits { new_pse.Select(k) }
+	for k := range other.AppliedEdits { new_pse.Select(k) }
+	return new_pse
+}
+
+func (this PostSuggestedEdit) Flatten() apitypes.TagDiff {
+	return this.Prompt.Flatten().Union(this.AutoFix.Flatten())
+}
+
+func GetSuggestedPostEdits(posts []int, settings UpdaterSettings) (map[int]PostSuggestedEdit, error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
 
-	results := make(map[int]*PostSuggestedEdit)
+	results := make(map[int]PostSuggestedEdit)
 	populate := func(id int, mode CorrectionMode) *apitypes.TagDiff {
 		value := results[id]
-		if value == nil {
-			value = &PostSuggestedEdit{}
-			results[id] = value
-		}
+
+		array := &value.Prompt
 		if mode == Prompt {
-			return &value.Prompt
 		} else if mode == AutoFix {
-			return &value.AutoFix
+			array = &value.AutoFix
+		} else {
+			panic("bad CorrectionMode? should be either Prompt or Autofix")
 		}
-		panic("bad CorrectionMode? should be either Prompt or Autofix")
+
+		*array = append(*array, apitypes.TagDiff{})
+		results[id] = value
+		return &(*array)[len(*array) - 1]
 	}
 
 	query := "SELECT post_id, tag_typo_name, tag_implied_name, mode FROM typos_identified INNER JOIN tag_index ON tag_typo_name = tag_name INNER JOIN post_tags USING (tag_id) WHERE mode IN ($1, $2) AND post_id = ANY($3::int[])"
-	rows, err := tx.Query(query, Prompt, AutoFix, posts)
+	rows, err := tx.Query(query, Prompt, AutoFix, pq.Array(posts))
 	if err != nil { return nil, err }
 	defer rows.Close()
 
@@ -1057,14 +1168,16 @@ func GetSuggestedPostEdits(posts []int, settings UpdaterSettings) (map[int]*Post
 		err = rows.Scan(&id, &typo, &fixed, &mode)
 		if err != nil { return nil, err }
 
+		log.Println(id, typo, fixed, mode)
+
 		diff := populate(id, mode)
 
-		diff.AddTag(fixed)
 		diff.RemoveTag(typo)
+		diff.AddTag(fixed)
 	}
 
 	query = "SELECT post_id, tag_cat_name, tag_1_name, tag_2_name, mode FROM cats_identified INNER JOIN tag_index ON tag_cat_name = tag_name INNER JOIN post_tags USING (tag_id) WHERE mode IN ($1, $2) AND post_id = ANY($3::int[])"
-	rows, err = tx.Query(query, Prompt, AutoFix, posts)
+	rows, err = tx.Query(query, Prompt, AutoFix, pq.Array(posts))
 	if err != nil { return nil, err }
 	defer rows.Close()
 
@@ -1075,17 +1188,89 @@ func GetSuggestedPostEdits(posts []int, settings UpdaterSettings) (map[int]*Post
 		err = rows.Scan(&id, &cat, &first, &second, &mode)
 		if err != nil { return nil, err }
 
+		log.Println(id, cat, first, second, mode)
+
 		diff := populate(id, mode)
 
+		diff.RemoveTag(cat)
 		diff.AddTag(first)
 		diff.AddTag(second)
-		diff.RemoveTag(cat)
 	}
 
 	settings.Transaction.commit = mine
 	return results, nil
 }
 
+type PromptPostInfo struct {
+	PostId    int
+	MsgId     tgtypes.MsgID
+	ChatId    tgtypes.ChatID
+	Timestamp time.Time
+	Captioned bool
+	Edit     *PostSuggestedEdit
+}
 
+func GetAutoFixHistoryForPosts(posts []int, settings UpdaterSettings) (map[int][]apitypes.TagDiff, error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
+
+	query := "SELECT post_id, fix_change FROM autofix_history WHERE post_id = ANY($1::int[])"
+	rows, err := tx.Query(query, pq.Array(posts))
+	if err != nil { return nil, err }
+	defer rows.Close()
+
+	results := make(map[int][]apitypes.TagDiff)
+
+	for rows.Next()	{
+		var id int
+		var diff_string string
+
+		err = rows.Scan(&id, &diff_string)
+		if err != nil { return nil, err }
+
+		results[id] = append(results[id], apitypes.TagDiffFromString(diff_string))
+	}
+	
+	settings.Transaction.commit = mine
+	return results, nil
+}
+
+func FindPromptPost(id int, settings UpdaterSettings) (*PromptPostInfo, error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
+
+	var post_info PromptPostInfo
+	query := "SELECT post_id, msg_id, chat_id, msg_ts, msg_captioned, edit_list_json FROM prompt_posts WHERE post_id = $1"
+	err := tx.QueryRow(query, id).Scan(&post_info.PostId, &post_info.MsgId, &post_info.ChatId, &post_info.Timestamp, &post_info.Captioned, &post_info.Edit)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	} else {
+		return &post_info, nil
+	}
+}
+
+func SavePromptPost(id int, post_info *PromptPostInfo, settings UpdaterSettings) (error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
+
+	query := "DELETE FROM prompt_posts WHERE post_id = $1"
+	_, err := tx.Exec(query, id)
+	if err != nil { return err }
+
+	if post_info != nil {
+		query = "INSERT INTO prompt_posts (post_id, msg_id, chat_id, msg_ts, msg_captioned, edit_list_json) VALUES ($1, $2, $3, $4, $5, $6)"
+		_, err = tx.Exec(query, id, post_info.MsgId, post_info.ChatId, post_info.Timestamp, post_info.Captioned, post_info.Edit)
+		if err != nil { return err }
+	}
+
+	settings.Transaction.commit = mine
+	return nil
+}
 
 
