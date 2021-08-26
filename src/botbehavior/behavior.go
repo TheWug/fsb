@@ -158,8 +158,10 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 
 						if post != nil {
 							err = storage.UpdatePost(apitypes.TPostInfo{Id: id}, *post, settings)
-							if err != nil { bot.ErrorLog.Println("Failed to locally update post:", err.Error()) }
-							return
+							if err != nil {
+								bot.ErrorLog.Println("Failed to locally update post:", err.Error())
+								continue
+							}
 						}
 					}
 				}
