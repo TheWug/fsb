@@ -14,8 +14,7 @@ type FailedCall struct {
 func TagSearch(user, apitoken string, tags string, page int, limit int) (results types.TResultArray, e error) {
 	url := "/post/index.json"
 	r, e := api.New(url).
-			URLArgDefault("login", user, "").
-			URLArgDefault("password_hash", apitoken, "").
+			BasicAuthentication(user, apitoken).
 			URLArg("tags", tags).
 			URLArg("page", strconv.Itoa(page)).
 			URLArg("limit", strconv.Itoa(limit)).
@@ -42,8 +41,7 @@ func TestLogin(user, apitoken string) (bool, error) {
 	var canary interface{}
 
 	r, e := api.New(url).
-			URLArg("login", user).
-			URLArg("password_hash", apitoken).
+			BasicAuthentication(user, apitoken).
 			Into(&canary).
 			Do()
 
@@ -72,8 +70,7 @@ func ListTagHistory(user, apitoken string, limit int, before, after *int) (types
 	var hist types.THistoryArray
 
 	req := api.New(url).
-			URLArg("login", user).
-			URLArg("password_hash", apitoken).
+			BasicAuthentication(user, apitoken).
 			URLArg("limit", strconv.Itoa(limit)).
 			Into(&hist)
 	if before != nil { req.URLArg("before", strconv.Itoa(*before)) }
@@ -94,8 +91,7 @@ func ListOnePageOfTags(user, apitoken string, page int, list types.TTagInfoArray
 	var results types.TTagInfoArray
 
 	r, e := api.New(url).
-			URLArg("login", user).
-			URLArg("password_hash", apitoken).
+			BasicAuthentication(user, apitoken).
 			URLArg("limit", "10000").
 			URLArg("order", "date").
 			URLArg("show_empty_tags", "true").
@@ -119,8 +115,7 @@ func ListOnePageOfAliases(user, apitoken string, page int, list types.TAliasInfo
 	var aliases types.TAliasInfoArray
 
 	r, e := api.New(url).
-			URLArg("login", user).
-			URLArg("password_hash", apitoken).
+			BasicAuthentication(user, apitoken).
 			URLArg("limit", "10000").
 			URLArg("order", "date").
 			URLArg("approved", "true").
@@ -144,8 +139,7 @@ func ListOnePageOfPosts(user, apitoken string, before int) (types.TResultArray, 
 	var posts types.TResultArray
 
 	req := api.New(url).
-			URLArg("login", user).
-			URLArg("password_hash", apitoken).
+			BasicAuthentication(user, apitoken).
 			URLArg("limit", "10000").
 			Into(&posts)
 	if before > 0 { req.URLArg("before_id", strconv.Itoa(before)) }
@@ -168,8 +162,7 @@ func FetchOnePost(user, apitoken string, id int) (*types.TSearchResult, error) {
 	var post types.TSearchResult
 
 	r, e := api.New(url).
-			URLArg("login", user).
-			URLArg("password_hash", apitoken).
+			BasicAuthentication(user, apitoken).
 			URLArg("id", strconv.Itoa(id)).
 			Into(&post).
 			Do()
@@ -190,8 +183,7 @@ func ListOnePageOfDeletedPosts(user, apitoken string, page int) (types.TResultAr
 	var posts types.TResultArray
 
 	r, e := api.New(url).
-			URLArg("login", user).
-			URLArg("password_hash", apitoken).
+			BasicAuthentication(user, apitoken).
 			URLArg("limit", "10000").
 			URLArg("page", strconv.Itoa(page)).
 			Into(&posts).
@@ -212,8 +204,7 @@ func GetTagData(user, apitoken string, id int) (*types.TTagData, error) {
 	var tag types.TTagData
 
 	r, e := api.New(url).
-			URLArg("login", user).
-			URLArg("password_hash", apitoken).
+			BasicAuthentication(user, apitoken).
 			URLArg("id", strconv.Itoa(id)).
 			Into(&tag).
 			Do()
