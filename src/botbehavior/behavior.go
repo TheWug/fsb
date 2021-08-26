@@ -66,6 +66,7 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 	go func() {
 		for maintenances := 0; true; maintenances++ {
 			_ = <- channel
+			bot.Log.Println("Maintenance sync.")
 
 			var err error
 			extra_expensive := (maintenances % 144 == 143)
@@ -76,10 +77,10 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 			}
 
 			tagindex.SyncPostsInternal(this.MySettings.SearchUser, this.MySettings.SearchAPIKey, settings, extra_expensive, extra_expensive, nil, nil)
-			bot.Log.Println("sync complete")
 
 			settings.Transaction.MarkForCommit()
 			settings.Transaction.Finalize(true)
+			bot.Log.Println("Maintenance sync complete.")
 		}
 	}()
 	return channel

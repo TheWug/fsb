@@ -92,7 +92,6 @@ func handle_transaction(c *committer, tx *sql.Tx) {
 	if c.commit {
 		tx.Commit()
 	} else {
-		log.Println("wtf?")
 		tx.Rollback()
 	}
 }
@@ -288,10 +287,7 @@ func ClearPosts(settings UpdaterSettings) (error) {
 	table2 := "post_tags_by_name"
 	table3 := "post_index"
 
-	log.Println("doing truncate")
 	_, err := tx.Exec("TRUNCATE " + suf(table1) + ", " + suf(table2) + ", " + suf(table3))
-
-	log.Println("clear posts")
 
 	settings.Transaction.commit = mine && (err != nil)
 	return err
@@ -465,7 +461,6 @@ func PostUpdater(input chan apitypes.TPostInfo, settings UpdaterSettings) (error
 	}
 
 	settings.Transaction.commit = mine
-	log.Println("postupdater normal exit")
 	return nil
 }
 
@@ -683,16 +678,12 @@ func GetMostRecentlyUpdatedPost(settings UpdaterSettings) (*apitypes.TPostInfo, 
 	row := tx.QueryRow("SELECT post_id, post_change_seq, post_rating, post_description, post_hash FROM post_index ORDER BY post_change_seq DESC LIMIT 1")
 	err := row.Scan(&p.Id, &p.Change, &p.Rating, &p.Description, &p.Md5)
 
-	log.Println("get most recently updated post")
 
 	if err == sql.ErrNoRows {
-		log.Println("no rows")
 		return nil, nil
 	} else if err != nil {
 		return nil, err
 	}
-
-	log.Println("yes rows")
 
 	settings.Transaction.commit = mine
 	return &p, err
@@ -722,7 +713,6 @@ func ImportPostTagsFromNameToID(settings UpdaterSettings, sfx chan string) (erro
 
 	// check if the amount of new data is large relative to the size of the existing dataset (1% or more out of 10s of millions of rows usually)
 	if new_count * 20 > existing_count {
-		log.Println("doing it the long way")
 		// for performance reasons, it is much better to drop the indexes, do the import, and then recreate them,
 		// if we are importing a significant amount of data, compared to how much is already there, as individually
 		// performing an enormous number of index insertions is much more expensive than building the index from scratch.
@@ -766,21 +756,18 @@ func ImportPostTagsFromNameToID(settings UpdaterSettings, sfx chan string) (erro
 		_, err = tx.Exec(query)
 		if err != nil { return err }
 	} else {
-		log.Println("doing it the short way")
 		// if the amount of new data is not large compared to the amount of existing data, just one-by-one plunk them into the table.
 		status(" (1/2 tag clear overrides)")
 		query := "DELETE FROM " + suf(table1) + " WHERE post_id IN (SELECT DISTINCT post_id FROM " + suf(table2) + ")"
 		_, err = tx.Exec(query)
 		if err != nil { return err }
 
-		log.Println("doing it the short way p2")
 		status(" (2/2 tag gross-reference)")
 		query = "INSERT INTO " + suf(table1) + " SELECT post_id, tag_id FROM " + suf(table2) + " INNER JOIN " + suf(table3) + " USING (tag_name)"
 		_, err = tx.Exec(query)
 		if err != nil { return err }
 	}
 
-	log.Println("almost done")
 	_, err = tx.Exec("TRUNCATE " + suf(table2))
 	if err != nil { return err }
 

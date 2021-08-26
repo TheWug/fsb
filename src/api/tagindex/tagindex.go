@@ -173,7 +173,6 @@ func SyncTagsInternal(user, api_key string, settings storage.UpdaterSettings, ms
 	if err != nil { return err }
 	if last != nil { last_existing_tag_id = last.Id }
 	if last_existing_tag_id < 0 { last_existing_tag_id = 0 }
-	log.Println("last_existing_tag_id:", last_existing_tag_id)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -186,7 +185,6 @@ func SyncTagsInternal(user, api_key string, settings storage.UpdaterSettings, ms
 
 	for {
 		list, err := api.ListTags(user, api_key, types.ListTagsOptions{Page: types.After(last_existing_tag_id), Order: types.TSONewest, Limit: limit})
-		log.Println("list of", len(list))
 		if err != nil {
 			if consecutive_errors++; consecutive_errors == 10 {
 				// transient API errors are okay, they might be because of network issues or whatever, but give up if they last too long.
@@ -365,9 +363,7 @@ func SyncPostsCommand(ctx *gogram.MessageCtx) {
 	settings.Transaction, err = storage.NewTxBox()
 	if err != nil { log.Println(err.Error(), "newtxbox") }
 
-	log.Println("syncposts")
 	err = SyncPosts(ctx, settings, aliases, recount, nil, nil)
-	log.Println("syncposts done")
 	if err == storage.ErrNoLogin {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
@@ -406,7 +402,6 @@ func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSetting
 	}
 
 	message("Syncing posts... ")
-	log.Println("syncposts start")
 
 	if settings.Full {
 		err := storage.ClearPosts(settings)
@@ -414,8 +409,6 @@ func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSetting
 			log.Println(err.Error(), "clearposts")
 		}
 	}
-
-	log.Println("syncposts cleared posts")
 
 	api_timeout := time.NewTicker(750 * time.Millisecond)
 	defer api_timeout.Stop()
@@ -428,7 +421,6 @@ func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSetting
 	last, err := storage.GetMostRecentlyUpdatedPost(settings)
 	if err != nil { return err }
 	if last != nil { latest_change_seq = last.Change }
-	log.Println("syncposts really going now")
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -487,27 +479,19 @@ func SyncPostsInternal(user, api_key string, settings storage.UpdaterSettings, a
 
 	message("Syncing activity... ")
 
-	log.Println("synconlyposts")
 	if err := SyncOnlyPostsInternal(user, api_key, settings, msg, sfx); err != nil { return err }
-
-	log.Println("synctags")
 	if err := SyncTagsInternal(user, api_key, settings, msg, sfx); err != nil { return err }
 
 	if aliases_too {
-		log.Println("syncaliases")
 		if err := SyncAliasesInternal(user, api_key, settings, msg, sfx); err != nil { return err }
 	}
 
 	message("Resolving post tags...")
 
-	log.Println("importposttagsfromname")
 	if err := storage.ImportPostTagsFromNameToID(settings, sfx); err != nil { return err }
 
 	if recount_too {
-		log.Println("recounttags")
 		if err := RecountTagsInternal(settings, msg, sfx); err != nil { return err }
-
-		log.Println("calculatealiascounts")
 		if err := CalculateAliasedCountsInternal(settings, msg, sfx); err != nil { return err }
 	}
 	suffix(" done.")
@@ -571,7 +555,6 @@ func SyncAliasesInternal(user, api_key string, settings storage.UpdaterSettings,
 
 	for {
 		list, err := api.ListTagAliases(user, api_key, types.ListTagAliasOptions{Limit: 10000, Page: page, Order: types.ASOCreated, Status: types.ASActive})
-		log.Println("got aliases", len(list))
 		if err != nil {
 			if consecutive_errors++; consecutive_errors == 10 {
 				// transient API errors are okay, they might be because of network issues or whatever, but give up if they last too long.
