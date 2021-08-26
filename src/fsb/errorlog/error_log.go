@@ -30,14 +30,14 @@ func RedirectLog(file string) (error) {
 	return nil
 }
 
-func ErrorLog(prefix string, file_and_line string, e error) {
+func ErrorLog(logger *log.Logger, prefix string, file_and_line string, e error) {
 	if e != nil {
 		log.Printf("[%-8.s] (%s) Error: %s", prefix, file_and_line, e.Error())
 	}
 }
 
-func ErrorLogFatal(prefix string, file_and_line string, e error, code int) {
-	ErrorLog(prefix, file_and_line, e)
+func ErrorLogFatal(logger *log.Logger, prefix string, file_and_line string, e error, code int) {
+	ErrorLog(logger, prefix, file_and_line, e)
 
 	if e != nil {
 		os.Exit(code)

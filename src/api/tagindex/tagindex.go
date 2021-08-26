@@ -3,6 +3,7 @@ package tagindex
 import (
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"
+	"github.com/meirf/gopart"
 
 	"api"
 	"api/types"
@@ -19,6 +20,7 @@ import (
 	"errors"
 	"sort"
 	"strings"
+	"math/rand"
 	"sync"
 )
 
@@ -116,7 +118,7 @@ func SyncTagsExternal(ctx *gogram.MessageCtx) {
 		}
 	}
 
-	err := SyncTags(ctx, full, nil, nil)
+	err := SyncTags(ctx, storage.UpdaterSettings{Full: full}, nil, nil)
 	if err == storage.ErrNoLogin {
 		ctx.ReplyOrPMAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
 		return
@@ -125,12 +127,12 @@ func SyncTagsExternal(ctx *gogram.MessageCtx) {
 	}
 }
 
-func SyncTags(ctx *gogram.MessageCtx, full bool, msg, sfx chan string) (error) {
+func SyncTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
 	user, api_key, janitor, err := storage.GetUserCreds(ctx.Msg.From.Id)
 	if err != nil || !janitor { return err }
 
 	m := "Syncing tag database..."
-	if full { m = "Full syncing tag database..." }
+	if settings.Full { m = "Full syncing tag database..." }
 	if msg == nil || sfx == nil {
 		msg, sfx = ProgressMessage(ctx, m, "")
 		defer close(msg)
@@ -139,8 +141,8 @@ func SyncTags(ctx *gogram.MessageCtx, full bool, msg, sfx chan string) (error) {
 		msg <- m
 	}
 
-	if full {
-		storage.ClearTagIndex()
+	if settings.Full {
+		storage.ClearTagIndex(settings)
 	}
 
 	api_timeout := time.NewTicker(750 * time.Millisecond)
@@ -153,17 +155,17 @@ func SyncTags(ctx *gogram.MessageCtx, full bool, msg, sfx chan string) (error) {
 	max_tag_id := 0
 	last_existing_tag_id := -1
 	consecutive_errors := 0
-	last, err := storage.GetLastTag()
+	last, err := storage.GetLastTag(settings)
 	if last != nil { last_existing_tag_id = last.Id }
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		storage.TagUpdater(fixed_tags)
+		storage.TagUpdater(fixed_tags, settings)
 		wg.Done()
 	}()
 	defer api_timeout.Stop()
-	defer storage.FixTagsWhichTheAPIManglesByAccident()
+	defer storage.FixTagsWhichTheAPIManglesByAccident(settings)
 
 	for {
 		list, cont, page, err = api.ListOnePageOfTags(user, api_key, page, nil)
@@ -194,7 +196,7 @@ func SyncTags(ctx *gogram.MessageCtx, full bool, msg, sfx chan string) (error) {
 		}
 
 		if !cont { break }
-		
+
 		<- api_timeout.C
 		_ = page
 	}
@@ -203,7 +205,7 @@ func SyncTags(ctx *gogram.MessageCtx, full bool, msg, sfx chan string) (error) {
 	wg.Wait()
 
 	msg <- "Resolving phantom tags..."
-	storage.ResolvePhantomTags()
+	storage.ResolvePhantomTags(settings)
 
 	sfx <- " done."
 	return nil
@@ -252,6 +254,35 @@ func RecountTags(ctx *gogram.MessageCtx, msg, sfx chan string) (error) {
 	return err
 }
 
+const (
+	SYNC_BEGIN = 0
+	SYNC_BEGIN_FULL = iota
+	SYNC_BEGIN_INCREMENTAL = iota
+
+	SYNC_RESETSTAGING = iota
+	SYNC_TAGCHECKPOINT = iota
+	SYNC_VISIBLE = iota
+	SYNC_DELETED = iota
+	SYNC_GHOSTED = iota
+	SYNC_INCREMENTAL_HISTORY = iota
+	SYNC_TAGS = iota
+	SYNC_TAGNORMALIZE = iota
+
+	SYNC_STAGEPROMOTE = iota
+
+	SYNC_DONE = iota
+	SYNC_ERROR = iota
+	SYNC_BREAK = iota
+)
+
+type SearchChanBox struct {
+	Channel chan types.TSearchResult
+}
+
+func (this *SearchChanBox) Close() {
+	close(this.Channel)
+}
+
 func SyncPosts(ctx *gogram.MessageCtx) {
 	user, api_key, janitor, err := storage.GetUserCreds(ctx.Msg.From.Id)
 	if err != nil || !janitor {
@@ -259,12 +290,10 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	var full, restart bool
+	settings := storage.UpdaterSettings{}
 	for _, token := range ctx.Cmd.Args {
 		if token == "--full" {
-			full = true
-		} else if token == "--restart" {
-			restart = true
+			settings.Full = true
 		}
 	}
 
@@ -272,22 +301,53 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 	defer close(msg)
 	defer close(sfx)
 
+	state, substate := SYNC_BEGIN, 0
 	checkpoint, err := storage.GetTagHistoryCheckpoint()
 
-	state, _ := storage.GetMigrationState()
-	if restart { state = 0 }
-	if full || state != 0 || checkpoint == 0 {
-		if state == 0 {
-			state = 1
-			storage.SetMigrationState(state, 0)
+	if err != nil {
+		m := fmt.Sprintf("Error during storage.GetTagHistoryCheckpoint: %s", err.Error())
+		ctx.Bot.ErrorLog.Println(m)
+		msg <- m
+		return
+	}
+
+	// we don't need to do a full sync if one wasn't requested, or if we have a saved checkpoint.
+	if !settings.Full && checkpoint != 0 {
+		// attempt to resume a sync in progress
+		state, substate, settings.Full = storage.GetMigrationState()
+
+		// if we're resuming a full sync, bodge in the correct staging suffix.
+		if settings.Full {
+			settings.TableSuffix = "staging"
 		}
-		if state == 1 {
-			msg <- "Resetting post database..."
- 			storage.ResetPostTags()
-			state += 1
-			storage.SetMigrationState(state, 0)
-		}
-		if state == 2 {
+	}
+
+	for {
+		switch state {
+
+		// beginning states (non-resumes SHOULD start in one of these)
+		case SYNC_BEGIN:
+			if settings.Full {
+				state = SYNC_BEGIN_FULL
+			} else {
+				state = SYNC_BEGIN_INCREMENTAL
+			}
+			storage.SetMigrationState(state, 0, settings.Full)
+		case SYNC_BEGIN_FULL:
+			settings.TableSuffix = "staging"
+			state = SYNC_RESETSTAGING
+			storage.SetMigrationState(state, 0, settings.Full)
+		case SYNC_BEGIN_INCREMENTAL:
+			state = SYNC_INCREMENTAL_HISTORY
+			storage.SetMigrationState(state, 0, settings.Full)
+
+		// full sync states
+		case SYNC_RESETSTAGING:
+			msg <- "Preparing sync environment..."
+			storage.SetupSyncStagingEnvironment(settings)
+			state = SYNC_TAGCHECKPOINT
+			storage.SetMigrationState(state, 0, settings.Full)
+		case SYNC_TAGCHECKPOINT:
 			msg <- "Updating tag history checkpoint..."
 			hist, err := api.ListTagHistory(user, api_key, 1, nil, nil)
 			if err != nil || len(hist) == 0 {
@@ -296,31 +356,41 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 				return
 			}
 
-			storage.SetTagHistoryCheckpoint(hist[0].Id)
+			storage.SetTagHistoryCheckpoint(hist[0].Id, settings)
 			checkpoint = hist[0].Id
 
-			state += 1
-			storage.SetMigrationState(state, 0)
-		}
-		if state == 3 {
+			state = SYNC_VISIBLE
+			storage.SetMigrationState(state, 0, settings.Full)
+		case SYNC_VISIBLE:
+			success := func() bool {
 			msg <- "Downloading visible posts..."
 			api_timeout := time.NewTicker(750 * time.Millisecond)
-			posts := make(chan types.TSearchResult)
 
 			defer api_timeout.Stop()
-			go storage.PostUpdater(posts, false)
 
-			before := 0
+			before := substate
 			cont := true
-			max_post_id := 0
+			max_post_id := storage.GetHighestStagedPostID(settings)
 			var list types.TResultArray
 			var err error
+			var wg sync.WaitGroup
 
 			for {
 				list, cont, before, err = api.ListOnePageOfPosts(user, api_key, before)
 				if err != nil {
-					fmt.Printf("Error when calling api: %s", err.Error())
+					m := fmt.Sprintf("Error when calling api: %s", err.Error())
+					msg <- m
+					ctx.Bot.ErrorLog.Println(m)
+					return false
 				}
+
+				posts := make(chan types.TSearchResult)
+				wg.Add(1)
+				go func(_state, _substate int) {
+					storage.PostUpdater(posts, settings)
+					wg.Done()
+					storage.SetMigrationState(_state, _substate, settings.Full)
+				}(state, before)
 
 				for i, p := range list {
 					if max_post_id < p.Id {
@@ -330,34 +400,51 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 					posts <- p
 				}
 
+				close(posts)
+
 				if !cont { break }
 				<- api_timeout.C
 			}
 
-			close(posts)
 			sfx <- "done."
-			state += 1
-			storage.SetMigrationState(state, 0)
-		}
-		if state == 4 {
+			wg.Wait()
+			state = SYNC_DELETED
+			substate = 0
+			storage.SetMigrationState(state, 0, settings.Full)
+			return true
+			}()
+			if !success { state = SYNC_ERROR }
+		case SYNC_DELETED:
+			success := func() bool {
 			msg <- "Downloading deleted posts..."
 			api_timeout := time.NewTicker(750 * time.Millisecond)
-			posts := make(chan types.TSearchResult)
 
 			defer api_timeout.Stop()
-			go storage.PostUpdater(posts, false)
 
-			page := 1
+			page := substate
+			if page == 0 { page = 1 }
 			cont := true
 			max_post_id := 0
 			var list types.TResultArray
 			var err error
+			var wg sync.WaitGroup
 
 			for {
 				list, cont, page, err = api.ListOnePageOfDeletedPosts(user, api_key, page)
 				if err != nil {
-					fmt.Printf("Error when calling api: %s", err.Error())
+					m := fmt.Sprintf("Error when calling api: %s", err.Error())
+					msg <- m
+					ctx.Bot.ErrorLog.Println(m)
+					return false
 				}
+
+				posts := make(chan types.TSearchResult)
+				wg.Add(1)
+				go func(_state, _substate int) {
+					storage.PostUpdater(posts, settings)
+					wg.Done()
+					storage.SetMigrationState(_state, _substate, settings.Full)
+				}(state, page)
 
 				for i, p := range list {
 					if max_post_id < p.Id {
@@ -367,116 +454,197 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 					posts <- p
 				}
 
+				close(posts)
+
 				if !cont { break }
 				<- api_timeout.C
 			}
 
-			close(posts)
 			sfx <- " done."
-			state += 1
-			storage.SetMigrationState(state, 0)
-		}
-		if state == 5 {
+			wg.Wait()
+			state = SYNC_GHOSTED
+			substate = 0
+			storage.SetMigrationState(state, 0, settings.Full)
+			return true
+			}()
+			if !success { state = SYNC_ERROR }
+		case SYNC_GHOSTED:
+			// this process is intrinsically resumable and no special logic is needed to accomplish that
+			success := func() bool {
 			msg <- "Scanning post gaps for stragglers..."
 			api_timeout := time.NewTicker(750 * time.Millisecond)
-			posts := make(chan types.TSearchResult)
 
 			defer api_timeout.Stop()
-			go storage.PostUpdater(posts, false)
 
-			gap_ids, err := storage.FindPostGaps()
+			gap_ids, err := storage.FindPostGaps(substate, settings)
 			if (err != nil) {
-				msg <- fmt.Sprintf("An error occurred when fetching post gaps: %s", err.Error())
-				return
+				m := fmt.Sprintf("An error occurred when fetching post gaps: %s", err.Error())
+				msg <- m
+				ctx.Bot.ErrorLog.Println(m)
+				return false
 			}
 
-			for i, id := range gap_ids {
-				post, err := api.FetchOnePost(user, api_key, id)
+			var wg sync.WaitGroup
+
+			for partition := range gopart.Partition(len(gap_ids), 10) {
+				posts := make(chan types.TSearchResult)
+				wg.Add(1)
+				go func(_state, _substate int) {
+					storage.PostUpdater(posts, settings)
+					wg.Done()
+					storage.SetMigrationState(_state, _substate, settings.Full)
+				}(state, gap_ids[partition.High - 1])
+
+				for i, id := range gap_ids[partition.Low: partition.High] {
+					post, err := api.FetchOnePost(user, api_key, id)
+					if err != nil {
+						m := fmt.Sprintf("Error when calling api: %s", err.Error())
+						msg <- m
+						ctx.Bot.ErrorLog.Println(m)
+						close(posts)
+						return false
+					}
+
+					if post != nil {
+						posts <- *post
+					}
+
+					sfx <- Percent(i + partition.Low, len(gap_ids))
+
+					<- api_timeout.C
+				}
+
+				close(posts)
+			}
+
+			sfx <- " done."
+			wg.Wait()
+			state = SYNC_INCREMENTAL_HISTORY
+			substate = 0
+			storage.SetMigrationState(state, 0, settings.Full)
+			return true
+			}()
+			if !success { state = SYNC_ERROR }
+
+		// incremental sync states
+		case SYNC_INCREMENTAL_HISTORY:
+			success := func() bool {
+			msg <- "Fetching history delta since last checkpoint..."
+			api_timeout := time.NewTicker(750 * time.Millisecond)
+			var wg sync.WaitGroup
+
+			defer api_timeout.Stop()
+
+			history_updates := make(map[int]int)
+
+			var new_checkpoint int
+			var last *int
+			if substate != 0 { last = &substate }
+			for {
+				history, err := api.ListTagHistory(user, api_key, 10000, nil, last)
+				if len(history) == 0 { err = errors.New("api.ListTagHistory produced an empty list") }
 				if err != nil {
-					fmt.Printf("Error when calling api: %s", err.Error())
+					m := fmt.Sprintf("Error when calling api: %s", err.Error())
+					msg <- m
+					ctx.Bot.ErrorLog.Println(m)
+					return false
 				}
 
-				if post != nil {
-					posts <- *post
-				}
+				last = &history[len(history) - 1].Id
 
-				sfx <- Percent(i, len(gap_ids))
+				posts := make(chan types.TSearchResult)
+				wg.Add(1)
+				go func(_state, _substate int) {
+					storage.PostUpdater(posts, settings)
+					wg.Done()
+					storage.SetMigrationState(_state, _substate, settings.Full)
+				}(state, *last)
+
+				if new_checkpoint == 0 { new_checkpoint = history[0].Id }
+
+				var h types.TTagHistory
+				for _, h = range history {
+					if h.Id <= checkpoint { break }
+
+					_, ok := history_updates[h.Post_id]
+					if ok { continue }
+
+					history_updates[h.Post_id] = h.Post_id
+					posts <- types.TSearchResult{Id: h.Post_id, Tags: h.Tags}
+				}
+				sfx <- Percent(new_checkpoint - *last, new_checkpoint - checkpoint)
+				close(posts)
+				if h.Id == checkpoint { break }
 
 				<- api_timeout.C
 			}
 
-			close(posts)
 			sfx <- " done."
-			state += 1
-			storage.SetMigrationState(state, 0)
-		}
-		if state == 6 {
-			SyncTags(ctx, false, msg, sfx)
-			state += 1
-			storage.SetMigrationState(state, 0)
-		}
-		if state == 7 {
+
+			msg <- "Writing new checkpoint..."
+			storage.SetTagHistoryCheckpoint(new_checkpoint, settings)
+			wg.Wait()
+			state = SYNC_TAGS
+			return true
+			}()
+			if !success { state = SYNC_ERROR }
+		case SYNC_TAGS:
+			SyncTags(ctx, settings, msg, sfx)
+			state = SYNC_TAGNORMALIZE
+			storage.SetMigrationState(state, 0, settings.Full)
+		case SYNC_TAGNORMALIZE:
 			msg <- "Resolving post tags..."
-			err := storage.ImportPostTagsFromNameToID(sfx)
+			err := storage.ImportPostTagsFromNameToID(settings, sfx)
 			if (err != nil) {
-				msg <- fmt.Sprintf("An error occurred when normalizing post tags: %s", err.Error())
-				return
+				m := fmt.Sprintf("An error occurred when normalizing post tags: %s", err.Error())
+				msg <- m
+				ctx.Bot.ErrorLog.Println(m)
+				state = SYNC_BREAK
+				break
 			}
-			state += 1
-			storage.SetMigrationState(state, 0)
+			state = SYNC_STAGEPROMOTE
+			storage.SetMigrationState(state, 0, settings.Full)
+
+		// promotion stages
+		case SYNC_STAGEPROMOTE:
+			msg <- "Promoting staging tablespace..."
+			// this is a no-op if you're not using a staging environment, e.g. if you do an incremental
+			// sync by itself (which is instead clumped into one giant transaction)
+			err := storage.ResetIntermediateEnvironment(settings)
+			if err != nil {
+				err = storage.PromoteStagingEnvironment(settings)
+			}
+			if (err != nil) {
+				m := fmt.Sprintf("An error occurred when promoting stage space: %s", err.Error())
+				msg <- m
+				ctx.Bot.ErrorLog.Println(m)
+				state = SYNC_BREAK
+				break
+			}
+			state = SYNC_DONE
+			storage.SetMigrationState(state, 0, settings.Full)
+
+		// finish-success stage
+		case SYNC_DONE:
+			RecountTags(ctx, msg, sfx)
+			CalculateAliasedCounts(ctx, msg, sfx)
+			sfx <- " done."
+			storage.SetMigrationState(SYNC_BEGIN, 0, false)
+			state = SYNC_BREAK
+			break
+
+		// finish-error stage
+		case SYNC_ERROR:
+			// put some proper error reporting mechanism here
+			state = SYNC_BREAK
+			break
+
 		}
-		sfx <- " done."
-		storage.SetMigrationState(0, 0)
-	}
 
-	msg <- "Fetching history delta since last checkpoint..."
-	history_updates := make(map[int]int)
-
-	posts := make(chan types.TSearchResult)
-	go storage.PostUpdater(posts, true)
-
-	var new_checkpoint int
-	var last *int
-	for {
-		history, err := api.ListTagHistory(user, api_key, 10000, nil, last)
-		if len(history) == 0 || err != nil {
-			sfx <- fmt.Sprintf(" (error: %s)", err.Error())
-			return
+		if state == SYNC_BREAK {
+			break
 		}
-
-		if new_checkpoint == 0 { new_checkpoint = history[0].Id }
-
-		var h types.TTagHistory
-		for _, h = range history {
-			if h.Id <= checkpoint { break }
-
-			_, ok := history_updates[h.Post_id]
-			if ok { continue }
-
-			history_updates[h.Post_id] = h.Post_id
-			posts <- types.TSearchResult{Id: h.Post_id, Tags: h.Tags}
-		}
-		last = &h.Id
-		sfx <- Percent(new_checkpoint - *last, new_checkpoint - checkpoint)
-		if h.Id == checkpoint { break }
 	}
-	close(posts)
-
-	SyncTags(ctx, false, msg, sfx)
-
-	msg <- "Resolving post tags..."
-	err = storage.ImportPostTagsFromNameToID(sfx)
-	if (err != nil) {
-		msg <- fmt.Sprintf("An error occurred when normalizing post tags: %s", err.Error())
-		return
-	}
-
-	msg <- "Writing new checkpoint..."
-	storage.SetTagHistoryCheckpoint(new_checkpoint)
-
-	RecountTags(ctx, msg, sfx)
-	CalculateAliasedCounts(ctx, msg, sfx)
-	sfx <- " done."
 }
 
 func UpdateAliases(ctx *gogram.MessageCtx) {
@@ -529,7 +697,7 @@ func UpdateAliases(ctx *gogram.MessageCtx) {
 
 const (
 	STATE_READY = 0
-	STATE_COUNT = 1
+	STATE_COUNT = iota
 )
 
 func Percent(current, max int) (string) {
@@ -555,7 +723,7 @@ func RecountNegativeReal(user, api_key string, skip_update bool, broken_tags typ
 		time.Sleep(3250 * time.Millisecond)
 
 		fixed_tags := make(chan types.TTagData)
-		go storage.TagUpdater(fixed_tags)
+		go storage.TagUpdater(fixed_tags, storage.UpdaterSettings{})
 
 		message = fmt.Sprintf("%s (done).\nRefetching jiggled tags", message)
 
@@ -720,6 +888,10 @@ const (
 	MODE_EXCLUDE = iota
 	MODE_INCLUDE = iota
 	MODE_THRESHHOLD = iota
+	MODE_FREQ_RATIO = iota
+	MODE_IGNORE = iota
+	MODE_UNIGNORE = iota
+	MODE_FIX = iota
 )
 
 type TagEditBox struct {
@@ -914,7 +1086,6 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 			for _, p := range posts {
 				newtags := NewTagsFromOldTags(p.Tags, map[string]bool{v.Tag.Name: true}, map[string]bool{start_tag: true})
 				newp, err := api.UpdatePost(user, api_key, p.Id, &p.Tags, &newtags, nil, nil, nil, nil, &reason)
-				err = nil
 				if err != nil {
 					sfx <- fmt.Sprintf(" (error: %s)", err.Error())
 					return
@@ -1013,31 +1184,187 @@ type Triplet struct {
 }
 
 func Concatenations(ctx *gogram.MessageCtx) {
-	tags, _ := storage.EnumerateAllTags(storage.EnumerateControl{})
-	tagmap := make(map[string]types.TTagData, len(tags))
-	var candidates []Triplet
-	for _, t := range tags {
-		tagmap[t.Name] = t
-	}
+	user, api_key, janitor, err := storage.GetUserCreds(ctx.Msg.From.Id)
+	if err != nil || !janitor { return }
 
-	for k, v := range tagmap {
-		if v.Count == 0 { continue } // skip anything with no posts.
-		runes := []rune(k)
-		for i := 1; i < len(runes) - 1; i++ {
-			prefix, prefix_ok := tagmap[string(runes[:i])]
-			suffix, suffix_ok := tagmap[string(runes[i:])]
-			if prefix_ok && suffix_ok && 10*v.Count < prefix.Count && 10*v.Count < suffix.Count && v.Type == types.General {
-				candidates = append(candidates, Triplet{tag: v, subtag1: prefix, subtag2: suffix})
+	var cats []Triplet
+	header := "Here are some random concatenated tags:"
+	if ctx.Msg.Reply_to_message != nil {
+		text := ctx.Msg.Reply_to_message.Text
+		if text != nil {
+			prev_cats := strings.Split(*text, "\n")
+			if prev_cats[0] == header {
+				prev_cats = prev_cats[1:]
+				for _, line := range prev_cats {
+					var t Triplet
+					tokens := strings.Split(line, " ")
+					t.subtag1.Name = strings.TrimSuffix(tokens[1], ",")
+					t.subtag2.Name = tokens[2]
+					t.tag.Name = t.subtag1.Name + t.subtag2.Name
+					cats = append(cats, t)
+				}
 			}
 		}
 	}
 
-	sort.Slice(candidates, func(i, j int) (bool) {
-		return len(candidates[i].tag.Name) > len(candidates[j].tag.Name)
-	})
+	ratio := 10
+	mode := MODE_READY
+	var fix_list, ignore_list []int
+	var manual_ignore, manual_unignore []string
 
-	for i, triplet := range candidates {
-		if i > 500 { break }
-		log.Printf("%7d %s: %s + %s\n", triplet.tag.Count, triplet.tag.Name, triplet.subtag1.Name, triplet.subtag2.Name)
+	for _, token := range ctx.Cmd.Args {
+		token = strings.Replace(strings.ToLower(token), "\uFE0F", "", -1)
+		if token == "--frequency-ratio" {
+			mode = MODE_FREQ_RATIO
+		} else if token == "--ignore" {
+			mode = MODE_IGNORE
+		} else if token == "--unignore" {
+			mode = MODE_UNIGNORE
+		} else if token == "--fix" {
+			mode = MODE_FIX
+		} else if mode == MODE_FREQ_RATIO {
+			temp, err := strconv.Atoi(token)
+			if err == nil { ratio = temp }
+		} else if mode == MODE_IGNORE {
+			manual_ignore = append(manual_ignore, token)
+			temp, err := strconv.Atoi(token)
+			if err == nil { ignore_list = append(ignore_list, temp) }
+		} else if mode == MODE_UNIGNORE {
+			manual_unignore = append(manual_unignore, token)
+		} else if mode == MODE_FIX {
+			temp, err := strconv.Atoi(token)
+			if err == nil { fix_list = append(fix_list, temp) }
+		}
 	}
+
+	if cats == nil {
+		var message bytes.Buffer
+		for _, tag := range manual_ignore {
+			storage.SetCatsException(tag)
+			message.WriteString(fmt.Sprintf("Adding to ignore list: <code>%s</code>\n", tag))
+		}
+		for _, tag := range manual_unignore {
+			storage.ClearCatsException(tag)
+			message.WriteString(fmt.Sprintf("Removing from ignore list: <code>%s</code>\n", tag))
+		}
+
+		if manual_ignore != nil || manual_unignore != nil {
+			ctx.ReplyAsync(data.OMessage{Text: message.String(), ParseMode: data.HTML}, nil)
+			return
+		}
+
+		tags, _ := storage.EnumerateAllTags(storage.EnumerateControl{})
+		exceptions, _ := storage.EnumerateCatsExceptions()
+
+		tagmap := make(map[string]types.TTagData, len(tags))
+		exceptionmap := make(map[string]bool, len(exceptions))
+
+		for _, t := range exceptions {
+			exceptionmap[t] = true
+		}
+
+		for _, t := range tags {
+			if !exceptionmap[t.Name] && len(t.Name) > 3 {
+				tagmap[t.Name] = t
+			}
+		}
+
+		var candidates []Triplet
+
+		for k, v := range tagmap {
+			if v.Count == 0 { continue } // skip anything with no posts.
+			if v.Type != types.General { continue } // skip anything that's not a general tag.
+			runes := []rune(k)
+			for i := 1; i < len(runes) - 1; i++ {
+				prefix, prefix_ok := tagmap[string(runes[:i])]
+				suffix, suffix_ok := tagmap[string(runes[i:])]
+				if prefix_ok && suffix_ok && ratio * v.Count < prefix.Count && ratio * v.Count < suffix.Count && v.Type == types.General {
+					candidates = append(candidates, Triplet{tag: v, subtag1: prefix, subtag2: suffix})
+				}
+			}
+		}
+
+		message.WriteString(header + "\n")
+
+		for i := 0; i < 10; i++ {
+			cats = append(cats, candidates[rand.Intn(len(candidates))])
+		}
+
+		for i, t := range cats {
+			message.WriteString(fmt.Sprintf("%d: <code>%s</code>, <code>%s</code> (%d)\n", i, t.subtag1.Name, t.subtag2.Name, t.tag.Count))
+		}
+
+		ctx.ReplyAsync(data.OMessage{Text: message.String(), ParseMode: data.HTML}, nil)
+		return
+	}
+
+	msg, sfx := ProgressMessage(ctx, "", "")
+	var message bytes.Buffer
+	for _, i := range ignore_list {
+		storage.SetCatsException(cats[i].tag.Name)
+		msg <- fmt.Sprintf("Adding %d to ignore list: <code>%s</code>\n", i, cats[i].tag.Name)
+	}
+	msg <- "\nUpdating posts which need fixing... "
+
+	api_timeout := time.NewTicker(750 * time.Millisecond)
+	updated := 1
+	for _, i := range fix_list {
+		t, err := storage.GetTag(cats[i].tag.Name, storage.EnumerateControl{})
+		cats[i].tag = *t
+		posts, err := storage.LocalTagSearch(cats[i].tag)
+		if err != nil {
+			sfx <- fmt.Sprintf(" (error: %s)", err.Error())
+			return
+		}
+
+		reason := fmt.Sprintf("Bulk retag: %s --> %s, %s (fixed concatenated tags)", cats[i].tag.Name, cats[i].subtag1.Name, cats[i].subtag2.Name)
+		for _, p := range posts {
+			newtags := NewTagsFromOldTags(p.Tags, map[string]bool{cats[i].tag.Name: true}, map[string]bool{cats[i].subtag1.Name: true, cats[i].subtag2.Name: true})
+			newp, err := api.UpdatePost(user, api_key, p.Id, &p.Tags, &newtags, nil, nil, nil, nil, &reason)
+			err = nil
+			if err != nil {
+				sfx <- fmt.Sprintf(" (error: %s)", err.Error())
+				return
+			}
+
+			if newp != nil {
+				err = storage.UpdatePost(p, *newp)
+				if err != nil {
+					sfx <- fmt.Sprintf(" (error: %s)", err.Error())
+					return
+				}
+			}
+
+			sfx <- fmt.Sprintf(" (%d/%d %d: <code>%s</code> -> <code>%s</code>, <code>%s</code>)", updated, -1, p.Id, cats[i].tag.Name, cats[i].subtag1.Name, cats[i].subtag2.Name)
+
+			<- api_timeout.C
+			updated++
+		}
+		sfx <- " done."
+		api_timeout.Stop()
+		message.WriteString(fmt.Sprintf("Fixing %d: <code>%s</code> -> <code>%s, %s</code>\n", i, cats[i].tag.Name, cats[i].subtag1.Name, cats[i].subtag2.Name))
+	}
+	ctx.ReplyAsync(data.OMessage{Text: message.String(), ParseMode: data.HTML}, nil)
 }
+
+// func BulkSearch(searchtags string)
+
+/*
+func BulkRetag(searchtags, applytags string) {
+        expression_tokens := Tokenize(searchtags)
+        search_expression := Parse(expression_tokens)
+        sql_format_string, sql_tokens := Serialize(search_expression)
+        for k, v := range sql_tokens {
+            sql_tokens[k] = pq.QuoteLiteral(v)
+        }
+        replace["tag_id"] = "tag_id"
+        replace["tag_index"] = "tag_index"
+        replace["tag_name"] = "tag_name"
+        replace["temp"] = "x"
+        var buf bytes.Buffer
+        template.Must(template.New("decoder").Parse(sql_format_string)).Execute(&buf, sql_tokens)
+        sql_substring := buf.String()
+
+        // TODO finish this
+}
+*/

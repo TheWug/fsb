@@ -95,23 +95,21 @@ func ConvertApiResultToTelegramInline(result types.TSearchResult, force_safe boo
 	return nil
 }
 
-func Offset(last string) (y int) {
-	var e error
-	y, e = strconv.Atoi(last)
-	if e != nil && last == "" {
-		y = 1
-	} else if e != nil {
-		y = -1
+func Offset(last string) (int, error) {
+	if last == "" {
+		last = "0"
 	}
-	return
+
+	return strconv.Atoi(last)
 }
 
 func GenerateDebugText(iqr interface{}, result types.TSearchResult) {
-
+	md := data.Markdown
+	t := true
 	imt := data.TInputMessageTextContent{
 		Message_text: "",
-		Parse_mode: "Markdown",
-		No_preview: true,
+		Parse_mode: &md,
+		No_preview: &t,
 	}
 
 	switch v := iqr.(type) {

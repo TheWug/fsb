@@ -4,26 +4,34 @@ import (
 	"api/types"
 	"strconv"
 	"log"
+	"fmt"
 )
 
 type FailedCall struct {
 	Success bool `json:"success"`
 }
 
-func TagSearch(tags string, page int, limit int) (results types.TResultArray, e error) {
+func TagSearch(user, apitoken string, tags string, page int, limit int) (results types.TResultArray, e error) {
 	url := "/post/index.json"
 	r, e := api.New(url).
+			URLArgDefault("login", user, "").
+			URLArgDefault("password_hash", apitoken, "").
 			URLArg("tags", tags).
 			URLArg("page", strconv.Itoa(page)).
 			URLArg("limit", strconv.Itoa(limit)).
 			Into(&results).
 			Do()
 
+	caller := "unauthenticated"
+	if user != "" {
+		caller = fmt.Sprintf("as %s", user)
+	}
+
 	if e != nil {
-		log.Printf("[api     ] API call: %s (ERROR: %s)\n", url, e.Error())
+		log.Printf("[api     ] API call: %s [%s] (ERROR: %s)\n", url, caller, e.Error())
 		return
 	} else if r != nil {
-		log.Printf("[api     ] API call: %s (%s, %d results)\n", url, r.Status, len(results))
+		log.Printf("[api     ] API call: %s [%s] (%s, %d results)\n", url, caller, r.Status, len(results))
 	}
 
 	return

@@ -17,12 +17,14 @@ import (
 	"html"
 	"io/ioutil"
 	"io"
+	"text/template"
 
 	"errors"
 
 	"errors"
 
 	"github.com/kballard/go-shellquote"
+	"github.com/lib/pq"
 )
 
 const (
@@ -1089,5 +1091,20 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 	
 		reason := "API Update Test (should be NOOP)"
 		api.UpdatePost(user, apikey, post, &oldtags, &newtags, &rating, &parent_post, &sources, &description, &reason)
+	} else if ctx.Cmd.Command == "/parseexpression" {
+		if len(ctx.Cmd.Args) < 1 { return }
+		tokens := tagindex.Tokenize(ctx.Cmd.Args[0])
+		e := tagindex.Parse(tokens)
+		str, replace := tagindex.Serialize(e)
+		for k, v := range replace {
+			replace[k] = pq.QuoteLiteral(v)
+		}
+		replace["tag_id"] = "tag_id"
+		replace["tag_index"] = "tag_index"
+		replace["tag_name"] = "tag_name"
+		replace["temp"] = "x"
+		var buf bytes.Buffer
+		template.Must(template.New("decoder").Parse(str)).Execute(&buf, replace)
+		fmt.Printf("%s\n", buf.String())
 	}
 }

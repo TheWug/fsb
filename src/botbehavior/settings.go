@@ -7,6 +7,8 @@ import (
 	"storage"
 )
 
+const MAX_RESULTS_PER_PAGE = 50
+
 type Settings struct {
 	gogram.InitSettings
 
@@ -17,6 +19,16 @@ type Settings struct {
 	ApiEndpoint         string `json:"api_endpoint"`
 	ApiFilteredEndpoint string `json:"api_filtered_endpoint"`
 	ApiStaticPrefix     string `json:"api_static_prefix"`
+
+	Owner   int    `json:"owner"`
+
+	ResultsPerPage int `json:"results_per_page"`
+
+	SearchUser   string `json:"search_user"`
+	SearchAPIKey string `json:"search_apikey"`
+
+	NoResultsPhotoID string `json:"no_results_photo_id"`
+	ErrorPhotoID     string `json:"error_photo_id"`
 }
 
 func (s Settings) GetApiName() string {
@@ -49,6 +61,10 @@ func (this *Settings) RedirectLogs(bot *gogram.TelegramBot) (error) {
 }
 
 func (this *Settings) InitializeAll(bot *gogram.TelegramBot) (error) {
+	if this.ResultsPerPage < 1 || this.ResultsPerPage > MAX_RESULTS_PER_PAGE {
+		this.ResultsPerPage = MAX_RESULTS_PER_PAGE
+	}
+
 	e := this.RedirectLogs(bot)
 	if e != nil { return e }
 
@@ -58,4 +74,8 @@ func (this *Settings) InitializeAll(bot *gogram.TelegramBot) (error) {
 	bot.Remote.SetAPIKey(this.ApiKey)
 	e = bot.Remote.Test()
 	return e
+}
+
+func (this *Settings) DefaultSearchCredentials() (string, string) {
+	return this.SearchUser, this.SearchAPIKey
 }

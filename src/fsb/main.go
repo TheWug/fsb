@@ -52,6 +52,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	behavior.MySettings = settings
+
 	var help bot.HelpState
 	var login bot.LoginState
 	var post bot.PostState
@@ -69,6 +71,7 @@ func main() {
 	machine.AddCommand("/recounttags", &janitor)
 	machine.AddCommand("/syncposts", &janitor)
 	machine.AddCommand("/editposttest", &janitor)
+	machine.AddCommand("/parseexpression", &janitor)
 
 	thebot.SetMessageCallback(machine)
 	thebot.SetStateMachine(machine)
