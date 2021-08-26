@@ -933,9 +933,14 @@ func GetMarkedAndUnmarkedBlits(ctrl EnumerateControl) ([]BlitData, error) {
 
 	var blit BlitData
 	var out []BlitData
-	rows, _ := tx.Query("SELECT is_blit, tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM blit_tag_registry INNER JOIN tag_index USING (tag_id) ORDER BY NOT is_blit, tag_name")
+
+	query := "SELECT is_blit, tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM blit_tag_registry INNER JOIN tag_index USING (tag_id) ORDER BY NOT is_blit, tag_name"
+	rows, err := tx.Query(query)
+	if err != nil { return nil, err }
+	defer rows.Close()
+
 	for rows.Next() {
-		err := rows.Scan(&blit.Valid, &blit.Id, &blit.Name, &blit.Count, &blit.Type, &blit.Locked)
+		err = rows.Scan(&blit.Valid, &blit.Id, &blit.Name, &blit.Count, &blit.Type, &blit.Locked)
 		if err != nil { return nil, err }
 		out = append(out, blit)
 	}
@@ -955,12 +960,12 @@ func MarkBlit(id int, mark bool, ctrl EnumerateControl) (error) {
 	return err
 }
 
-type TypoMode int
-const Untracked TypoMode = 0
-const Ignore TypoMode = 1
-const Prompt TypoMode = 2
-const AutoFix TypoMode = 3
-func (this TypoMode) Display() string {
+type CorrectionMode int
+const Untracked CorrectionMode = 0
+const Ignore CorrectionMode = 1
+const Prompt CorrectionMode = 2
+const AutoFix CorrectionMode = 3
+func (this CorrectionMode) Display() string {
 	switch this {
 	case Untracked:
 		return " "
@@ -975,7 +980,7 @@ func (this TypoMode) Display() string {
 	}
 }
 
-func AddTagTypo(real_name, typo_name string, mode TypoMode, settings UpdaterSettings) (error) {
+func AddTagTypo(real_name, typo_name string, mode CorrectionMode, settings UpdaterSettings) (error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }
@@ -990,7 +995,7 @@ func AddTagTypo(real_name, typo_name string, mode TypoMode, settings UpdaterSett
 
 type TypoData struct {
 	Tag  apitypes.TTagData
-	Mode TypoMode
+	Mode CorrectionMode
 }
 
 func GetTagTypos(tag string, ctrl EnumerateControl) (map[string]TypoData, error) {
@@ -1015,3 +1020,72 @@ func GetTagTypos(tag string, ctrl EnumerateControl) (map[string]TypoData, error)
 	ctrl.Transaction.commit = mine
 	return results, nil
 }
+
+type PostSuggestedEdit struct {
+	Prompt, AutoFix apitypes.TagDiff
+}
+
+func GetSuggestedPostEdits(posts []int, settings UpdaterSettings) (map[int]*PostSuggestedEdit, error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
+
+	results := make(map[int]*PostSuggestedEdit)
+	populate := func(id int, mode CorrectionMode) *apitypes.TagDiff {
+		value := results[id]
+		if value == nil {
+			value = &PostSuggestedEdit{}
+			results[id] = value
+		}
+		if mode == Prompt {
+			return &value.Prompt
+		} else if mode == AutoFix {
+			return &value.AutoFix
+		}
+		panic("bad CorrectionMode? should be either Prompt or Autofix")
+	}
+
+	query := "SELECT post_id, tag_typo_name, tag_implied_name, mode FROM typos_identified INNER JOIN tag_index ON tag_typo_name = tag_name INNER JOIN post_tags USING (tag_id) WHERE mode IN ($1, $2) AND post_id = ANY($3::int[])"
+	rows, err := tx.Query(query, Prompt, AutoFix, posts)
+	if err != nil { return nil, err }
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var typo, fixed string
+		var mode CorrectionMode
+		err = rows.Scan(&id, &typo, &fixed, &mode)
+		if err != nil { return nil, err }
+
+		diff := populate(id, mode)
+
+		diff.AddTag(fixed)
+		diff.RemoveTag(typo)
+	}
+
+	query = "SELECT post_id, tag_cat_name, tag_1_name, tag_2_name, mode FROM cats_identified INNER JOIN tag_index ON tag_cat_name = tag_name INNER JOIN post_tags USING (tag_id) WHERE mode IN ($1, $2) AND post_id = ANY($3::int[])"
+	rows, err = tx.Query(query, Prompt, AutoFix, posts)
+	if err != nil { return nil, err }
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var cat, first, second string
+		var mode CorrectionMode
+		err = rows.Scan(&id, &cat, &first, &second, &mode)
+		if err != nil { return nil, err }
+
+		diff := populate(id, mode)
+
+		diff.AddTag(first)
+		diff.AddTag(second)
+		diff.RemoveTag(cat)
+	}
+
+	settings.Transaction.commit = mine
+	return results, nil
+}
+
+
+
+

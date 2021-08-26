@@ -59,7 +59,7 @@ var PostIsDeleted error = errors.New("This post has been deleted.")
 
 func UpdatePost(user, apitoken string,
 		id int,
-		tagdiff TagDiff,				// empty to leave tags unchanged.
+		tagdiff types.TagDiff,				// empty to leave tags unchanged.
 		rating *string,					// nil to leave rating unchanged.
 		parent *int,					// nil to leave parent unchanged, -1 to UNSET parent
 		source *string,					// nil to leave source unchanged

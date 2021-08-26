@@ -1350,6 +1350,6 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 		rating := "safe"
 
 		reason := "API Update Test (should be NOOP)"
-		api.UpdatePost(user, apikey, post, api.TagDiff{}, &rating, &parent_post, &sources, &description, &reason)
+		api.UpdatePost(user, apikey, post, apitypes.TagDiff{}, &rating, &parent_post, &sources, &description, &reason)
 	}
 }

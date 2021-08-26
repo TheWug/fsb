@@ -675,7 +675,7 @@ const (
 type TagEditBox struct {
 	EditDistance int
 	Tag types.TTagData
-	Mode storage.TypoMode
+	Mode storage.CorrectionMode
 }
 
 func NewTagsFromOldTags(oldtags []string, deltags, addtags map[string]bool) (string) {
@@ -916,7 +916,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 	if fix {
 		updated := 1
 		api_timeout := time.NewTicker(750 * time.Millisecond)
-		diffs := make(map[int]api.TagDiff)
+		diffs := make(map[int]types.TagDiff)
 
 		for _, v := range results {
 			array, err := storage.PostsWithTag(v.Tag, ctrl)
@@ -1382,7 +1382,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 
 		reason := fmt.Sprintf("Bulk retag: %s --> %s, %s (fixed concatenated tags)", cats[i].tag.Name, cats[i].subtag1.Name, cats[i].subtag2.Name)
 		for _, p := range posts {
-			var diff api.TagDiff
+			var diff types.TagDiff
 			diff.AddTag(cats[i].subtag1.Name)
 			diff.AddTag(cats[i].subtag2.Name)
 			diff.RemoveTag(cats[i].tag.Name)
