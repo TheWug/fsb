@@ -147,7 +147,7 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 				edit.SelectAutofix()
 				auto_diff := edit.GetChangeToApply()
 				if !auto_diff.IsZero() {
-					_, err = api.UpdatePost(auto_user, auto_api_key, id, auto_diff, nil, nil, nil, nil, sptr("Automatic tag cleanup: typos and concatenations (via KnottyBot)"))
+					post, err := api.UpdatePost(auto_user, auto_api_key, id, auto_diff, nil, nil, nil, nil, sptr("Automatic tag cleanup: typos and concatenations (via KnottyBot)"))
 					if err != nil {
 						bot.ErrorLog.Println("Error updating post:", err.Error())
 					} else {
@@ -155,6 +155,12 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 						var applied_api []string
 						for k, _ := range edit.AppliedEdits { applied_api = append(applied_api, k) }
 						storage.AddAutoFixHistoryForPost(id, applied_api, settings)
+
+						if post != nil {
+							err = storage.UpdatePost(apitypes.TPostInfo{Id: id}, *post, settings)
+							if err != nil { bot.ErrorLog.Println("Failed to locally update post:", err.Error()) }
+							return
+						}
 					}
 				}
 

@@ -737,7 +737,7 @@ func (this *AutofixState) HandleCallback(ctx *gogram.CallbackCtx) {
 			}
 
 			reason := "Manual tag cleanup: typos and concatenations (via KnottyBot)"
-			_, err = api.UpdatePost(user, api_key, post_info.PostId, diff, nil, nil, nil, nil, &reason)
+			post, err := api.UpdatePost(user, api_key, post_info.PostId, diff, nil, nil, nil, nil, &reason)
 			if err != nil {
 				ctx.AnswerAsync(data.OCallback{Notification: "\u26A0 An error occurred when trying to update the post! Try again later."}, nil)
 				return
@@ -746,8 +746,18 @@ func (this *AutofixState) HandleCallback(ctx *gogram.CallbackCtx) {
 			post_info.Edit.Apply()
 			botbehavior.DismissPromptPost(ctx.Bot, post_info, diff, settings)
 			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F539 Changes saved."}, nil)
+
+			if post != nil {
+				err = storage.UpdatePost(apitypes.TPostInfo{Id: post_info.PostId}, *post, settings)
+				if err != nil { ctx.Bot.ErrorLog.Println("Failed to locally update post:", err.Error()) }
+				return
+			}
 		} else if ctx.Cmd.Command == "/af-dismiss" {
-			botbehavior.DismissPromptPost(ctx.Bot, post_info, apitypes.TagDiff{}, settings)
+			err = botbehavior.DismissPromptPost(ctx.Bot, post_info, apitypes.TagDiff{}, settings)
+			if err != nil {
+				if err != nil { ctx.Bot.ErrorLog.Println("Failed to dismiss prompt post:", err.Error()) }
+				return
+			}
 			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F539 Dismissed without changes."}, nil)
 		}
 
