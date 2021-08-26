@@ -28,12 +28,10 @@ type TransactionBox struct {
 }
 
 func (this *TransactionBox) Commit() error {
-	log.Printf("Committing transaction.\n")
 	return this.tx.Commit()
 }
 
 func (this *TransactionBox) Rollback() error {
-	log.Printf("Aborting transaction.\n")
 	return this.tx.Rollback()
 }
 
@@ -107,10 +105,6 @@ func suffix(table, suffix string) string {
 	}
 }
 
-func prototype(table string) string {
-	return table + "_prototype"
-}
-
 // initialize the DAL. Closing it might be important at some point, but who cares right now.
 func DBInit(dburl string) (error) {
 	var err error
@@ -147,12 +141,6 @@ func GetUserCreds(settings UpdaterSettings, id tgtypes.UserID) (string, string, 
 	err := row.Scan(&user, &key, &privilege)
 	if err == sql.ErrNoRows || len(user) == 0 || len(key) == 0 { err = ErrNoLogin }
 
-	if err == nil {
-		log.Println("user creds no error")
-	} else {
-		log.Println("user creds", err.Error())
-	}
-
 	settings.Transaction.commit = mine
 	return user, key, privilege, err
 }
@@ -183,41 +171,6 @@ func GetUserTagRules(settings UpdaterSettings, id tgtypes.UserID, name string) (
 
 	settings.Transaction.commit = mine
 	return rules, err
-}
-
-func SetMigrationState(settings UpdaterSettings, state, progress int, is_full bool) (error) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
-	sq := "DELETE FROM import_progress"
-	_, err := tx.Exec(sq)
-	if err != nil { return err }
-
-	sq = "INSERT INTO import_progress VALUES ($1, $2, $3)"
-	_, err = tx.Exec(sq, state, progress, is_full)
-	if err != nil { return err }
-
-	settings.Transaction.commit = mine
-	return nil
-}
-
-func GetMigrationState(settings UpdaterSettings) (int, int, bool) {
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return 0, 0, false }
-
-	sq := "SELECT state, progress, is_full FROM import_progress LIMIT 1"
-	row := tx.QueryRow(sq)
-
-	var state, progress int
-	var is_full bool
-	err := row.Scan(&state, &progress, &is_full)
-
-	if err != nil { log.Println(err.Error()) }
-
-	settings.Transaction.commit = mine
-	return state, progress, is_full
 }
 
 func PrefixedTagToTypedTag(name string) (string, int) {
@@ -841,91 +794,6 @@ func ResetPostTags() (error) {
 	return nil
 }
 
-func SetupSyncStagingEnvironment(settings UpdaterSettings) (error) {
-	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
-	proto := func(table string) string { return prototype(table) }
-
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
-	tables := []string{
-		"post_tags",
-		"post_tags_by_name",
-		"tag_history_checkpoint",
-		"tag_index",
-	}
-
-	for _, table := range tables {
-		_, err := tx.Exec("CREATE TABLE IF NOT EXISTS " + suf(table) + " (LIKE " + proto(table) + " INCLUDING ALL)")
-		if err != nil { return err }
-		_, err = tx.Exec("TRUNCATE " + suf(table))
-		if err != nil { return err }
-	}
-
-	settings.Transaction.commit = mine
-	return nil
-}
-
-func PromoteStagingEnvironment(settings UpdaterSettings) (error) {
-	// if we aren't using a staging environment, then we're already done, do nothing further.
-	if settings.TableSuffix == "" {
-		return nil
-	}
-
-	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
-	suf2 := func(table, extrasuffix string) string { return suffix(table, settings.TableSuffix) + extrasuffix }
-
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
-	tables := []string{
-		"post_tags",
-		"post_tags_by_name",
-		"tag_history_checkpoint",
-		"tag_index",
-	}
-
-	for _, table := range tables {
-		_, err := tx.Exec("DROP TABLE IF EXISTS " + table)
-		if err != nil { return err }
-		_, err = tx.Exec("ALTER TABLE " + suf(table) + " RENAME TO " + table)
-		if err != nil { return err }
-	}
-
-	_, err := tx.Exec("ALTER INDEX " + suf2("post_tags", "_pkey") + " RENAME TO post_tags_pkey")
-	if err != nil { return err }
-	_, err = tx.Exec("ALTER INDEX " + suf2("post_tags", "_tag_id_idx") + " RENAME TO post_tags_tag_id_idx")
-	if err != nil { return err }
-
-	settings.Transaction.commit = mine
-	return nil
-}
-
-func ResetIntermediateEnvironment(settings UpdaterSettings) (error) {
-	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
-	proto := func(table string) string { return prototype(table) }
-
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
-	tables := []string{
-		"post_tags_by_name",
-	}
-
-	for _, table := range tables {
-		_, err := tx.Exec("CREATE TABLE IF NOT EXISTS " + suf(table) + " (LIKE " + proto(table) + " INCLUDING ALL)")
-		if err != nil { return err }
-		_, err = tx.Exec("TRUNCATE " + suf(table))
-		if err != nil { return err }
-	}
-
-	settings.Transaction.commit = mine
-	return nil
-}
-
 func CountTags(settings UpdaterSettings, status chan string) (error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
@@ -1044,57 +912,3 @@ func MarkBlit(id int, mark bool, ctrl EnumerateControl) (error) {
 	return err
 }
 
-/*
-func BigSearchPaginated(tag_expression string, last_post_id int64) {
-    expression_tokens := tagindex.Tokenize(tag_expression)
-    search_expression := tagindex.Parse(expression_tokens)
-    sql_format_substring, sql_tokens := tagindex.Serialize(search_expression)
-    for k, v := range sql_tokens {
-        sql_tokens[k] = pq.QuoteLiteral(v)
-    }
-    replace["tag_id"] = "tag_id"
-    replace["tag_index"] = "tag_index"
-    replace["tag_name"] = "tag_name"
-    replace["temp"] = "x"
-    var buf bytes.Buffer
-    template.Must(template.New("decoder").Parse(sql_format_substring)).Execute(&buf, sql_tokens)
-    sql_substring := buf.String()
-    sql_format_string := `
-        SELECT 
-          post_id
-        FROM (
-            SELECT 
-              post_id,
-              (
-                  SELECT (
-                      WITH x AS (
-                          SELECT 
-                            tag_id
-                          FROM post_tags
-                          WHERE post_id = x.post_id
-                      ) (
-                          SELECT %s
-                      )
-                  )
-              ) AS present
-            FROM post_tags AS x
-            GROUP BY post_id
-            ORDER BY post_id
-        ) AS _
-        WHERE
-          present AND
-          post_id > $1 limit 320`
-    sql_string := fmt.Sprintf(sql_format_string, sql_substring)
-
-	tx, err := Db_pool.Begin()
-	if err != nil { return err }
-
-	var c committer
-	defer handle_transaction(&c, tx)
-
-    err = tx.Exec("SET LOCAL statement_timeout to 20000")
-    // TODO finish this
-    rows, err := tx.Query(sql_string, last_post_id)
-}
-
-*/

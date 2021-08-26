@@ -476,8 +476,8 @@ func SyncPostsInternal(user, api_key string, settings storage.UpdaterSettings, m
 	if err := SyncOnlyPostsInternal(user, api_key, settings, msg, sfx); err != nil { return err }
 	if err := SyncTagsInternal(user, api_key, settings, msg, sfx); err != nil { return err }
 	if err := SyncAliasesInternal(user, api_key, settings, msg, sfx); err != nil { return err }
-	//msg <- "Resolving post tags..."
-	//if err := storage.ImportPostTagsFromNameToID(settings, sfx); err != nil { return err }
+	msg <- "Resolving post tags..."
+	if err := storage.ImportPostTagsFromNameToID(settings, sfx); err != nil { return err }
 	//if err := RecountTagsInternal(settings, msg, sfx); err != nil { return err }
 	//if err := CalculateAliasedCountsInternal(settings, msg, sfx); err != nil { return err }
 	sfx <- " done."
