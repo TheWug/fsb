@@ -10,21 +10,6 @@ import (
 	"fmt"
 )
 
-func WugURL(url string) (string) {
-	if strings.HasSuffix(url, ".png") {
-		url += ".jpg"
-	}
-
-	if strings.HasPrefix(url, "https://") {
-		url = strings.Replace(url, "https://", "http://", 1)
-	} else {
-		url = "http://" + url
-	}
-
-	url = strings.Replace(url, api.StaticEndpoint, "home.wuggl.es", 1)
-	return url
-}
-
 func ContainsSafeRatingTag(tags string) (bool) {
 	taglist := strings.Split(tags, " ")
 
