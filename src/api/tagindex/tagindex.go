@@ -1110,7 +1110,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 				}
 
 				if newp != nil {
-					err = storage.UpdatePost(p, *newp)
+					err = storage.UpdatePost(p, *newp, storage.UpdaterSettings{Transaction: ctrl.Transaction})
 					if err != nil {
 						sfx <- fmt.Sprintf(" (error: %s)", err.Error())
 						return
@@ -1347,7 +1347,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 			}
 
 			if newp != nil {
-				err = storage.UpdatePost(p, *newp)
+				err = storage.UpdatePost(p, *newp, storage.UpdaterSettings{})
 				if err != nil {
 					sfx <- fmt.Sprintf(" (error: %s)", err.Error())
 					return

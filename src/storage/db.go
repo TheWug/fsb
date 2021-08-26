@@ -943,12 +943,10 @@ func LocalTagSearch(tag apitypes.TTagData, ctrl EnumerateControl) (apitypes.TRes
 	return out, nil
 }
 
-func UpdatePost(oldpost, newpost apitypes.TSearchResult) (error) {
-	tx, err := Db_pool.Begin()
-	if err != nil { return err }
-
-	var c committer
-	defer handle_transaction(&c, tx)
+func UpdatePost(oldpost, newpost apitypes.TSearchResult, settings UpdaterSettings) (error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
 
 	count_deltas := make(map[string]int)
 	for _, new_tag := range strings.Split(newpost.Tags, " ") {
@@ -961,19 +959,19 @@ func UpdatePost(oldpost, newpost apitypes.TSearchResult) (error) {
 	for k, v := range count_deltas {
 		if v == 0 { continue }
 		query := "UPDATE tag_index SET tag_count = tag_count + $2 WHERE tag_name = $1"
-		_, err = tx.Exec(query, k, v)
+		_, err := tx.Exec(query, k, v)
 		if err != nil { return err }
 	}
 
 	query := "DELETE FROM post_tags WHERE post_id = $1"
-	_, err = tx.Exec(query, oldpost.Id)
+	_, err := tx.Exec(query, oldpost.Id)
 	if err != nil { return err }
 
 	query = "INSERT INTO post_tags SELECT $1 as post_id, tag_id FROM UNNEST($2::varchar[]) AS tag_name INNER JOIN tag_index USING (tag_name)"
 	_, err = tx.Exec(query, oldpost.Id, pq.Array(strings.Split(newpost.Tags, " ")))
 	if err != nil { return err }
 
-	c.commit = true
+	settings.Transaction.commit = mine
 	return nil
 }
 
