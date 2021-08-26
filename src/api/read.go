@@ -11,14 +11,18 @@ type FailedCall struct {
 	Success bool `json:"success"`
 }
 
-func TagSearch(user, apitoken string, tags string, page int, limit int) (results types.TResultArray, e error) {
-	url := "/post/index.json"
+func TagSearch(user, apitoken string, tags string, page int, limit int) (types.TResultArray, error) {
+	temp := struct {
+		Posts types.TResultArray `json:"posts"`
+	}{}
+
+	url := "/posts.json"
 	r, e := api.New(url).
 			BasicAuthentication(user, apitoken).
 			URLArg("tags", tags).
 			URLArg("page", strconv.Itoa(page)).
 			URLArg("limit", strconv.Itoa(limit)).
-			Into(&results).
+			Into(&temp).
 			Do()
 
 	caller := "unauthenticated"
@@ -28,16 +32,16 @@ func TagSearch(user, apitoken string, tags string, page int, limit int) (results
 
 	if e != nil {
 		log.Printf("[api     ] API call: %s [%s] (ERROR: %s)\n", url, caller, e.Error())
-		return
+		return nil, e
 	} else if r != nil {
-		log.Printf("[api     ] API call: %s [%s] (%s, %d results)\n", url, caller, r.Status, len(results))
+		log.Printf("[api     ] API call: %s [%s] (%s, %d results)\n", url, caller, r.Status, len(temp.Posts))
 	}
 
-	return
+	return temp.Posts, e
 }
 
 func TestLogin(user, apitoken string) (bool, error) {
-	url := "/dmail/inbox.json"
+	url := "/dmails.json"
 	var canary interface{}
 
 	r, e := api.New(url).
@@ -53,18 +57,18 @@ func TestLogin(user, apitoken string) (bool, error) {
 
 	switch v := canary.(type) {
 	case map[string]interface{}:
-		switch w := v["success"].(type) {
-		case bool:
-			return w, nil
-		default:
-			return true, nil
-		} 
+	        switch w := v["success"].(type) {
+	        case bool:
+	                return w, nil
+	        default:
+	                return true, nil
+	        }
 	default:
-		return true, nil
+	        return true, nil
 	}
 }
 
-func ListTagHistory(user, apitoken string, limit int, before, after *int) (types.THistoryArray, error) {
+func ListTagHistory(user, apitoken string, limit int, before, after *int) (types.THistoryArray, error) { // moved to post_versions, requires rework
 	url := "/post_tag_history/index.json"
 
 	var hist types.THistoryArray
@@ -86,16 +90,16 @@ func ListTagHistory(user, apitoken string, limit int, before, after *int) (types
 }
 
 func ListOnePageOfTags(user, apitoken string, page int, list types.TTagInfoArray) (types.TTagInfoArray, bool, int, error) {
-	url := "/tag/index.json"
+	url := "/tags.json"
 
 	var results types.TTagInfoArray
 
 	r, e := api.New(url).
 			BasicAuthentication(user, apitoken).
 			URLArg("limit", "10000").
-			URLArg("order", "date").
-			URLArg("show_empty_tags", "true").
 			URLArg("page", strconv.Itoa(page)).
+			URLArg("[search]order", "date").
+			URLArg("[search]hide_empty", "no").
 			Into(&results).
 			Do()
 
@@ -110,16 +114,16 @@ func ListOnePageOfTags(user, apitoken string, page int, list types.TTagInfoArray
 }
 
 func ListOnePageOfAliases(user, apitoken string, page int, list types.TAliasInfoArray) (types.TAliasInfoArray, bool, int, error) {
-	url := "/tag_alias/index.json"
+	url := "/tag_aliases.json"
 
 	var aliases types.TAliasInfoArray
 
 	r, e := api.New(url).
 			BasicAuthentication(user, apitoken).
 			URLArg("limit", "10000").
-			URLArg("order", "date").
-			URLArg("approved", "true").
 			URLArg("page", strconv.Itoa(page)).
+			URLArg("[search]order", "date").
+			URLArg("[search]status", "approved").
 			Into(&aliases).
 			Do()
 
@@ -134,7 +138,7 @@ func ListOnePageOfAliases(user, apitoken string, page int, list types.TAliasInfo
 }
 
 func ListOnePageOfPosts(user, apitoken string, before int) (types.TResultArray, bool, int, error) {
-	url := "/post/index.json"
+	url := "/posts.json"
 
 	var posts types.TResultArray
 
@@ -142,7 +146,7 @@ func ListOnePageOfPosts(user, apitoken string, before int) (types.TResultArray, 
 			BasicAuthentication(user, apitoken).
 			URLArg("limit", "10000").
 			Into(&posts)
-	if before > 0 { req.URLArg("before_id", strconv.Itoa(before)) }
+	if before > 0 { req.URLArg("page", fmt.Sprintf("b%d", before)) }
 	r, e := req.Do()
 
 	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
@@ -157,13 +161,12 @@ func ListOnePageOfPosts(user, apitoken string, before int) (types.TResultArray, 
 
 
 func FetchOnePost(user, apitoken string, id int) (*types.TSearchResult, error) {
-	url := "/post/show.json"
+	url := fmt.Sprintf("/posts/%d.json", id)
 
 	var post types.TSearchResult
 
 	r, e := api.New(url).
 			BasicAuthentication(user, apitoken).
-			URLArg("id", strconv.Itoa(id)).
 			Into(&post).
 			Do()
 
@@ -178,7 +181,7 @@ func FetchOnePost(user, apitoken string, id int) (*types.TSearchResult, error) {
 }
 
 func ListOnePageOfDeletedPosts(user, apitoken string, page int) (types.TResultArray, bool, int, error) {
-	url := "/post/deleted_index.json"
+	url := "/posts.json"
 
 	var posts types.TResultArray
 
@@ -186,6 +189,7 @@ func ListOnePageOfDeletedPosts(user, apitoken string, page int) (types.TResultAr
 			BasicAuthentication(user, apitoken).
 			URLArg("limit", "10000").
 			URLArg("page", strconv.Itoa(page)).
+			URLArg("tags", "status:deleted").
 			Into(&posts).
 			Do()
 
@@ -199,13 +203,12 @@ func ListOnePageOfDeletedPosts(user, apitoken string, page int) (types.TResultAr
 }
 
 func GetTagData(user, apitoken string, id int) (*types.TTagData, error) {
-	url := "/tag/show.json"
+	url := fmt.Sprintf("/tags/%d.json", id)
 
 	var tag types.TTagData
 
 	r, e := api.New(url).
 			BasicAuthentication(user, apitoken).
-			URLArg("id", strconv.Itoa(id)).
 			Into(&tag).
 			Do()
 

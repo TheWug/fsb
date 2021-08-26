@@ -7,6 +7,7 @@ import (
 	"log"
 	"github.com/thewug/reqtify"
 	"io"
+	"fmt"
 )
 
 var MissingArguments error = errors.New("Missing file or upload_url")
@@ -20,28 +21,25 @@ type UploadCallResult struct {
 }
 
 func UploadFile(file_data io.Reader, upload_url, tags, rating, source, description string, parent *int, user, apitoken string) (*UploadCallResult, error) {
-	url := "/post/create.json"
+	url := "/uploads.json"
 
 	out := UploadCallResult{}
 
 	req := api.New(url).
 			Method(reqtify.POST).
-			FormArg("login", user).
-			FormArg("password_hash", apitoken).
-
-			FormArg("post[tags]", tags).
-			FormArg("post[source]", source).
-			FormArg("post[description]", description).
-			FormArg("post[tags]", tags).
-			FormArg("post[rating]", rating).
+			BasicAuthentication(user, apitoken).
+			FormArg("upload[source]", source).
+			FormArg("upload[description]", description).
+			FormArg("upload[tag_string]", tags).
+			FormArg("upload[rating]", rating).
 			Into(&out).
 			Multipart()
-	if parent != nil { req.FormArg("post[parent_id]", strconv.Itoa(*parent)) }
+	if parent != nil { req.FormArg("upload[parent_id]", strconv.Itoa(*parent)) }
 
 	if upload_url == "" && file_data != nil {
-		req.FileArg("post[file]", "postfile", file_data)
+		req.FileArg("upload[file]", "post.file", file_data)
 	} else if upload_url != "" && file_data == nil {
-		req.FormArg("post[upload_url]", upload_url)
+		req.FormArg("upload[direct_url]", upload_url)
 	} else { return nil, MissingArguments }
 
 	r, e := req.Do()
@@ -65,15 +63,13 @@ func UpdatePost(user, apitoken string,
 		source *string,					// nil to leave source unchanged
 		description *string,				// nil to leave description unchanged
 		reason *string) (*types.TSearchResult, error) {
-	url := "/post/update.json"
+	url := fmt.Sprintf("/post/%s.json", id)
 
 	var post types.TSearchResult
 
 	req := api.New(url).
-			Method(reqtify.POST).
-			FormArg("login", user).
-			FormArg("password_hash", apitoken).
-			FormArg("id", strconv.Itoa(id)).
+			Method(reqtify.PATCH).
+			BasicAuthentication(user, apitoken).
 			Into(&post)
 	if oldtags != nil { req.FormArg("post[old_tags]", *oldtags) }
 	if newtags != nil { req.FormArg("post[tags]", *newtags) }
@@ -99,20 +95,9 @@ func UpdatePost(user, apitoken string,
 // and pagination doesn't work automatically when enumerating results using the before_id mechanism, so this can only work for tags
 // with less than 320 * 750 = 240000 results (which is all but the 40 or so most popular tags).
 // after calling it, the count will be reset to the number of non-deleted posts with the tag.
+
+// with next-gen, do we even need to keep this?
 func FixPostcountForTag(user, apitoken, tag string) (error) {
-	url := "/post/index.json"
-
-	var posts types.TResultArray
-
-	r, e := api.New(url).
-			URLArg("login", user).
-			URLArg("password_hash", apitoken).
-			URLArg("limit", "320").
-			URLArg("page", "750").
-			URLArg("tags", tag).
-			Into(&posts).
-			Do()
-
-	log.Printf("[api     ] API call: %s [as %s] (%s)\n", url, user, r.Status)
+	_, e := TagSearch(user, apitoken, tag, 750, 320)
 	return e
 }
