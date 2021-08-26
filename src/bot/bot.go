@@ -1,8 +1,9 @@
 package bot
 
 import (
-	"telegram"
-	"telegram/telebot"
+	"github.com/thewug/gogram"
+	"github.com/thewug/gogram/data"
+
 	"storage"
 	"api"
 	"api/tagindex"
@@ -183,8 +184,8 @@ func (this *WizardRule) DoImplicit(tags *api.TagSet) {
 	}
 }
 
-func (this *WizardRule) GetButtons(tags *api.TagSet) ([]telegram.TInlineKeyboardButton) {
-	var out []telegram.TInlineKeyboardButton
+func (this *WizardRule) GetButtons(tags *api.TagSet) ([]data.TInlineKeyboardButton) {
+	var out []data.TInlineKeyboardButton
 	for _, o := range this.options {
 		hide, _, _, tag := TagWizardMarkupHelper(o)
 		if !hide {
@@ -196,7 +197,7 @@ func (this *WizardRule) GetButtons(tags *api.TagSet) ([]telegram.TInlineKeyboard
 			}
 			tag_display := tag
 			if strings.HasPrefix(strings.ToLower(tag), "meta:") { tag_display = strings.Replace(tag_display[5:], "_", " ", -1) }
-			btn := telegram.TInlineKeyboardButton{Text: decor + " " + tag_display + " " + decor, Data: "/z " + tag}
+			btn := data.TInlineKeyboardButton{Text: decor + " " + tag_display + " " + decor, Data: "/z " + tag}
 			out = append(out, btn)
 		}
 	}
@@ -224,12 +225,11 @@ func (this *WizardRuleset) AddRule(r *WizardRule) {
 }
 
 type TagWizard struct {
-	bot          *telebot.TelegramBot
+	ctx          *gogram.MessageCtx
 	tags         *api.TagSet
 	rules         WizardRuleset
 	current_rule *WizardRule
-	chat_id       int64
-	wizard_id     int
+	wizard_ctx   *gogram.MessageCtx
 }
 
 func (this *TagWizard) SetNewRulesFromString(rulestring string) (error) {
@@ -292,8 +292,8 @@ func (this *TagWizard) Abort() {
 
 func (this *TagWizard) Reset() {
 	if this.tags == nil { this.tags = api.NewTagSet() }
-	if this.chat_id != 0 && this.wizard_id != 0 { this.bot.Remote.DeleteMessage(this.chat_id, this.wizard_id) }
-	*this = TagWizard{tags: this.tags, rules: this.rules, bot: this.bot}
+	if this.wizard_ctx != nil { this.wizard_ctx.DeleteAsync(nil) }
+	*this = TagWizard{tags: this.tags, rules: this.rules, ctx: this.ctx}
 	this.tags.Reset()
 	this.rules.visitval += 1
 }
@@ -333,9 +333,8 @@ func (this *TagWizard) ClearTag(tag string) {
 }
 
 func (this *TagWizard) SendWizard(chat_id int64) {
-	if this.chat_id != 0 && this.wizard_id != 0 { this.bot.Remote.DeleteMessage(this.chat_id, this.wizard_id) }
-	this.chat_id = chat_id
-	this.wizard_id = 0
+	if this.wizard_ctx != nil { this.wizard_ctx.DeleteAsync(nil) }
+	this.wizard_ctx = nil
 
 	if this.current_rule == nil { this.NextMenuInternal() }
 	this.UpdateMenu()
@@ -357,41 +356,39 @@ func (this *TagWizard) NextMenuInternal() (bool) {
 
 func (this *TagWizard) UpdateMenu() {
 	if this.current_rule == nil { return }
-	if (this.wizard_id != 0) {
-		var kbd telegram.TInlineKeyboard
-		kbd.AddButton(telegram.TInlineKeyboardButton{Text: "\u27a1 Next", Data: "/next"})
-		kbd.AddButton(telegram.TInlineKeyboardButton{Text: "\U0001f501 Start Over", Data: "/again"})
+	if (this.wizard_ctx != nil) {
+		var kbd data.TInlineKeyboard
+		kbd.AddButton(data.TInlineKeyboardButton{Text: "\u27a1 Next", Data: "/next"})
+		kbd.AddButton(data.TInlineKeyboardButton{Text: "\U0001f501 Start Over", Data: "/again"})
 		if this.current_rule == &wizard_rule_done {
-			kbd.AddButton(telegram.TInlineKeyboardButton{Text: "\U0001f197 Done", Data: "/finish"})
+			kbd.AddButton(data.TInlineKeyboardButton{Text: "\U0001f197 Done", Data: "/finish"})
 		} else { 
 			for _, b := range this.current_rule.GetButtons(this.tags) {
 				kbd.AddRow()
 				kbd.AddButton(b)
 			}
 		}
-		_, err := this.bot.Remote.EditMessageText(this.chat_id, this.wizard_id, "", this.current_rule.Prompt(), "HTML", kbd, false)
-		if err != nil { fmt.Printf("An error happened: %s\n", err.Error()) }
+		this.wizard_ctx.EditTextAsync(data.OMessage{Text: this.current_rule.Prompt(), ParseMode: data.HTML, ReplyMarkup: kbd}, nil)
 	} else {
 		prompt := "Time for tags!\n\n" + this.current_rule.Prompt()
-		var kbd telegram.TInlineKeyboard
-		kbd.AddButton(telegram.TInlineKeyboardButton{Text: "\u27a1 Next", Data: "/next"})
-		kbd.AddButton(telegram.TInlineKeyboardButton{Text: "\U0001f501 Start Over", Data: "/again"})
+		var kbd data.TInlineKeyboard
+		kbd.AddButton(data.TInlineKeyboardButton{Text: "\u27a1 Next", Data: "/next"})
+		kbd.AddButton(data.TInlineKeyboardButton{Text: "\U0001f501 Start Over", Data: "/again"})
 		if this.current_rule == &wizard_rule_done {
-			kbd.AddButton(telegram.TInlineKeyboardButton{Text: "\U0001f197 Done", Data: "/finish"})
+			kbd.AddButton(data.TInlineKeyboardButton{Text: "\U0001f197 Done", Data: "/finish"})
 		} else { 
 			for _, b := range this.current_rule.GetButtons(this.tags) {
 				kbd.AddRow()
 				kbd.AddButton(b)
 			}
 		}
-		msg, _ := this.bot.Remote.SendMessage(this.chat_id, prompt, nil, "HTML", kbd, false)
-		this.wizard_id = msg.Message_id
+		this.wizard_ctx, _ = this.ctx.Respond(data.OMessage{Text: prompt, ParseMode: data.HTML, ReplyMarkup: kbd})
 	}
 }
 
 func (this *TagWizard) FinishMenu() { // updates menu with no buttons
-	if this.chat_id != 0 && this.wizard_id != 0 { this.bot.Remote.EditMessageText(this.chat_id, this.wizard_id, "", fmt.Sprintf("Tags:\n\n<pre>%s</pre>", this.TagString()), "HTML", nil, false) }
-	this.wizard_id = 0
+	if this.wizard_ctx != nil { this.wizard_ctx.EditTextAsync(data.OMessage{Text: fmt.Sprintf("Tags:\n\n<pre>%s</pre>", this.TagString()), ParseMode: data.HTML}, nil) }
+	this.wizard_ctx = nil
 }
 
 func (this *TagWizard) DoOver() {
@@ -399,8 +396,8 @@ func (this *TagWizard) DoOver() {
 	this.UpdateMenu()
 }
 
-func NewTagWizard(bot *telebot.TelegramBot) (*TagWizard) {
-	w := TagWizard{tags: api.NewTagSet(), rules:WizardRuleset{visitval: 1}, bot: bot}
+func NewTagWizard(ctx *gogram.MessageCtx) (*TagWizard) {
+	w := TagWizard{tags: api.NewTagSet(), rules:WizardRuleset{visitval: 1}, ctx: ctx}
 	return &w
 }
 
@@ -442,30 +439,30 @@ func (this *UserState) Reset() {
 	this.postwizard.Reset()
 }
 
-func NewUserState(user_id int, bot *telebot.TelegramBot) (*UserState) {
-	u := UserState{my_id: user_id}
-	u.postwizard = *NewTagWizard(bot)
-	rules, err := storage.GetUserTagRules(user_id, "main")
-	if err != nil { fmt.Println(err.Error()) }
+func NewUserState(ctx *gogram.MessageCtx) (*UserState) {
+	u := UserState{my_id: ctx.Msg.From.Id}
+	u.postwizard = *NewTagWizard(ctx)
+	rules, err := storage.GetUserTagRules(ctx.Msg.From.Id, "main")
+	if err != nil { ctx.Bot.ErrorLog.Println(err.Error()) }
 	if err == nil { u.postwizard.SetNewRulesFromString(rules) }
 	return &u
 }
 
 var states_by_user map[int]*UserState
 
-func GetUserState(from *telegram.TUser, bot *telebot.TelegramBot) (*UserState) {
+func GetUserState(ctx *gogram.MessageCtx) (*UserState) {
 	if states_by_user == nil {
 		states_by_user = make(map[int]*UserState)
 	}
 
-	if from == nil {
+	if ctx.Msg.From == nil {
 		return nil
 	}
 
-	state := states_by_user[from.Id]
+	state := states_by_user[ctx.Msg.From.Id]
 	if state == nil {
-		state = NewUserState(from.Id, bot)
-		states_by_user[from.Id] = state
+		state = NewUserState(ctx)
+		states_by_user[ctx.Msg.From.Id] = state
 	}
 
 	return state
@@ -620,12 +617,12 @@ birds. We just don't know.`
 type HelpState struct {
 }
 
-func (this *HelpState) Handle(ctx *telebot.MsgContext) {
+func (this *HelpState) Handle(ctx *gogram.MessageCtx) {
 	topic := "public"
 	if ctx.Msg.Chat.Type == "private" {
 		topic = ctx.Cmd.Argstr
 	}
-	ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, ShowHelp(topic), nil, "HTML", nil, false, nil)
+	ctx.ReplyAsync(data.OMessage{Text: ShowHelp(topic), ParseMode: data.HTML}, nil)
 }
 
 type LoginState struct {
@@ -633,21 +630,21 @@ type LoginState struct {
 	apikey	string
 }
 
-func (this *LoginState) Handle(ctx *telebot.MsgContext) {
+func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 	if ctx.Msg.From == nil {
 		return
 	}
 	if ctx.Cmd.Command == "/cancel" {
-		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, "Command cancelled.", nil, "HTML", nil, false, nil)
+		ctx.RespondAsync(data.OMessage{Text: "Command cancelled."}, nil)
 		ctx.SetState(nil)
 		return
 	} else if ctx.Msg.Chat.Type != "private" && ctx.Cmd.Command == "/login" {
-		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, "You should only use this command in private, to protect the security of your account.\n\nIf you accidentally posted your API key publicly, <a href=\"https://" + api.Endpoint + "/user/api_key\">go here to revoke it.</a>", &ctx.Msg.Message_id, "HTML", nil, false, nil)
+		ctx.ReplyAsync(data.OMessage{Text: "You should only use this command in private, to protect the security of your account.\n\nIf you accidentally posted your API key publicly, <a href=\"https://" + api.Endpoint + "/user/api_key\">go here to revoke it.</a>", ParseMode: data.HTML}, nil)
 		ctx.SetState(nil)
 		return
 	} else if ctx.Cmd.Command == "/logout" {
 		storage.WriteUserCreds(ctx.Msg.From.Id, "", "")
-		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, "You are now logged out.", nil, "HTML", nil, true, nil)
+		ctx.ReplyAsync(data.OMessage{Text: "You are now logged out."}, nil)
 		ctx.SetState(nil)
 		return
 	} else {
@@ -665,12 +662,12 @@ func (this *LoginState) Handle(ctx *telebot.MsgContext) {
 			if this.user != "" && this.apikey != "" {
 				success, err := api.TestLogin(this.user, this.apikey)
 				if success && err == nil {
-					ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, fmt.Sprintf("You are now logged in as <code>%s</code>.", this.user), nil, "HTML", nil, true, nil)
+					ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("You are now logged in as <code>%s</code>.", this.user), ParseMode: data.HTML}, nil)
 					storage.WriteUserCreds(ctx.Msg.From.Id, this.user, this.apikey)
 				} else if err != nil {
-					ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, fmt.Sprintf("An error occurred when testing if you were logged in! (%s)", html.EscapeString(err.Error())), nil, "HTML", nil, true, nil)
+					ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("An error occurred when testing if you were logged in! (%s)", html.EscapeString(err.Error())), ParseMode: data.HTML}, nil)
 				} else if !success {
-					ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, "Login failed! (api key invalid?)", nil, "HTML", nil, true, nil)
+					ctx.RespondAsync(data.OMessage{Text: "Login failed! (api key invalid?)"}, nil)
 				}
 				ctx.SetState(nil)
 				return
@@ -678,9 +675,9 @@ func (this *LoginState) Handle(ctx *telebot.MsgContext) {
 		}
 
 		if this.user == "" {
-			ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, "Please send your " + api.ApiName + " username.", nil, "HTML", nil, true, nil)
+			ctx.RespondAsync(data.OMessage{Text: "Please send your " + api.ApiName + " username."}, nil)
 		} else if this.apikey == "" {
-			ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, "Please send your " + api.ApiName + " <a href=\"https://" + api.Endpoint + "/user/api_key\">API Key</a>. (not your password!)", nil, "HTML", nil, true, nil)
+			ctx.RespondAsync(data.OMessage{Text: "Please send your " + api.ApiName + " <a href=\"https://" + api.Endpoint + "/user/api_key\">API Key</a>. (not your password!)", ParseMode: data.HTML}, nil)
 		}
 		return
 	}
@@ -691,12 +688,12 @@ type TagRuleState struct {
 	tagrulename string
 }
 
-func (this *TagRuleState) Handle(ctx *telebot.MsgContext) {
+func (this *TagRuleState) Handle(ctx *gogram.MessageCtx) {
 	if ctx.Msg.From == nil {
 		return
 	}
 	if ctx.Cmd.Command == "/cancel" {
-		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, "Command cancelled.", nil, "HTML", nil, false, nil)
+		ctx.RespondAsync(data.OMessage{Text: "Command cancelled."}, nil)
 		ctx.SetState(nil)
 		return
 	}
@@ -706,7 +703,7 @@ func (this *TagRuleState) Handle(ctx *telebot.MsgContext) {
 		ctx.SetState(this)
 	}
 
-	var doc *telegram.TDocument
+	var doc *data.TDocument
 	if ctx.Msg.Document != nil {
 		doc = ctx.Msg.Document
 	} else if ctx.Msg.Reply_to_message != nil && ctx.Msg.Reply_to_message.Document != nil {
@@ -715,22 +712,22 @@ func (this *TagRuleState) Handle(ctx *telebot.MsgContext) {
 
 	if doc != nil {
 		if !strings.HasSuffix(doc.File_name, ".txt") {
-			ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, fmt.Sprintf("%s isn't a plain text file.", doc.File_name), nil, "HTML", nil, true, nil)
+			ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("%s isn't a plain text file.", html.EscapeString(doc.File_name)), ParseMode: data.HTML}, nil)
 			return
 		}
-		file, err := ctx.Bot.Remote.GetFile(doc.File_id)
+		file, err := ctx.Bot.Remote.GetFile(data.OGetFile{FileID: doc.File_id})
 		if err != nil || file == nil || file.File_path == nil {
-			ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, fmt.Sprintf("Error while fetching %s, try sending it again?", doc.File_name), nil, "HTML", nil, true, nil)
+			ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("Error while fetching %s, try sending it again?", html.EscapeString(doc.File_name)), ParseMode: data.HTML}, nil)
 			return
 		}
-		file_data, err := ctx.Bot.Remote.DownloadFile(*file.File_path)
+		file_data, err := ctx.Bot.Remote.DownloadFile(data.OFile{FilePath: *file.File_path})
 		if err != nil || file_data == nil {
-			ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, fmt.Sprintf("Error while downloading %s, try sending it again?", doc.File_name), nil, "HTML", nil, true, nil)
+			ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("Error while downloading %s, try sending it again?", html.EscapeString(doc.File_name)), ParseMode: data.HTML}, nil)
 			return
 		}
 		b, err := ioutil.ReadAll(file_data)
 		if err != nil || b == nil {
-			ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, fmt.Sprintf("Error while reading %s, try sending it again?", doc.File_name), nil, "HTML", nil, true, nil)
+			ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("Error while reading %s, try sending it again?", html.EscapeString(doc.File_name)), ParseMode: data.HTML}, nil)
 			return
 		}
 		this.tagwizardrules = string(b)
@@ -738,7 +735,7 @@ func (this *TagRuleState) Handle(ctx *telebot.MsgContext) {
 	if ctx.Cmd.Argstr != "" {
 		this.tagrulename = ctx.Cmd.Argstr
 	} else {
-		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, "Send some new tag rules in a text file.", nil, "HTML", nil, true, nil)
+		ctx.RespondAsync(data.OMessage{Text: "Send some new tag rules in a text file."}, nil)
 		return
 	}
 
@@ -746,11 +743,11 @@ func (this *TagRuleState) Handle(ctx *telebot.MsgContext) {
 		if this.tagrulename == "" { this.tagrulename = "main" }
 		this.tagwizardrules = strings.Replace(this.tagwizardrules, "\r", "", -1) // pesky windows carriage returns
 		storage.WriteUserTagRules(ctx.Msg.From.Id, this.tagrulename, this.tagwizardrules)
-		if err := NewTagWizard(ctx.Bot).SetNewRulesFromString(this.tagwizardrules); err != nil {
-			ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, fmt.Sprintf("Error while parsing tag rules: %s", err.Error()), nil, "HTML", nil, true, nil)
+		if err := NewTagWizard(ctx).SetNewRulesFromString(this.tagwizardrules); err != nil {
+			ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("Error while parsing tag rules: %s", html.EscapeString(err.Error())), ParseMode: data.HTML}, nil)
 			return
 		} else {
-			ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, "Set new tag rules.", nil, "HTML", nil, true, nil)
+			ctx.RespondAsync(data.OMessage{Text: "Set new tag rules."}, nil)
 			ctx.SetState(nil)
 			return
 		}
@@ -771,10 +768,8 @@ type PostState struct {
 	postreviewed	bool
 }
 
-func (this *PostState) Reset(ctx *telebot.MsgContext) {
-	if this.postwizard.chat_id != 0 && this.postwizard.wizard_id != 0 {
-		ctx.Bot.Remote.DeleteMessage(this.postwizard.chat_id, this.postwizard.wizard_id)
-	}
+func (this *PostState) Reset(ctx *gogram.MessageCtx) {
+	this.postwizard.Reset()
 	ctx.SetState(nil)
 }
 
@@ -788,23 +783,27 @@ func (this *PostState) WriteUserTagRules(my_id int, tagrules, name string) {
 	storage.WriteUserTagRules(my_id, name, tagrules)
 }
 
-func (this *PostState) Handle(ctx *telebot.MsgContext) {
+func (this *PostState) Handle(ctx *gogram.MessageCtx) {
 	if ctx.Msg.From == nil {
 		return
 	}
 	if ctx.Cmd.Command == "/cancel" {
-		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, "Command cancelled.", nil, "HTML", nil, false, nil)
+		ctx.RespondAsync(data.OMessage{Text: "Command cancelled."}, nil)
 		ctx.SetState(nil)
 		return
 	}
 
 	if ctx.GetState() == nil {
 		this = &PostState{}
+		this.postwizard = *NewTagWizard(ctx)
+		rules, err := storage.GetUserTagRules(ctx.Msg.From.Id, "main")
+		if err != nil { ctx.Bot.ErrorLog.Println(err.Error()) }
+		if err == nil { this.postwizard.SetNewRulesFromString(rules) }
 		ctx.SetState(this)
 	}
 
 	var prompt string
-	var reply *int
+	var reply *gogram.MessageCtx
 
 	if ctx.Cmd.Command == "/post" || ctx.Cmd.Command == "/file" || ctx.Cmd.Command == "/f" {
 		this.postfile.mode = none
@@ -836,7 +835,7 @@ func (this *PostState) Handle(ctx *telebot.MsgContext) {
 	} else if ctx.Cmd.Command == "/upload" {
 		this.postmode = postupload
 	} else if ctx.Cmd.Command == "/help" {
-		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, ShowHelp("post"), reply, "HTML", nil, true, nil)
+		ctx.RespondAsync(data.OMessage{Text: ShowHelp("post"), ParseMode: data.HTML}, nil)
 		return
 	} else if ctx.Cmd.Command == "/z" && this.postmode == postwizard {
 		this.postwizard.ToggleTagsFromString(ctx.Cmd.Argstr)
@@ -851,26 +850,19 @@ func (this *PostState) Handle(ctx *telebot.MsgContext) {
 		this.postwizard.DoOver()
 	}
 
-	if this.postmode == postfile || this.postmode == postpublic {
+	if this.postmode == postfile {
 		if ctx.Msg.Photo != nil { // inline photo
 			prompt = "That photo was compressed by telegram, and its quality may be severely degraded.  Send it as a file instead if you're sure.\n\n"
 		} else if ctx.Msg.Document != nil { // inline file
 			prompt = "Preparing to post file sent in this message.\n\n"
 			this.postfile.mode = file_id
 			this.postfile.file_id = ctx.Msg.Document.File_id
-			if this.postmode == postpublic {
-				fwd, err := ctx.Bot.Remote.ForwardMessage(ctx.Msg.From.Id, ctx.Msg.Chat.Id, ctx.Msg.Message_id, true)
-				if err == nil { reply = &fwd.Message_id }
-			} else { reply = &ctx.Msg.Message_id }
 			this.postmode = postnext
 		} else if ctx.Msg.Reply_to_message != nil && ctx.Msg.Reply_to_message.Document != nil { // reply to file
+			reply = gogram.NewMessageCtx(ctx.Msg.Reply_to_message, false, ctx.Bot)
 			prompt = "Preparing to post file sent in this message.\n\n"
 			this.postfile.mode = file_id
 			this.postfile.file_id = ctx.Msg.Reply_to_message.Document.File_id
-			if this.postmode == postpublic {
-				fwd, err := ctx.Bot.Remote.ForwardMessage(ctx.Msg.From.Id, ctx.Msg.Chat.Id, ctx.Msg.Reply_to_message.Message_id, true)
-				if err == nil { reply = &fwd.Message_id }
-			} else { reply = &ctx.Msg.Reply_to_message.Message_id }
 			this.postmode = postnext
 		} else if strings.HasPrefix(ctx.Cmd.Argstr, "http://") || strings.HasPrefix(ctx.Cmd.Argstr, "https://") { // inline url
 			prompt = fmt.Sprintf("Preparing to post from <a href=\"%s\">this URL</a>.\n\n", ctx.Cmd.Argstr)
@@ -878,11 +870,10 @@ func (this *PostState) Handle(ctx *telebot.MsgContext) {
 			this.postfile.url = ctx.Cmd.Argstr
 			this.postmode = postnext
 		} else if ctx.Msg.Reply_to_message != nil && ctx.Msg.Reply_to_message.Photo != nil { // reply to photo
+			reply = gogram.NewMessageCtx(ctx.Msg.Reply_to_message, false, ctx.Bot)
 			prompt = "That photo was compressed by telegram, and its quality may be severely degraded.  Send it as a file instead.\n\n"
-			if this.postmode != postpublic { reply = &ctx.Msg.Reply_to_message.Message_id }
 		} else if ctx.Msg.Reply_to_message != nil || ctx.Cmd.Argstr != "" { // reply to unknown, or unknown
 			prompt = "Sorry, I don't know what to do with that.\n\nPlease send me a file. Either send (or forward) one directly, reply to one you sent earlier, or send a URL."
-			reply = &ctx.Msg.Message_id
 		} else {
 			this.postmode = postnext
 		}
@@ -964,15 +955,15 @@ func (this *PostState) Handle(ctx *telebot.MsgContext) {
 			if this.postfile.mode == url {
 				post_url = this.postfile.url
 			} else {
-				file, err := ctx.Bot.Remote.GetFile(this.postfile.file_id)
+				file, err := ctx.Bot.Remote.GetFile(data.OGetFile{FileID: this.postfile.file_id})
 				if err != nil || file == nil || file.File_path == nil {
-					ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, fmt.Sprintf("Error while fetching %s, try sending it again?", this.postfile.file_id), nil, "HTML", nil, true, nil)
+					ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("Error while fetching %s, try sending it again?", this.postfile.file_id)}, nil)
 					this.postmode = postnext
 					return
 				}
-				post_filedata, err = ctx.Bot.Remote.DownloadFile(*file.File_path)
+				post_filedata, err = ctx.Bot.Remote.DownloadFile(data.OFile{FilePath: *file.File_path})
 				if err != nil || post_filedata == nil {
-					ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, fmt.Sprintf("Error while downloading %s, try sending it again?", this.postfile.file_id), nil, "HTML", nil, true, nil)
+					ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("Error while downloading %s, try sending it again?", this.postfile.file_id)}, nil)
 					this.postmode = postnext
 					return
 				}
@@ -981,16 +972,16 @@ func (this *PostState) Handle(ctx *telebot.MsgContext) {
 			result, err := api.UploadFile(post_filedata, post_url, this.postwizard.TagString(), this.postrating, this.postsource, this.postdescription, this.postparent, user, apikey)
 			if err != nil || !result.Success {
 				if result.StatusCode == 403 {
-					ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, fmt.Sprintf("It looks like your api key isn't valid, you need to login again.", *result.Reason), nil, "HTML", nil, true, nil)
+					ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("It looks like your api key isn't valid, you need to login again.", *result.Reason)}, nil)
 					this.Reset(ctx)
 				} else if result.Location != nil && result.StatusCode == 423 {
-					ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, fmt.Sprintf("It looks like that file has already been posted. <a href=\"%s\">Check it out here.</a>", *result.Location), nil, "HTML", nil, true, nil)
+					ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("It looks like that file has already been posted. <a href=\"%s\">Check it out here.</a>", *result.Location), ParseMode: data.HTML}, nil)
 					this.Reset(ctx)
 				} else {
-					ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, fmt.Sprintf("I'm having issues posting that file. (%s)", *result.Reason), nil, "HTML", nil, true, nil)
+					ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("I'm having issues posting that file. (%s)", *result.Reason)}, nil)
 				}
 			} else {
-				ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, fmt.Sprintf("Upload complete! <a href=\"%s\">Check it out.</a>", *result.Location), nil, "HTML", nil, true, nil)
+				ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("Upload complete! <a href=\"%s\">Check it out.</a>", *result.Location), ParseMode: data.HTML}, nil)
 				this.Reset(ctx)
 			}
 
@@ -1039,7 +1030,11 @@ func (this *PostState) Handle(ctx *telebot.MsgContext) {
 	}
 
 	if prompt != "" {
-		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, prompt, reply, "HTML", nil, true, nil)
+		if reply != nil {
+			reply.Reply(data.OMessage{Text: prompt, ParseMode: data.HTML})
+		} else {
+			ctx.Respond(data.OMessage{Text: prompt, ParseMode: data.HTML})
+		}
 	}
 
 	if this.posttagwiz && this.postmode == postwizard {
@@ -1051,7 +1046,7 @@ func (this *PostState) Handle(ctx *telebot.MsgContext) {
 type JanitorState struct {
 }
 
-func (this *JanitorState) Handle(ctx *telebot.MsgContext) {
+func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 	if ctx.Msg.From == nil {
 		// ignore messages not sent by a user.
 		return
@@ -1063,26 +1058,26 @@ func (this *JanitorState) Handle(ctx *telebot.MsgContext) {
 		return
 	}
 	if err != nil {
-		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", nil, "HTML", nil, true, nil)
+		ctx.ReplyOrPMAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
 		return
 	}
 
 	if ctx.Cmd.Command == "/indextags" {
-		go tagindex.SyncTagsExternal(ctx.Bot, &ctx.Msg, ctx.Cmd)
+		go tagindex.SyncTagsExternal(ctx)
 	} else if ctx.Cmd.Command == "/indextagaliases" {
-		go tagindex.UpdateAliases(ctx.Bot, &ctx.Msg)
+		go tagindex.UpdateAliases(ctx)
 	} else if ctx.Cmd.Command == "/recountnegative" {
-		go tagindex.RecountNegative(ctx.Bot, &ctx.Msg, ctx.Cmd)
+		go tagindex.RecountNegative(ctx)
 	} else if ctx.Cmd.Command == "/cats" {
-		go tagindex.Concatenations(ctx.Bot, &ctx.Msg, ctx.Cmd)
+		go tagindex.Concatenations(ctx)
 	} else if ctx.Cmd.Command == "/blits" {
-		go tagindex.Blits(ctx.Bot, &ctx.Msg, ctx.Cmd)
+		go tagindex.Blits(ctx)
 	} else if ctx.Cmd.Command == "/findtagtypos" {
-		go tagindex.FindTagTypos(ctx.Bot, &ctx.Msg, ctx.Cmd)
+		go tagindex.FindTagTypos(ctx)
 	} else if ctx.Cmd.Command == "/recounttags" {
-		go tagindex.RecountTagsExternal(ctx.Bot, &ctx.Msg, ctx.Cmd)
+		go tagindex.RecountTagsExternal(ctx)
 	} else if ctx.Cmd.Command == "/syncposts" {
-		go tagindex.SyncPosts(ctx.Bot, &ctx.Msg, ctx.Cmd)
+		go tagindex.SyncPosts(ctx)
 	} else if ctx.Cmd.Command == "/editposttest" {
 		post := 2893902 // https://api-host/post/show/2893902
 		newtags := "1:1 2021 anthro beastars canid canine canis clothed clothing fur grey_body grey_fur hi_res javigameboy legoshi_(beastars) male mammal simple_background solo teeth wolf"

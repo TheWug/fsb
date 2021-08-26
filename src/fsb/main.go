@@ -5,9 +5,7 @@ import (
 	"os"
 	"botbehavior"
 	"bot"
-	"telegram/telebot"
-
-	bbot "bot"
+	"github.com/thewug/gogram"
 )
 
 // This bot runs by polling telegram for updates, and then making synchronous calls to api. Because of the latency
@@ -30,13 +28,11 @@ func main() {
 		}
 	}
 
-	var thebot telebot.TelegramBot
-	machine := telebot.NewMessageStateMachine()
+	var thebot gogram.TelegramBot
+	machine := gogram.NewMessageStateMachine()
 	var settings botbehavior.Settings
 	var behavior botbehavior.Behavior
 	behavior.ForwardTo = machine
-
-	settings.Bot = &thebot
 
 	e := thebot.Init(settingsFile, &settings)
 	if e != nil {
@@ -50,15 +46,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	bbot.Init(settings)
+	bot.Init(settings)
 	if e != nil {
 		fmt.Println(e.Error())
 		os.Exit(1)
 	}
-
-	thebot.SetMessageCallback(machine)
-	thebot.SetInlineCallback(&behavior)
-	thebot.SetCallbackCallback(&behavior)
 
 	var help bot.HelpState
 	var login bot.LoginState
@@ -77,6 +69,11 @@ func main() {
 	machine.AddCommand("/recounttags", &janitor)
 	machine.AddCommand("/syncposts", &janitor)
 	machine.AddCommand("/editposttest", &janitor)
+
+	thebot.SetMessageCallback(machine)
+	thebot.SetStateMachine(machine)
+	thebot.SetInlineCallback(&behavior)
+	thebot.SetCallbackCallback(&behavior)
 
 	thebot.MainLoop()
 }

@@ -1,10 +1,11 @@
 package tagindex
 
 import (
+	"github.com/thewug/gogram"
+	"github.com/thewug/gogram/data"
+
 	"api"
 	"api/types"
-	"telegram"
-	"telegram/telebot"
 	"storage"
 	"wordset"
 
@@ -41,12 +42,12 @@ func DBMessage(done bool, name string) (string) {
 }
 
 // launches a message thing and repeatedly edits it with updates that are passed into channels. expects to live in a goroutine.
-func ProgressMessageRoutine(bot *telebot.TelegramBot, chat_id int64, initial_status, initial_suffix string, new_status, new_suffix chan string) {
+func ProgressMessageRoutine(ctx *gogram.MessageCtx, initial_status, initial_suffix string, new_status, new_suffix chan string) {
 	var err error
-	var sent_message *telegram.TMessage
+	var sent_message *gogram.MessageCtx
 
 	if initial_status != "" {
-		sent_message, err = bot.Remote.SendMessage(chat_id, fmt.Sprintf("%s%s", initial_status, initial_suffix), nil, "HTML", nil, true)
+		sent_message, err = ctx.Reply(data.OMessage{Text: fmt.Sprintf("%s%s", initial_status, initial_suffix), ParseMode: data.HTML})
 	}
 
 	edit_timer := time.NewTicker(1000 * time.Millisecond)
@@ -68,9 +69,9 @@ func ProgressMessageRoutine(bot *telebot.TelegramBot, chat_id int64, initial_sta
 			}
 
 			if sent_message == nil {
-				sent_message, err = bot.Remote.SendMessage(chat_id, fmt.Sprintf("%s%s", message, suffix), nil, "HTML", nil, true)
+				sent_message, err = ctx.Reply(data.OMessage{Text: fmt.Sprintf("%s%s", message, suffix), ParseMode: data.HTML})
 			} else {
-				bot.Remote.EditMessageTextAsync(sent_message.Chat.Id, sent_message.Message_id, "", fmt.Sprintf("%s%s", message, suffix), "HTML", nil, true, nil)
+				sent_message.EditTextAsync(data.OMessage{Text: fmt.Sprintf("%s%s", message, suffix), ParseMode: data.HTML}, nil)
 			}
 			last_update = now
 			changed = false
@@ -100,38 +101,38 @@ func ProgressMessageRoutine(bot *telebot.TelegramBot, chat_id int64, initial_sta
 	update(true)
 }
 
-func ProgressMessage(bot *telebot.TelegramBot, id int64, initial_status, initial_suffix string) (chan string, chan string) {
+func ProgressMessage(ctx *gogram.MessageCtx, initial_status, initial_suffix string) (chan string, chan string) {
 	new_status := make(chan string)
 	new_suffix := make(chan string)
-	go ProgressMessageRoutine(bot, id, initial_status, initial_suffix, new_status, new_suffix)
+	go ProgressMessageRoutine(ctx, initial_status, initial_suffix, new_status, new_suffix)
 	return new_status, new_suffix
 }
 
-func SyncTagsExternal(bot *telebot.TelegramBot, message *telegram.TMessage, cmd telebot.CommandData) {
+func SyncTagsExternal(ctx *gogram.MessageCtx) {
 	full := false
-	for _, token := range cmd.Args {
+	for _, token := range ctx.Cmd.Args {
 		if token == "--full" {
 			full = true
 		}
 	}
 
-	err := SyncTags(bot, message, full, nil, nil)
+	err := SyncTags(ctx, full, nil, nil)
 	if err == storage.ErrNoLogin {
-		bot.Remote.SendMessageAsync(message.From.Id, "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", nil, "HTML", nil, true, nil)
+		ctx.ReplyOrPMAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
 		return
 	} else if err != nil {
 		log.Println("Error occurred syncing tags: %s", err.Error())
 	}
 }
 
-func SyncTags(bot *telebot.TelegramBot, message *telegram.TMessage, full bool, msg, sfx chan string) (error) {
-	user, api_key, janitor, err := storage.GetUserCreds(message.From.Id)
+func SyncTags(ctx *gogram.MessageCtx, full bool, msg, sfx chan string) (error) {
+	user, api_key, janitor, err := storage.GetUserCreds(ctx.Msg.From.Id)
 	if err != nil || !janitor { return err }
 
 	m := "Syncing tag database..."
 	if full { m = "Full syncing tag database..." }
 	if msg == nil || sfx == nil {
-		msg, sfx = ProgressMessage(bot, message.Chat.Id, m, "")
+		msg, sfx = ProgressMessage(ctx, m, "")
 		defer close(msg)
 		defer close(sfx)
 	} else {
@@ -208,10 +209,10 @@ func SyncTags(bot *telebot.TelegramBot, message *telegram.TMessage, full bool, m
 	return nil
 }
 
-func RecountTagsExternal(bot *telebot.TelegramBot, message *telegram.TMessage, cmd telebot.CommandData) {
+func RecountTagsExternal(ctx *gogram.MessageCtx) {
 	real_counts := false
 	alias_counts := false
-	for _, token := range cmd.Args {
+	for _, token := range ctx.Cmd.Args {
 		if token == "--real" {
 			real_counts = true
 		} else if token == "--alias" {
@@ -219,22 +220,22 @@ func RecountTagsExternal(bot *telebot.TelegramBot, message *telegram.TMessage, c
 		}
 	}
 
-	msg, sfx := ProgressMessage(bot, message.Chat.Id, "", "")
+	msg, sfx := ProgressMessage(ctx, "", "")
 	defer close(msg)
 	defer close(sfx)
 
 	if (real_counts) {
-		RecountTags(bot, message, msg, sfx)
+		RecountTags(ctx, msg, sfx)
 	}
 	if (alias_counts) {
-		CalculateAliasedCounts(bot, message, msg, sfx)
+		CalculateAliasedCounts(ctx, msg, sfx)
 	}
 }
 
-func RecountTags(bot *telebot.TelegramBot, message *telegram.TMessage, msg, sfx chan string) (error) {
+func RecountTags(ctx *gogram.MessageCtx, msg, sfx chan string) (error) {
 	m := "Recounting tags..."
 	if msg == nil || sfx == nil {
-		msg, sfx = ProgressMessage(bot, message.Chat.Id, m, "")
+		msg, sfx = ProgressMessage(ctx, m, "")
 		defer close(msg)
 		defer close(sfx)
 	} else {
@@ -251,15 +252,15 @@ func RecountTags(bot *telebot.TelegramBot, message *telegram.TMessage, msg, sfx 
 	return err
 }
 
-func SyncPosts(bot *telebot.TelegramBot, message *telegram.TMessage, cmd telebot.CommandData) {
-	user, api_key, janitor, err := storage.GetUserCreds(message.From.Id)
+func SyncPosts(ctx *gogram.MessageCtx) {
+	user, api_key, janitor, err := storage.GetUserCreds(ctx.Msg.From.Id)
 	if err != nil || !janitor {
-		bot.Remote.SendMessageAsync(message.From.Id, "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", nil, "HTML", nil, true, nil)
+		ctx.ReplyAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
 		return
 	}
 
 	var full, restart bool
-	for _, token := range cmd.Args {
+	for _, token := range ctx.Cmd.Args {
 		if token == "--full" {
 			full = true
 		} else if token == "--restart" {
@@ -267,7 +268,7 @@ func SyncPosts(bot *telebot.TelegramBot, message *telegram.TMessage, cmd telebot
 		}
 	}
 
-	msg, sfx := ProgressMessage(bot, message.Chat.Id, "Syncing post database...", "")
+	msg, sfx := ProgressMessage(ctx, "Syncing post database...", "")
 	defer close(msg)
 	defer close(sfx)
 
@@ -410,7 +411,7 @@ func SyncPosts(bot *telebot.TelegramBot, message *telegram.TMessage, cmd telebot
 			storage.SetMigrationState(state, 0)
 		}
 		if state == 6 {
-			SyncTags(bot, message, false, msg, sfx)
+			SyncTags(ctx, false, msg, sfx)
 			state += 1
 			storage.SetMigrationState(state, 0)
 		}
@@ -461,7 +462,7 @@ func SyncPosts(bot *telebot.TelegramBot, message *telegram.TMessage, cmd telebot
 	}
 	close(posts)
 
-	SyncTags(bot, message, false, msg, sfx)
+	SyncTags(ctx, false, msg, sfx)
 
 	msg <- "Resolving post tags..."
 	err = storage.ImportPostTagsFromNameToID(sfx)
@@ -473,21 +474,21 @@ func SyncPosts(bot *telebot.TelegramBot, message *telegram.TMessage, cmd telebot
 	msg <- "Writing new checkpoint..."
 	storage.SetTagHistoryCheckpoint(new_checkpoint)
 
-	RecountTags(bot, message, msg, sfx)
-	CalculateAliasedCounts(bot, message, msg, sfx)
+	RecountTags(ctx, msg, sfx)
+	CalculateAliasedCounts(ctx, msg, sfx)
 	sfx <- " done."
 }
 
-func UpdateAliases(bot *telebot.TelegramBot, message *telegram.TMessage) {
-	user, api_key, janitor, err := storage.GetUserCreds(message.From.Id)
+func UpdateAliases(ctx *gogram.MessageCtx) {
+	user, api_key, janitor, err := storage.GetUserCreds(ctx.Msg.From.Id)
 	if err != nil || !janitor {
-		bot.Remote.SendMessageAsync(message.From.Id, "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", nil, "HTML", nil, true, nil)
+		ctx.ReplyAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
 		return
 	}
 
-	sent_message, err := bot.Remote.SendMessage(message.From.Id, DownloadMessage(0, 0, "alias"), nil, "HTML", nil, true)
+	sent_message, err := ctx.Reply(data.OMessage{Text: DownloadMessage(0, 0, "alias"), ParseMode: data.HTML})
 	if err != nil {
-		bot.ErrorLog.Printf("Couldn't send message to update requestor. ???")
+		ctx.Bot.ErrorLog.Printf("Couldn't send message to update requestor. ???")
 		return
 	}
 
@@ -498,12 +499,12 @@ func UpdateAliases(bot *telebot.TelegramBot, message *telegram.TMessage) {
 	if len(list) != 0 {
 		for cont {
 			if page % 5 == 0 { // every 5 pages, update the percentage
-				bot.Remote.EditMessageTextAsync(message.From.Id, sent_message.Message_id, "", DownloadMessage(list[len(list) - 1].Id, list[0].Id, "alias"), "HTML", nil, true, nil)
+				sent_message.EditTextAsync(data.OMessage{Text: DownloadMessage(list[len(list) - 1].Id, list[0].Id, "alias"), ParseMode: data.HTML}, nil)
 			}
 			time.Sleep(750 * time.Millisecond) // 750ms per request, just above the hard limit of 500
 			list, cont, page, err = api.ListOnePageOfAliases(user, api_key, page, list)
 		}
-		bot.Remote.EditMessageTextAsync(message.From.Id, sent_message.Message_id, "", DBMessage(false, "alias"), "HTML", nil, true, nil)
+		sent_message.EditTextAsync(data.OMessage{Text: DBMessage(false, "alias"), ParseMode: data.HTML}, nil)
 	}
 
 	storage.ClearAliasIndex()
@@ -523,7 +524,7 @@ func UpdateAliases(bot *telebot.TelegramBot, message *telegram.TMessage) {
 		}
 		close(fixed_aliases)
 	}
-	bot.Remote.EditMessageTextAsync(message.From.Id, sent_message.Message_id, "", DBMessage(true, "alias"), "HTML", nil, true, nil)
+	sent_message.EditTextAsync(data.OMessage{Text: DBMessage(true, "alias"), ParseMode: data.HTML}, nil)
 }
 
 const (
@@ -535,14 +536,14 @@ func Percent(current, max int) (string) {
 	return fmt.Sprintf(" (%.1f%%)", float32(current * 100) / float32(max))
 }
 
-func RecountNegativeReal(user, api_key string, skip_update bool, broken_tags types.TTagInfoArray, message string, status *telegram.TMessage, bot *telebot.TelegramBot) (string) {
+func RecountNegativeReal(user, api_key string, skip_update bool, broken_tags types.TTagInfoArray, message string, sent_message *gogram.MessageCtx) (string) {
 	for i, tag := range broken_tags {
 		if i % 5 == 0 { // every 5 pages, update the percentage
-			bot.Remote.EditMessageTextAsync(status.Chat.Id, status.Message_id, "", fmt.Sprintf("%s (%s)...", message, Percent(i, len(broken_tags))), "HTML", nil, true, nil)
+			sent_message.EditTextAsync(data.OMessage{Text: fmt.Sprintf("%s (%s)...", message, Percent(i, len(broken_tags))), ParseMode: data.HTML}, nil)
 		}
 		err := api.FixPostcountForTag(user, api_key, tag.Name)
 		if err != nil {
-			log.Printf("Error jiggling tag: %s\n", err.Error())
+			sent_message.Bot.ErrorLog.Printf("Error jiggling tag: %s\n", err.Error())
 			continue
 		}
 		time.Sleep(750 * time.Millisecond)
@@ -560,11 +561,11 @@ func RecountNegativeReal(user, api_key string, skip_update bool, broken_tags typ
 
 		for i, tag := range broken_tags {
 			if i % 5 == 0 { // every 5 pages, update the percentage
-				bot.Remote.EditMessageTextAsync(status.Chat.Id, status.Message_id, "", fmt.Sprintf("%s (%s)...", message, Percent(i, len(broken_tags))), "HTML", nil, true, nil)
+				sent_message.EditTextAsync(data.OMessage{Text: fmt.Sprintf("%s (%s)...", message, Percent(i, len(broken_tags))), ParseMode: data.HTML}, nil)
 			}
 			td, err := api.GetTagData(user, api_key, tag.Id)
 			if err != nil {
-				log.Printf("Error updating tag: %s\n", err.Error())
+				sent_message.Bot.ErrorLog.Printf("Error updating tag: %s\n", err.Error())
 				continue
 			}
 			time.Sleep(750 * time.Millisecond)
@@ -575,14 +576,14 @@ func RecountNegativeReal(user, api_key string, skip_update bool, broken_tags typ
 	}
 
 	message = fmt.Sprintf("%s (done).\n", message)
-	bot.Remote.EditMessageTextAsync(status.Chat.Id, status.Message_id, "", message, "HTML", nil, true, nil)
+	sent_message.EditTextAsync(data.OMessage{Text: message, ParseMode: data.HTML}, nil)
 	return message
 }
 
-func RecountNegative(bot *telebot.TelegramBot, message *telegram.TMessage, cmd telebot.CommandData) {
-	user, api_key, janitor, err := storage.GetUserCreds(message.From.Id)
+func RecountNegative(ctx *gogram.MessageCtx) {
+	user, api_key, janitor, err := storage.GetUserCreds(ctx.Msg.From.Id)
 	if err != nil || !janitor {
-		bot.Remote.SendMessageAsync(message.From.Id, "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", nil, "HTML", nil, true, nil)
+		ctx.ReplyAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
 		return
 	}
 
@@ -591,7 +592,7 @@ func RecountNegative(bot *telebot.TelegramBot, message *telegram.TMessage, cmd t
 	count := 0
 	state := STATE_READY
 
-	for _, token := range cmd.Args {
+	for _, token := range ctx.Cmd.Args {
 		if state == STATE_COUNT {
 			temp, err := strconv.Atoi(token)
 			if err == nil { count = temp }
@@ -615,17 +616,17 @@ func RecountNegative(bot *telebot.TelegramBot, message *telegram.TMessage, cmd t
 		m = fmt.Sprintf("Jiggling tags with (count &lt; %d)", count)
 	}
 	if err != nil {
-		bot.ErrorLog.Printf("Couldn't enumerate tags.")
+		ctx.Bot.ErrorLog.Printf("Couldn't enumerate tags.")
 		return
 	}
 
-	sent_message, err := bot.Remote.SendMessage(message.From.Id, fmt.Sprintf("%s...", m), nil, "HTML", nil, true)
+	sent_message, err := ctx.Reply(data.OMessage{Text: fmt.Sprintf("%s...", m), ParseMode: data.HTML})
 	if err != nil {
-		bot.ErrorLog.Printf("Couldn't send message to update requestor. %s\n", err.Error())
+		ctx.Bot.ErrorLog.Printf("Couldn't send message to update requestor. %s\n", err.Error())
 		return
 	}
 
-	RecountNegativeReal(user, api_key, skip_update, broken_tags, m, sent_message, bot)
+	RecountNegativeReal(user, api_key, skip_update, broken_tags, m, sent_message)
 }
 
 const (
@@ -660,7 +661,7 @@ func Traverse(words []string, solutions chan []string, so_far []string, combined
 	}
 }
 
-func FindTagConcatenations(bot *telebot.TelegramBot, message *telegram.TMessage) {
+func FindTagConcatenations(ctx *gogram.MessageCtx) {
 	tags, err := storage.EnumerateAllTags(storage.EnumerateControl{})
 	if err != nil {
 		log.Printf("Error enumerating all tags: %s", err.Error())
@@ -693,10 +694,10 @@ func FindTagConcatenations(bot *telebot.TelegramBot, message *telegram.TMessage)
 	}
 }
 
-func CalculateAliasedCounts(bot *telebot.TelegramBot, message *telegram.TMessage, msg, sfx chan string) (error) {
+func CalculateAliasedCounts(ctx *gogram.MessageCtx, msg, sfx chan string) (error) {
 	m := "Mapping counts between aliased tags..."
 	if msg == nil || sfx == nil {
-		msg, sfx = ProgressMessage(bot, message.Chat.Id, m, "")
+		msg, sfx = ProgressMessage(ctx, m, "")
 		defer close(msg)
 		defer close(sfx)
 	} else {
@@ -740,7 +741,7 @@ func NewTagsFromOldTags(oldtags string, deltags, addtags map[string]bool) (strin
 	return strings.Join(tags, " ")
 }
 
-func FindTagTypos(bot *telebot.TelegramBot, message *telegram.TMessage, cmd telebot.CommandData) {
+func FindTagTypos(ctx *gogram.MessageCtx) {
 	mode := MODE_READY
 	var distinct, include, exclude []string
 	var threshhold int
@@ -748,7 +749,7 @@ func FindTagTypos(bot *telebot.TelegramBot, message *telegram.TMessage, cmd tele
 	var start_tag string
 	results := make(map[string]TagEditBox)
 
-	for _, token := range cmd.Args {
+	for _, token := range ctx.Cmd.Args {
 		token = strings.ToLower(token)
 		if mode == MODE_DISTINCT {
 			distinct = append(distinct, token)
@@ -786,14 +787,14 @@ func FindTagTypos(bot *telebot.TelegramBot, message *telegram.TMessage, cmd tele
 		}
 	}
 
-	user, api_key, janitor, err := storage.GetUserCreds(message.From.Id)
+	user, api_key, janitor, err := storage.GetUserCreds(ctx.Msg.From.Id)
 	if (err != nil || !janitor) && fix {
-		bot.Remote.SendMessageAsync(message.Chat.Id, "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", nil, "HTML", nil, true, nil)
+		ctx.ReplyAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
 		return
 	}
 
 	if start_tag == "" {
-		bot.Remote.SendMessageAsync(message.Chat.Id, "You must specify a tag.", nil, "HTML", nil, true, nil)
+		ctx.ReplyAsync(data.OMessage{Text: "You must specify a tag.", ParseMode: data.HTML}, nil)
 		return
 	}
 
@@ -810,14 +811,14 @@ func FindTagTypos(bot *telebot.TelegramBot, message *telegram.TMessage, cmd tele
 		}
 	}
 
-	t1, err := storage.GetTag(cmd.Args[0], storage.EnumerateControl{CreatePhantom: true})
+	t1, err := storage.GetTag(ctx.Cmd.Args[0], storage.EnumerateControl{CreatePhantom: true})
 	if err != nil { log.Printf("Error occurred when looking up tag: %s", err.Error()) }
 	if t1 == nil {
-		bot.Remote.SendMessageAsync(message.Chat.Id, fmt.Sprintf("Tag doesn't exist: %s.", start_tag), nil, "", nil, true, nil)
+		ctx.ReplyAsync(data.OMessage{Text: fmt.Sprintf("Tag doesn't exist: %s.", start_tag)}, nil)
 		return
 	}
 
-	msg, sfx := ProgressMessage(bot, message.Chat.Id, "Checking for duplicates...", "(enumerate tags)")
+	msg, sfx := ProgressMessage(ctx, "Checking for duplicates...", "(enumerate tags)")
 
 	tags, _ := storage.EnumerateAllTags(storage.EnumerateControl{OrderByCount: true})
 
@@ -940,11 +941,11 @@ func FindTagTypos(bot *telebot.TelegramBot, message *telegram.TMessage, cmd tele
 	_ = save
 }
 
-func Blits(bot *telebot.TelegramBot, message *telegram.TMessage, cmd telebot.CommandData) {
+func Blits(ctx *gogram.MessageCtx) {
 	mode := MODE_READY
 	include, exclude := make(map[string]bool), make(map[string]bool)
 
-	for _, token := range cmd.Args {
+	for _, token := range ctx.Cmd.Args {
 		token = strings.Replace(strings.ToLower(token), "\uFE0F", "", -1)
 		if token == "--exclude" {
 			mode = MODE_EXCLUDE
@@ -1004,14 +1005,14 @@ func Blits(bot *telebot.TelegramBot, message *telegram.TMessage, cmd telebot.Com
 		if len(newstr) + buf.Len() > 4096 - 12 { break }
 		buf.WriteString(html.EscapeString(newstr))
 	}
-	bot.Remote.SendMessageAsync(message.Chat.Id, "<pre>" + buf.String() + "</pre>", nil, "HTML", nil, true, nil)
+	ctx.ReplyAsync(data.OMessage{Text: "<pre>" + buf.String() + "</pre>", ParseMode: data.HTML}, nil)
 }
 
 type Triplet struct {
 	tag, subtag1, subtag2 types.TTagData
 }
 
-func Concatenations(bot *telebot.TelegramBot, message *telegram.TMessage, cmd telebot.CommandData) {
+func Concatenations(ctx *gogram.MessageCtx) {
 	tags, _ := storage.EnumerateAllTags(storage.EnumerateControl{})
 	tagmap := make(map[string]types.TTagData, len(tags))
 	var candidates []Triplet

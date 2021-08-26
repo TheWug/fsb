@@ -1,8 +1,9 @@
 package proxify
 
 import (
+	"github.com/thewug/gogram/data"
+
 	"api/types"
-	"telegram"
 	"strings"
 	"strconv"
 	"log"
@@ -51,7 +52,7 @@ func ConvertApiResultToTelegramInline(result types.TSearchResult, force_safe boo
 	caption := fmt.Sprintf("Full res: %s\n(search: %s)", postURL, query)
 
 	if result.File_ext == "gif" {
-		foo := telegram.TInlineQueryResultGif{
+		foo := data.TInlineQueryResultGif{
 			Type:         "gif",
 			Id:           salt + result.Md5,
 			Gif_url:      raw_url,
@@ -77,7 +78,7 @@ func ConvertApiResultToTelegramInline(result types.TSearchResult, force_safe boo
 			height = result.Sample_height
 		}
 
-		foo := telegram.TInlineQueryResultPhoto{
+		foo := data.TInlineQueryResultPhoto{
 			Type:         "photo",
 			Id:           salt + result.Md5,
 			Photo_url:    raw_url,
@@ -107,17 +108,17 @@ func Offset(last string) (y int) {
 
 func GenerateDebugText(iqr interface{}, result types.TSearchResult) {
 
-	imt := telegram.TInputMessageTextContent{
+	imt := data.TInputMessageTextContent{
 		Message_text: "",
 		Parse_mode: "Markdown",
 		No_preview: true,
 	}
 
 	switch v := iqr.(type) {
-	case *telegram.TInlineQueryResultPhoto:
+	case *data.TInlineQueryResultPhoto:
 		imt.Message_text = fmt.Sprintf("`ID:    `%d\n`MD5:   `%s\n`Size:  `%dx%d\n`Full:  `%s\n`Thumb: `%s\n", result.Id, result.Md5, *v.Photo_width, *v.Photo_height, v.Photo_url, v.Thumb_url)
 		v.Input_message_content = &imt
-	case *telegram.TInlineQueryResultGif:
+	case *data.TInlineQueryResultGif:
 		imt.Message_text = fmt.Sprintf("`ID:    `%d\n`MD5:   `%s\n`Size:  `%dx%d\n`Full:  `%s\n`Thumb: `%s\n", result.Id, result.Md5, *v.Gif_width, *v.Gif_height, v.Gif_url, v.Thumb_url)
 		v.Input_message_content = &imt
 	}

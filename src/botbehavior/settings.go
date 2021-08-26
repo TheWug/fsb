@@ -1,14 +1,14 @@
 package botbehavior
 
 import (
-	"telegram/telebot"
+	"github.com/thewug/gogram"
 	"os"
 	"log"
 	"storage"
 )
 
 type Settings struct {
-	telebot.InitSettings
+	gogram.InitSettings
 
 	Logfile string `json:"logfile"`
 	ApiKey  string `json:"apikey"`
@@ -17,8 +17,6 @@ type Settings struct {
 	ApiEndpoint         string `json:"api_endpoint"`
 	ApiFilteredEndpoint string `json:"api_filtered_endpoint"`
 	ApiStaticPrefix     string `json:"api_static_prefix"`
-
-	Bot    *telebot.TelegramBot
 }
 
 func (s Settings) GetApiName() string {
@@ -37,27 +35,27 @@ func (s Settings) GetApiStaticPrefix() string {
 	return s.ApiStaticPrefix
 }
 
-func (this *Settings) RedirectLogs() (error) {
+func (this *Settings) RedirectLogs(bot *gogram.TelegramBot) (error) {
 	newLogHandle, err := os.OpenFile(this.Logfile, os.O_RDWR | os.O_CREATE | os.O_APPEND, 0600)
 	if err != nil {
 		return err
 	}
 
-	this.Bot.Log = log.New(newLogHandle, "", log.LstdFlags)
-	this.Bot.ErrorLog = log.New(newLogHandle, "", log.LstdFlags | log.Llongfile)
+	bot.Log = log.New(newLogHandle, "", log.LstdFlags)
+	bot.ErrorLog = log.New(newLogHandle, "", log.LstdFlags | log.Llongfile)
 	log.SetOutput(newLogHandle)
-	this.Bot.Log.Printf("%s opened for logging.\n", this.Logfile)
+	bot.Log.Printf("%s opened for logging.\n", this.Logfile)
 	return nil
 }
 
-func (this Settings) InitializeAll() (error) {
-	e := this.RedirectLogs()
+func (this *Settings) InitializeAll(bot *gogram.TelegramBot) (error) {
+	e := this.RedirectLogs(bot)
 	if e != nil { return e }
 
 	e = storage.DBInit(this.DbUrl)
 	if e != nil { return e }
 
-	this.Bot.Remote.SetAPIKey(this.ApiKey)
-	e = this.Bot.Remote.Test()
+	bot.Remote.SetAPIKey(this.ApiKey)
+	e = bot.Remote.Test()
 	return e
 }

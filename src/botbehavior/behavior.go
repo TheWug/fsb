@@ -1,12 +1,13 @@
 package botbehavior
 
 import (
+	"github.com/thewug/gogram"
+	"github.com/thewug/gogram/data"
+
 	"fmt"
 	"fsb/proxify"
 	"fsb/errorlog"
 	"api"
-	"telegram"
-	"telegram/telebot"
 	"strings"
 	"log"
 	"strconv"
@@ -25,41 +26,37 @@ func ShowHelp() {
 }
 
 type Behavior struct {
-	ForwardTo *telebot.MessageStateMachine
+	ForwardTo *gogram.MessageStateMachine
 }
 
-func (this *Behavior) ProcessCallback(bot *telebot.TelegramBot, callback *telegram.TCallbackQuery) {
-	var ctx telebot.MsgContext
-	ctx.Bot = bot
-	if callback.Data != nil {
-		ctx.Cmd, ctx.CmdError = telebot.ParseCommandFromString(*callback.Data)
+func (this *Behavior) ProcessCallback(ctx *gogram.CallbackCtx) {
+	if ctx.Cb.Message == nil {
+		return // message is too old, just do nothing for now.
 	}
-	if callback.Message != nil {
-		ctx.Msg.Chat = callback.Message.Chat
-	}
-	ctx.Msg.From = &callback.From
-	ctx.Machine = this.ForwardTo
-	this.ForwardTo.FeedContext(&ctx)
-	bot.Remote.AnswerCallbackQuery(callback.Id, "", true)
+
+	m := *ctx.Cb.Message
+	m.Text = ctx.Cb.Data
+	this.ForwardTo.ProcessMessage(gogram.NewMessageCtx(&m, false, ctx.Bot))
+	ctx.Bot.Remote.AnswerCallbackQuery(data.OCallback{QueryID: ctx.Cb.Id})
 }
 
 // inline query, do tag search.
-func (this *Behavior) ProcessInlineQuery(b *telebot.TelegramBot, q *telegram.TInlineQuery) {
-	debugmode := strings.Contains(q.Query, "special:debugoutput")
-	q.Query = strings.Replace(q.Query, "special:debugoutput", "", -1)
+func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
+	debugmode := strings.Contains(ctx.Query.Query, "special:debugoutput")
+	ctx.Query.Query = strings.Replace(ctx.Query.Query, "special:debugoutput", "", -1)
 	var debugstr string
 	if debugmode { debugstr = ", DEBUG" }
-	log.Printf("[main    ] Received inline query (from %d %s%s): %s", q.From.Id, q.From.UsernameString(), debugstr, q.Query)
-	offset := proxify.Offset(q.Offset)
-	search_results, e := api.TagSearch(q.Query, offset, 50)
+	log.Printf("[main    ] Received inline query (from %d %s%s): %s", ctx.Query.From.Id, ctx.Query.From.UsernameString(), debugstr, ctx.Query.Query)
+	offset := proxify.Offset(ctx.Query.Offset)
+	search_results, e := api.TagSearch(ctx.Query.Query, offset, 50)
 	errorlog.ErrorLog("api", "api.TagSearch", e)
 
 	// take the suggestions we got from api and marshal them into inline query replies for telegram
 	inline_suggestions := []interface{}{}
 
-	if q.From.Id == 68060168 {
+	if ctx.Query.From.Id == 68060168 {
 		for _, r := range search_results {
-			new_result := proxify.ConvertApiResultToTelegramInline(r, proxify.ContainsSafeRatingTag(q.Query), q.Query, debugmode)
+			new_result := proxify.ConvertApiResultToTelegramInline(r, proxify.ContainsSafeRatingTag(ctx.Query.Query), ctx.Query.Query, debugmode)
 
 			if (new_result != nil) {
 				inline_suggestions = append(inline_suggestions, new_result)
@@ -67,7 +64,7 @@ func (this *Behavior) ProcessInlineQuery(b *telebot.TelegramBot, q *telegram.TIn
 		}
 	} else {
 		for _, r := range search_results {
-			new_result := proxify.ConvertApiResultToTelegramInline(r, proxify.ContainsSafeRatingTag(q.Query), q.Query, false)
+			new_result := proxify.ConvertApiResultToTelegramInline(r, proxify.ContainsSafeRatingTag(ctx.Query.Query), ctx.Query.Query, false)
 
 			if (new_result != nil) {
 				inline_suggestions = append(inline_suggestions, new_result)
@@ -77,11 +74,10 @@ func (this *Behavior) ProcessInlineQuery(b *telebot.TelegramBot, q *telegram.TIn
 
 	// send them out
 	if len(inline_suggestions) != 0 {
-		e = b.Remote.AnswerInlineQuery(*q, inline_suggestions, strconv.FormatInt(int64(offset + 1), 10))
-		errorlog.ErrorLog("telegram", "telegram.AnswerInlineQuery", e)
+		ctx.AnswerAsync(data.OInlineQueryAnswer{QueryID: ctx.Query.Id, Results: inline_suggestions, NextOffset: strconv.FormatInt(int64(offset + 1), 10), CacheTime: 30}, nil)
 	}
 }
 
-func (this *Behavior) ProcessInlineQueryResult(b *telebot.TelegramBot, r *telegram.TChosenInlineResult) {
-	log.Printf("[main    ] Inline selection: %s (by %d %s)\n", r.Result_id, r.From.Id, r.From.UsernameString())
+func (this *Behavior) ProcessInlineQueryResult(ctx *gogram.InlineResultCtx) {
+	log.Printf("[main    ] Inline selection: %s (by %d %s)\n", ctx.Result.Result_id, ctx.Result.From.Id, ctx.Result.From.UsernameString())
 }
