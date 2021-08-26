@@ -528,41 +528,6 @@ func ResolvePhantomTags(settings UpdaterSettings) (error) {
 	return nil
 }
 
-func FixTagsWhichTheAPIManglesByAccident(settings UpdaterSettings) (error) {
-	// what the fuck is this, you may ask?
-	// well, it turns out, there are a small number of tags which include unicode characters past
-	// codepoint 0xFFFF. apparently ruby on rails (api backend) serializes these badly to json, which
-	// cannot escape codepoints higher than that. They just get munged. silently. :|
-	// in this function, we manually UPDATE the rows in the tag database that will have these names.
-	// thankfully there are only a small number of (known) ones.
-
-	// these are all the ones i've found. there's probably more.
-
-	fix_map := map[int]string{
-		407005: "samochan" + "\U0001F49F" + "iluvml",
-		628543: "\U0001F171",
-		390821: "\U0001F60D",
-		390822: "\U0001F61D",
-		390824: "\U0001F635",
-		390825: "\U0001F60B",
-		390826: "\U0001F61B",
-		483084: "\U0001F44C",
-	}
-
-	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
-	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return settings.Transaction.err }
-
-	for k, v := range fix_map {
-		query := "UPDATE tag_index SET tag_name = $1 WHERE tag_id = $2"
-		_, err := tx.Exec(query, v, k)
-		if err != nil { return err }
-	}
-
-	settings.Transaction.commit = mine
-	return nil
-}
-
 //func EnumerateAllTagNames() ([]string, error) {
 //	return []string{"tawny_otter_(character)", "tawny", "otter", "character"}, nil
 //}
