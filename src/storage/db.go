@@ -698,9 +698,14 @@ func GetMostRecentlyUpdatedPost(settings UpdaterSettings) (*apitypes.TPostInfo, 
 	return &p, err
 }
 
-func ImportPostTagsFromNameToID(settings UpdaterSettings, status chan string) (error) {
+func ImportPostTagsFromNameToID(settings UpdaterSettings, sfx chan string) (error) {
 	suf := func(table string) string { return suffix(table, settings.TableSuffix) }
 	suf2 := func(table, extrasuffix string) string { return suffix(table, settings.TableSuffix) + extrasuffix }
+	status := func(s string) {
+		if sfx != nil {
+			sfx <- s
+		}
+	}
 
 	table1 := "post_tags"
 	table2 := "post_tags_by_name"
@@ -713,10 +718,11 @@ func ImportPostTagsFromNameToID(settings UpdaterSettings, status chan string) (e
 	var new_count, existing_count int64
 	var err error
 	if err = tx.QueryRow("SELECT COUNT(*) FROM " + suf(table2)).Scan(&new_count); err != nil { return err }
-	if err = tx.QueryRow("SELECT COUNT(*) FROM " + suf(table1)).Scan(&existing_count); err != nil { return err }
+	if err = tx.QueryRow("SELECT n_live_tup FROM pg_stat_all_tables WHERE relname = '" + suf(table1) + "'").Scan(&existing_count); err != nil { return err }
 
 	// check if the amount of new data is large relative to the size of the existing dataset (1% or more out of 10s of millions of rows usually)
 	if new_count * 20 > existing_count {
+		log.Println("doing it the long way")
 		// for performance reasons, it is much better to drop the indexes, do the import, and then recreate them,
 		// if we are importing a significant amount of data, compared to how much is already there, as individually
 		// performing an enormous number of index insertions is much more expensive than building the index from scratch.
@@ -729,13 +735,13 @@ func ImportPostTagsFromNameToID(settings UpdaterSettings, status chan string) (e
 		if err != nil { return err }
 
 		// delete existing tag records before removing indices because it will be a lot slower without them
-		status <- " (1/4 tag clear overrides)"
+		status(" (1/4 tag clear overrides)")
 		query = "DELETE FROM " + suf(table1) + " WHERE post_id IN (SELECT DISTINCT post_id FROM " + suf(table2) + ")"
 		_, err = tx.Exec(query)
 		if err != nil { return err }
 
 		// drop the index and the primary key constraint
-		status <- " (2/4 drop indices)"
+		status(" (2/4 drop indices)")
 		query = "DROP INDEX " + suf2(table1, "_tag_id_idx")
 		_, err = tx.Exec(query)
 		if err != nil { return err }
@@ -745,13 +751,13 @@ func ImportPostTagsFromNameToID(settings UpdaterSettings, status chan string) (e
 		if err != nil { return err }
 
 		// slurp all of the data into the table (very slow if indexes are present, which is why we killed them)
-		status <- " (3/4 import data)"
+		status(" (3/4 import data)")
 		query = "INSERT INTO " + suf(table1) + " SELECT post_id, tag_id FROM " + suf(table2) + " INNER JOIN " + suf(table3) + " USING (tag_name)"
 		_, err = tx.Exec(query)
 		if err != nil { return err }
 
 		// add the index and primary key constraint back to the table
-		status <- " (4/4 re-index)"
+		status(" (4/4 re-index)")
 		query = "ALTER TABLE " + suf(table1) + " ADD PRIMARY KEY (post_id, tag_id)"
 		_, err = tx.Exec(query)
 		if err != nil { return err }
@@ -760,18 +766,21 @@ func ImportPostTagsFromNameToID(settings UpdaterSettings, status chan string) (e
 		_, err = tx.Exec(query)
 		if err != nil { return err }
 	} else {
+		log.Println("doing it the short way")
 		// if the amount of new data is not large compared to the amount of existing data, just one-by-one plunk them into the table.
-		status <- " (1/2 tag clear overrides)"
+		status(" (1/2 tag clear overrides)")
 		query := "DELETE FROM " + suf(table1) + " WHERE post_id IN (SELECT DISTINCT post_id FROM " + suf(table2) + ")"
 		_, err = tx.Exec(query)
 		if err != nil { return err }
 
-		status <- " (2/2 tag gross-reference)"
+		log.Println("doing it the short way p2")
+		status(" (2/2 tag gross-reference)")
 		query = "INSERT INTO " + suf(table1) + " SELECT post_id, tag_id FROM " + suf(table2) + " INNER JOIN " + suf(table3) + " USING (tag_name)"
 		_, err = tx.Exec(query)
 		if err != nil { return err }
 	}
 
+	log.Println("almost done")
 	_, err = tx.Exec("TRUNCATE " + suf(table2))
 	if err != nil { return err }
 
@@ -794,17 +803,23 @@ func ResetPostTags() (error) {
 	return nil
 }
 
-func CountTags(settings UpdaterSettings, status chan string) (error) {
+func CountTags(settings UpdaterSettings, sfx chan string) (error) {
+	status := func(s string) {
+		if sfx != nil {
+			sfx <- s
+		}
+	}
+
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }
 
-	status <- " (1/2 reset cached counts)"
+	status(" (1/2 reset cached counts)")
 	query := "UPDATE tag_index SET tag_count = 0"
 	_, err := tx.Exec(query)
 	if err != nil { return err }
 
-	status <- " (2/2 calculate actual tag counts)"
+	status(" (2/2 calculate actual tag counts)")
 	query = "WITH subq AS (SELECT tag_id, COUNT(tag_id) AS real_count FROM post_tags GROUP BY tag_id) UPDATE tag_index SET tag_count = subq.real_count FROM subq WHERE subq.tag_id = tag_index.tag_id"
 	_, err = tx.Exec(query)
 	if err != nil { return err }

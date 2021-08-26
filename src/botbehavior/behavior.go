@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"storage"
 	"errors"
+	"api/tagindex"
 )
 
 func ShowHelp() {
@@ -37,6 +38,51 @@ func ShowHelp() {
 type Behavior struct {
 	ForwardTo *gogram.MessageStateMachine
 	MySettings Settings
+
+	maintain chan bool
+}
+
+func (this *Behavior) GetInterval() int64 {
+	return 600
+}
+
+func (this *Behavior) DoMaintenance(bot *gogram.TelegramBot) {
+	if this.maintain == nil {
+		this.maintain = this.StartMaintenanceAsync(bot)
+		this.maintain <- true
+	} else {
+		select {
+		case this.maintain <- true:
+			// do nothing, the maintenance routine is now running async
+			return
+		default:
+			bot.Log.Println("Skipping maintenance (backlogged?)")
+		}
+	}
+}
+
+func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool) {
+	channel := make(chan bool)
+	go func() {
+		for maintenances := 0; true; maintenances++ {
+			_ = <- channel
+
+			var err error
+			extra_expensive := (maintenances % 144 == 143)
+			settings := storage.UpdaterSettings{Full: false}
+			settings.Transaction, err = storage.NewTxBox()
+			if err != nil {
+				bot.Log.Println("Error in maintenance loop:", err.Error())
+			}
+
+			tagindex.SyncPostsInternal(this.MySettings.SearchUser, this.MySettings.SearchAPIKey, settings, extra_expensive, extra_expensive, nil, nil)
+			bot.Log.Println("sync complete")
+
+			settings.Transaction.MarkForCommit()
+			settings.Transaction.Finalize(true)
+		}
+	}()
+	return channel
 }
 
 func (this *Behavior) ProcessCallback(ctx *gogram.CallbackCtx) {

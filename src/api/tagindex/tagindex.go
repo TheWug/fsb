@@ -346,9 +346,17 @@ func (this *SearchChanBox) Close() {
 
 func SyncPostsCommand(ctx *gogram.MessageCtx) {
 	full := false
+	aliases := false
+	recount := false
 	for _, token := range ctx.Cmd.Args {
 		if token == "--full" {
 			full = true
+		}
+		if token == "--aliases" {
+			aliases = true
+		}
+		if token == "--recount" {
+			recount = true
 		}
 	}
 
@@ -358,7 +366,7 @@ func SyncPostsCommand(ctx *gogram.MessageCtx) {
 	if err != nil { log.Println(err.Error(), "newtxbox") }
 
 	log.Println("syncposts")
-	err = SyncPosts(ctx, settings, nil, nil)
+	err = SyncPosts(ctx, settings, aliases, recount, nil, nil)
 	log.Println("syncposts done")
 	if err == storage.ErrNoLogin {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
@@ -372,8 +380,7 @@ func SyncPostsCommand(ctx *gogram.MessageCtx) {
 	settings.Transaction.Finalize(true)
 }
 
-
-func SyncPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+func SyncPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, aliases_too, recount_too bool, msg, sfx chan string) (error) {
 	user, api_key, janitor, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
 	if err != nil || !janitor { return err }
 
@@ -383,7 +390,7 @@ func SyncPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sf
 		defer close(sfx)
 	}
 
-	return SyncPostsInternal(user, api_key, settings, msg, sfx)
+	return SyncPostsInternal(user, api_key, settings, aliases_too, recount_too, msg, sfx)
 }
 
 func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
@@ -466,23 +473,44 @@ func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSetting
 	return nil
 }
 
-func SyncPostsInternal(user, api_key string, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
+func SyncPostsInternal(user, api_key string, settings storage.UpdaterSettings, aliases_too, recount_too bool, msg, sfx chan string) (error) {
 	message := func(x string) {
 		if msg != nil {
 			msg <- x
 		}
 	}
+	suffix := func(x string) {
+		if sfx != nil {
+			sfx <- x
+		}
+	}
 
 	message("Syncing activity... ")
 
+	log.Println("synconlyposts")
 	if err := SyncOnlyPostsInternal(user, api_key, settings, msg, sfx); err != nil { return err }
+
+	log.Println("synctags")
 	if err := SyncTagsInternal(user, api_key, settings, msg, sfx); err != nil { return err }
-	if err := SyncAliasesInternal(user, api_key, settings, msg, sfx); err != nil { return err }
-	msg <- "Resolving post tags..."
+
+	if aliases_too {
+		log.Println("syncaliases")
+		if err := SyncAliasesInternal(user, api_key, settings, msg, sfx); err != nil { return err }
+	}
+
+	message("Resolving post tags...")
+
+	log.Println("importposttagsfromname")
 	if err := storage.ImportPostTagsFromNameToID(settings, sfx); err != nil { return err }
-	if err := RecountTagsInternal(settings, msg, sfx); err != nil { return err }
-	if err := CalculateAliasedCountsInternal(settings, msg, sfx); err != nil { return err }
-	sfx <- " done."
+
+	if recount_too {
+		log.Println("recounttags")
+		if err := RecountTagsInternal(settings, msg, sfx); err != nil { return err }
+
+		log.Println("calculatealiascounts")
+		if err := CalculateAliasedCountsInternal(settings, msg, sfx); err != nil { return err }
+	}
+	suffix(" done.")
 
 	return nil
 }
