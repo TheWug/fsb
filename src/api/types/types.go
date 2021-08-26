@@ -11,6 +11,7 @@ type TTagData struct {
 	Id int `json:"id"`
 	Name string `json:"name"`
 	Count int `json:"post_count"`
+	FullCount int // this field is only present in the local DB
 	Type TagCategory `json:"category"`
 	Locked *bool `json:"is_locked"`
 
@@ -18,6 +19,14 @@ type TTagData struct {
 	// updated_at
 	// related_tags
 	// related_tags_updated_at
+}
+
+func (this TTagData) ApparentCount(include_deleted bool) int {
+	if include_deleted {
+		return this.FullCount
+	} else {
+		return this.Count
+	}
 }
 
 type TTagInfoArray []TTagData

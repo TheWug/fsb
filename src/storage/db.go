@@ -179,6 +179,7 @@ func PrefixedTagToTypedTag(name string) (string, int) {
 type EnumerateControl struct {
 	OrderByCount bool
 	CreatePhantom bool
+	IncludeDeleted bool
 	Transaction TransactionBox
 }
 
@@ -533,11 +534,14 @@ func ResolvePhantomTags(settings UpdaterSettings) (error) {
 //}
 
 func EnumerateAllTags(ctrl EnumerateControl) (apitypes.TTagInfoArray, error) {
+	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
+	defer ctrl.Transaction.Finalize(mine)
+	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
+
 	var output apitypes.TTagInfoArray
 
-	sql := "SELECT tag_id, tag_name, tag_count, tag_type, tag_type_locked FROM %s %s"
+	sql := "SELECT tag_id, tag_name, tag_count, tag_count_full, tag_type, tag_type_locked FROM tag_index %s"
 	order_by := "ORDER BY %s"
-	table := "tag_index"
 	
 	if ctrl.OrderByCount {
 		order_by = fmt.Sprintf(order_by, "-tag_count")
@@ -545,22 +549,46 @@ func EnumerateAllTags(ctrl EnumerateControl) (apitypes.TTagInfoArray, error) {
 		order_by = ""
 	}
 
-	sql = fmt.Sprintf(sql, table, order_by)
+	sql = fmt.Sprintf(sql, order_by)
 		
-	rows, err := Db_pool.Query(sql)
+	rows, err := tx.Query(sql)
 	if err != nil { return nil, err }
 
 	defer rows.Close()
 	var d apitypes.TTagData
 
 	for rows.Next() {
-		err = rows.Scan(&d.Id, &d.Name, &d.Count, &d.Type, &d.Locked)
+		err = rows.Scan(&d.Id, &d.Name, &d.Count, &d.FullCount, &d.Type, &d.Locked)
 		if err != nil { return nil, err }
 
 		output = append(output, d)
 	}
 
+	ctrl.Transaction.commit = mine
 	return output, nil
+}
+
+func EnumerateAllBlits(ctrl EnumerateControl) (map[string]bool, error) {
+	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
+	defer ctrl.Transaction.Finalize(mine)
+	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
+
+	result := make(map[string]bool)
+	sql := "SELECT tag_name, is_blit FROM blit_tag_registry INNER JOIN tag_index USING (tag_id)"
+	rows, err := tx.Query(sql)
+	if err != nil { return nil, err }
+
+	defer rows.Close()
+	for rows.Next() {
+		var is_blit bool
+		var tag_name string
+		err := rows.Scan(&tag_name, &is_blit)
+		if err != nil { return nil, err }
+		result[tag_name] = is_blit
+	}
+
+	ctrl.Transaction.commit = mine
+	return result, nil
 }
 
 func EnumerateCatsExceptions(ctrl EnumerateControl) ([]string, error) {
@@ -789,7 +817,12 @@ func PostsWithTag(tag apitypes.TTagData, ctrl EnumerateControl) (apitypes.TPostI
 	defer ctrl.Transaction.Finalize(mine)
 	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
 
-	query := "SELECT post_id FROM post_tags WHERE tag_id = $1 ORDER BY post_id "
+	query := ""
+	if ctrl.IncludeDeleted {
+		query = "SELECT post_id FROM post_tags WHERE tag_id = $1 ORDER BY post_id"
+	} else {
+		query = "SELECT post_id FROM post_tags INNER JOIN post_index USING (post_id) WHERE tag_id = $1 AND NOT post_deleted ORDER BY post_id"
+	}
 	rows, err := tx.Query(query, tag.Id)
 	if err != nil { return nil, err }
 
@@ -922,3 +955,63 @@ func MarkBlit(id int, mark bool, ctrl EnumerateControl) (error) {
 	return err
 }
 
+type TypoMode int
+const Untracked TypoMode = 0
+const Ignore TypoMode = 1
+const Prompt TypoMode = 2
+const AutoFix TypoMode = 3
+func (this TypoMode) Display() string {
+	switch this {
+	case Untracked:
+		return " "
+	case Ignore:
+		return "i"
+	case Prompt:
+		return "P"
+	case AutoFix:
+		return "X"
+	default:
+		return "?"
+	}
+}
+
+func AddTagTypo(real_name, typo_name string, mode TypoMode, settings UpdaterSettings) (error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
+
+	query := "INSERT INTO typos_identified (tag_implied_name, tag_typo_name, mode) VALUES ($1, $2, $3)"
+	_, err := tx.Exec(query, real_name, typo_name, mode)
+	if err != nil { return err }
+
+	settings.Transaction.commit = mine
+	return nil
+}
+
+type TypoData struct {
+	Tag  apitypes.TTagData
+	Mode TypoMode
+}
+
+func GetTagTypos(tag string, ctrl EnumerateControl) (map[string]TypoData, error) {
+	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
+	defer ctrl.Transaction.Finalize(mine)
+	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
+
+	query := "SELECT mode, tag_id, tag_name, tag_count, tag_count_full, tag_type, tag_type_locked FROM typos_identified INNER JOIN tag_index ON tag_name = tag_typo_name WHERE tag_implied_name = $1"
+	rows, err := tx.Query(query, tag)
+	if err != nil { return nil, err }
+
+	defer rows.Close()
+
+	results := make(map[string]TypoData)
+	for rows.Next() {
+		var data TypoData
+		err = rows.Scan(&data.Mode, &data.Tag.Id, &data.Tag.Name, &data.Tag.Count, &data.Tag.FullCount, &data.Tag.Type, &data.Tag.Locked)
+		if err != nil { return nil, err }
+		results[data.Tag.Name] = data
+	}
+	
+	ctrl.Transaction.commit = mine
+	return results, nil
+}

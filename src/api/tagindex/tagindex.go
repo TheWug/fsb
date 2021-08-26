@@ -675,6 +675,7 @@ const (
 type TagEditBox struct {
 	EditDistance int
 	Tag types.TTagData
+	Mode storage.TypoMode
 }
 
 func NewTagsFromOldTags(oldtags []string, deltags, addtags map[string]bool) (string) {
@@ -694,8 +695,9 @@ func NewTagsFromOldTags(oldtags []string, deltags, addtags map[string]bool) (str
 func FindTagTypos(ctx *gogram.MessageCtx) {
 	mode := MODE_READY
 	var distinct, include, exclude []string
-	var threshhold int
-	var save, allow_short, fix, show_zero bool
+	var threshhold int = -1
+	var fix, save, autofix bool
+	var allow_short, show_zero, show_all, show_all_posts bool
 	var start_tag string
 	reason := "likely typo"
 	results := make(map[string]TagEditBox)
@@ -718,26 +720,32 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		if mode != MODE_READY {
 			mode = MODE_READY
 		} else {
-			if token == "--distinct" {
-				mode = MODE_DISTINCT
-			} else if token == "--exclude" {
-				mode = MODE_EXCLUDE
-			} else if token == "--include" {
-				mode = MODE_INCLUDE
-			} else if token == "--threshhold" {
-				mode = MODE_THRESHHOLD
-			} else if token == "--save" {
-				save = true
-			} else if token == "--show-zero" {
-				show_zero = true
-			} else if token == "--allow-short" {
-				allow_short = true
-			} else if token == "--fix" {
-				fix = true
-			} else if token == "--reason" {
-				mode = MODE_REASON
-			} else {
+			if !strings.HasPrefix(token, "-") {
 				start_tag = token
+			} else if token == "--all"         || token == "-a" {
+				show_all = true
+			} else if token == "--all-posts"   || token == "-p" {
+				show_all_posts = true
+			} else if token == "--allow-short" || token == "-s" {
+				allow_short = true
+			} else if token == "--show-zero"   || token == "-z" {
+				show_zero = true
+			} else if token == "--threshhold"  || token == "-t" {
+				mode = MODE_THRESHHOLD
+			} else if token == "--exclude"     || token == "-e" {
+				mode = MODE_EXCLUDE
+			} else if token == "--distinct"    || token == "-d" {
+				mode = MODE_DISTINCT
+			} else if token == "--include"     || token == "-i" {
+				mode = MODE_INCLUDE
+			} else if token == "--save"        || token == "-S" {
+				save = true
+			} else if token == "--autofix"     || token == "-X" {
+				autofix = true
+			} else if token == "--fix"         || token == "-x" {
+				fix = true
+			} else if token == "--reason"      || token == "-r" {
+				mode = MODE_REASON
 			}
 		}
 	}
@@ -753,6 +761,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		Transaction: txbox,
 		CreatePhantom: true,
 		OrderByCount: true,
+		IncludeDeleted: show_all_posts,
 	}
 
 	defer ctrl.Transaction.Finalize(true)
@@ -768,49 +777,67 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	temp1 := utf8.RuneCountInString(start_tag)
-	if threshhold == 0 {
-		if temp1 < 8 {
+	len1 := utf8.RuneCountInString(start_tag)
+	if threshhold == -1 {
+		if len1 < 8 {
 			threshhold = 1
-		} else if temp1 < 16 {
+		} else if len1 < 16 {
 			threshhold = 2
-		} else if temp1 < 32 {
+		} else if len1 < 32 {
 			threshhold = 3
 		} else {
 			threshhold = 4
 		}
 	}
 
-	t1, err := storage.GetTag(ctx.Cmd.Args[0], ctrl)
+	t1, err := storage.GetTag(start_tag, ctrl)
 	if err != nil { log.Printf("Error occurred when looking up tag: %s", err.Error()) }
 	if t1 == nil {
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Tag doesn't exist: %s.", start_tag)}}, nil)
 		return
 	}
 
-	msg, sfx := ProgressMessage(ctx, "Checking for duplicates...", "(enumerate tags)")
+	msg, sfx := ProgressMessage(ctx, "Checking for typos...", "(enumerate tags)")
 	defer close(sfx)
 	defer close(msg)
 
-	tags, _ := storage.EnumerateAllTags(ctrl)
+	tags, err := storage.EnumerateAllTags(ctrl)
+	blits, err := storage.EnumerateAllBlits(ctrl)
+	typos, err := storage.GetTagTypos(start_tag, ctrl)
 
 	for _, t2 := range tags {
 		if t1.Name == t2.Name { continue } // skip tag = tag
 
+		is_blit2, reg_blit2 := blits[t2.Name]
+
 		// shortest name first (in terms of codepoints)
 		var t1n, t2n string
 		var t1l, t2l int
-		temp2 := utf8.RuneCountInString(t2.Name)
-		if temp1 > temp2 {
+		len2 := utf8.RuneCountInString(t2.Name)
+		if len1 > len2 {
 			t1n, t2n = t2.Name, t1.Name
-			t1l, t2l = temp2, temp1
+			t1l, t2l = len2, len1
 		} else {
 			t1n, t2n = t1.Name, t2.Name
-			t1l, t2l = temp1, temp2
+			t1l, t2l = len1, len2
 		}
 
-		if t1l < 3 && !allow_short { continue } // skip short tags.
+		tooshort := (t1l < 3) // tag length too short
+		blit := reg_blit2 && is_blit2
+		notblit := reg_blit2 && !is_blit2
+		zero := t2.ApparentCount(show_all_posts) <= 0
 
+		if tooshort && !notblit && !allow_short ||
+		   blit && !show_all ||
+		   zero && !show_zero {
+			// if it's too short and not a confirmed non-blit, AND the short override isn't specified OR
+			// if it's a blit, and the all override isn't specified OR
+			// if it's got no posts and the no-post override isn't specified
+			// skip
+			continue
+		}
+
+		// if it doesn't match, skip
 		// the length difference is a lower bound on the edit distance so if the lengths are too dissimilar, skip.
 		if t2l - t1l > threshhold { continue }
 
@@ -822,6 +849,17 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		results[t2.Name] = TagEditBox{Tag: t2, EditDistance: distance}
 	}
 
+	for name, value := range typos {
+		if !show_all {
+			// if override isn't specified and we already have a rule for this one, skip it
+			delete(results, name)
+		} else {
+			// if override IS specified, always show all rules
+			results[name] = TagEditBox{Tag: value.Tag, EditDistance: wordset.Levenshtein(start_tag, name), Mode: value.Mode}
+		}
+	}
+
+	// now for selectors, which take priority over all of the blanket filter options
 	// remove any matches that were manually excluded.
 	sfx <- "(remove excluded)"
 	for _, item := range exclude {
@@ -832,7 +870,10 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 	sfx <- "(remove distinct)"
 	for _, item := range distinct {
 		for k, v := range results {
-			if wordset.Levenshtein(item, k) < v.EditDistance { delete(results, k) }
+			if wordset.Levenshtein(item, k) < v.EditDistance {
+				exclude = append(exclude, k)
+				delete(results, k)
+			}
 		}
 	}
 
@@ -856,16 +897,15 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 
 	total_posts := 0
 	for _, v := range results {
-		total_posts += v.Tag.Count
+		total_posts += v.Tag.ApparentCount(show_all_posts)
 	}
 
 	var buf bytes.Buffer
 	buf.WriteString(fmt.Sprintf("Possible typos of <code>%s</code>: %d (%d estimated posts)\n<pre>", html.EscapeString(start_tag), len(results), total_posts))
 	for _, v := range results {
-		alert := "  "
-		if !show_zero && v.Tag.Count == 0 { continue }
-		if v.Tag.Type != types.TCGeneral { alert = "!!" }
-		buf.WriteString(fmt.Sprintf("%6d %s %s\n", v.Tag.Count, alert, html.EscapeString(v.Tag.Name)))
+		alert := " "
+		if v.Tag.Type != types.TCGeneral { alert = "!" }
+		buf.WriteString(fmt.Sprintf("%7d %s%s %s\n", v.Tag.ApparentCount(show_all_posts), v.Mode.Display(), alert, html.EscapeString(v.Tag.Name)))
 	}
 	buf.WriteString("</pre>")
 	if fix {
@@ -905,6 +945,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 			newp, err := api.UpdatePost(user, api_key, id, diff, nil, nil, nil, nil, &reason)
 
 			if err == api.PostIsDeleted {
+				log.Printf("Post was deleted which we didn't know about? DB consistency? (%d)\n", id)
 				err = storage.MarkPostDeleted(id, storage.UpdaterSettings{Transaction: ctrl.Transaction})
 			}
 
@@ -930,8 +971,31 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		api_timeout.Stop()
 	}
 
+	if save {
+		// everything in results goes into the database as either prompt or auto
+		mode := storage.Prompt
+		if autofix { mode = storage.AutoFix }
+		for name, _ := range results {
+			if _, already_exists := typos[name]; already_exists { continue }
+			err := storage.AddTagTypo(start_tag, name, mode, storage.UpdaterSettings{Transaction: ctrl.Transaction})
+			if err != nil {
+				log.Printf("Error adding tag typo to database (%s -> %s): %s", name, start_tag, err.Error())
+				return
+			}
+		}
+		// everything in exclude goes in as ignore
+		for _, name := range exclude {
+			if _, already_exists := typos[name]; already_exists { continue }
+			if _, already_exists := results[name]; already_exists { continue }
+			err := storage.AddTagTypo(start_tag, name, storage.Ignore, storage.UpdaterSettings{Transaction: ctrl.Transaction})
+			if err != nil {
+				log.Printf("Error adding tag typo to database (%s -> %s): %s", name, start_tag, err.Error())
+				return
+			}
+		}
+	}
+
 	ctrl.Transaction.MarkForCommit()
-	_ = save
 }
 
 func RefetchDeletedPostsCommand(ctx *gogram.MessageCtx) {
