@@ -236,7 +236,7 @@ func RecountTagsCommand(ctx *gogram.MessageCtx) {
 	if err == storage.ErrNoLogin {
 		ctx.ReplyOrPMAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
-	} else {
+	} else if err != nil {
 		ctx.Bot.Log.Println("Error occurred syncing tags: %s", err.Error())
 	}
 }
@@ -669,6 +669,7 @@ const (
 	MODE_IGNORE = iota
 	MODE_UNIGNORE = iota
 	MODE_FIX = iota
+	MODE_REASON = iota
 )
 
 type TagEditBox struct {
@@ -696,6 +697,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 	var threshhold int
 	var save, allow_short, fix, show_zero bool
 	var start_tag string
+	reason := "likely typo"
 	results := make(map[string]TagEditBox)
 
 	for _, token := range ctx.Cmd.Args {
@@ -709,7 +711,9 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		} else if mode == MODE_THRESHHOLD {
 			t, err := strconv.Atoi(token)
 			if err == nil { threshhold = t }
-		} 
+		} else if mode == MODE_REASON {
+			reason = token
+		}
 
 		if mode != MODE_READY {
 			mode = MODE_READY
@@ -730,6 +734,8 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 				allow_short = true
 			} else if token == "--fix" {
 				fix = true
+			} else if token == "--reason" {
+				mode = MODE_REASON
 			} else {
 				start_tag = token
 			}
@@ -870,37 +876,55 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 	if fix {
 		updated := 1
 		api_timeout := time.NewTicker(750 * time.Millisecond)
+		diffs := make(map[int]api.TagDiff)
+
 		for _, v := range results {
-			posts, err := storage.LocalTagSearch(v.Tag, ctrl)
+			array, err := storage.PostsWithTag(v.Tag, ctrl)
 			if err != nil {
 				sfx <- fmt.Sprintf(" (error: %s)", err.Error())
 				return
 			}
 
-			reason := fmt.Sprintf("Bulk retag: %s --> %s (likely typo)", v.Tag.Name, start_tag)
-			for _, p := range posts {
-				var diff api.TagDiff
-				diff.AddTag(start_tag)
-				diff.RemoveTag(v.Tag.Name)
-				newp, err := api.UpdatePost(user, api_key, p.Id, diff, nil, nil, nil, nil, &reason)
-				if err != nil {
-					sfx <- fmt.Sprintf(" (error: %s)", err.Error())
-					return
-				}
-
-				if newp != nil {
-					err = storage.UpdatePost(p, *newp, storage.UpdaterSettings{Transaction: ctrl.Transaction})
-					if err != nil {
-						sfx <- fmt.Sprintf(" (error: %s)", err.Error())
-						return
-					}
-				}
-
-				sfx <- fmt.Sprintf(" (%d/%d %d: <code>%s</code> -> <code>%s</code>)", updated, total_posts, p.Id, v.Tag.Name, start_tag)
-
-				<- api_timeout.C
-				updated++
+			for _, post := range array {
+				d := diffs[post.Id]
+				d.AddTag(start_tag)
+				d.RemoveTag(v.Tag.Name)
+				diffs[post.Id] = d
 			}
+		}
+
+		// we now know for sure that exactly this many edits are required
+		total_posts = len(diffs)
+
+		for id, diff := range diffs {
+			if diff.IsZero() { continue }
+
+			if updated != 1 { <- api_timeout.C }
+
+			reason := fmt.Sprintf("Bulk retag: %s (%s)", diff.APIString(), reason)
+			newp, err := api.UpdatePost(user, api_key, id, diff, nil, nil, nil, nil, &reason)
+
+			if err == api.PostIsDeleted {
+				err = storage.MarkPostDeleted(id, storage.UpdaterSettings{Transaction: ctrl.Transaction})
+			}
+
+			if err != nil {
+				log.Println(err.Error())
+				sfx <- fmt.Sprintf(" (error: %s)", err.Error())
+				break
+			}
+
+			if newp != nil {
+				err = storage.UpdatePost(types.TPostInfo{Id: id}, *newp, storage.UpdaterSettings{Transaction: ctrl.Transaction})
+				if err != nil {
+					log.Println(err.Error())
+					sfx <- fmt.Sprintf(" (error: %s)", err.Error())
+					break
+				}
+			}
+
+			sfx <- fmt.Sprintf(" (%d/%d %d: <code>%s</code>)", updated, total_posts, id, diff.APIString())
+			updated++
 		}
 		sfx <- " done."
 		api_timeout.Stop()

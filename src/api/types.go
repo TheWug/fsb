@@ -68,7 +68,7 @@ func (this *TagDiff) ApplyArrays(add_tags, remove_tags []string) {
 	}
 }
 
-func (this *TagDiff) IsZero() bool {
+func (this TagDiff) IsZero() bool {
 	return len(this.add) == 0 && len(this.remove) == 0
 }
 

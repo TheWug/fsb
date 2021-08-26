@@ -455,13 +455,25 @@ func PostUpdater(input chan apitypes.TPostInfo, settings UpdaterSettings) (error
 		_, err = tx.Exec("INSERT INTO " + suf(table1) + " (SELECT $1 as post_id, tag_name FROM UNNEST($2::varchar[]) as tag_name) ON CONFLICT DO NOTHING",
 				 post.Id, pq.Array(post.Tags()))
 		if err != nil { return err }
-		_, err = tx.Exec("INSERT INTO " + suf(table2) + " (post_id, post_change_seq, post_rating, post_description, post_sources, post_hash) VALUES ($1, $2, $3, $4, $5, $6)",
-				 post.Id, post.Change, post.Rating, post.Description, strings.Join(post.Sources, " "), post.Md5)
+		_, err = tx.Exec("INSERT INTO " + suf(table2) + " (post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+				 post.Id, post.Change, post.Rating, post.Description, strings.Join(post.Sources, " "), post.Md5, post.Deleted)
 		if err != nil { return err }
 	}
 
 	settings.Transaction.commit = mine
 	return nil
+}
+
+func MarkPostDeleted(post_id int, settings UpdaterSettings) error {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
+
+	query := "UPDATE post_index SET post_deleted = TRUE WHERE post_id = $1"
+	_, err := tx.Exec(query, post_id)
+
+	settings.Transaction.commit = mine && err == nil
+	return err
 }
 
 func GetHighestStagedPostID(settings UpdaterSettings) (int) {
@@ -815,6 +827,26 @@ func CountTags(settings UpdaterSettings, sfx chan string) (error) {
 	return nil
 }
 
+func PostsWithTag(tag apitypes.TTagData, ctrl EnumerateControl) (apitypes.TPostInfoArray, error) {
+	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
+	defer ctrl.Transaction.Finalize(mine)
+	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
+
+	query := "SELECT post_id FROM post_tags WHERE tag_id = $1 ORDER BY post_id "
+	rows, err := tx.Query(query, tag.Id)
+	if err != nil { return nil, err }
+
+	var out apitypes.TPostInfoArray
+	var item apitypes.TPostInfo
+	for rows.Next() {
+		err := rows.Scan(&item.Id)
+		if err != nil { return nil, err }
+		out = append(out, item)
+	}
+
+	return out, nil	
+}
+
 func LocalTagSearch(tag apitypes.TTagData, ctrl EnumerateControl) (apitypes.TPostInfoArray, error) {
 	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
 	defer ctrl.Transaction.Finalize(mine)
@@ -851,12 +883,22 @@ func UpdatePost(oldpost, newpost apitypes.TPostInfo, settings UpdaterSettings) (
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }
+	old_id := oldpost.Id // this is the only field we trust to be populated
 
 	count_deltas := make(map[string]int)
+	// up-count all of the tags in the modified post
 	for _, new_tag := range newpost.Tags() {
 		count_deltas[new_tag] += 1
 	}
-	for _, old_tag := range oldpost.Tags() {
+
+	// down-count all of the tags that were there before.
+	rows, err := tx.Query("SELECT tag_name FROM post_tags INNER JOIN tag_index USING (tag_id) WHERE post_id = $1", old_id)
+	if err != nil { return err }
+
+	for rows.Next() {
+		var old_tag string
+		err := rows.Scan(&old_tag)
+		if err != nil { return err }
 		count_deltas[old_tag] -= 1
 	}
 
@@ -868,11 +910,20 @@ func UpdatePost(oldpost, newpost apitypes.TPostInfo, settings UpdaterSettings) (
 	}
 
 	query := "DELETE FROM post_tags WHERE post_id = $1"
-	_, err := tx.Exec(query, oldpost.Id)
+	_, err = tx.Exec(query, old_id)
+	if err != nil { return err }
+
+	query = "DELETE FROM post_index WHERE post_id = $1"
+	_, err = tx.Exec(query, old_id)
+	if err != nil { return err }
+
+
+	query = "INSERT INTO post_index (post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted) VALUES ($1, $2, $3, $4, $5, $6, $7)"
+	_, err = tx.Exec(query, newpost.Id, newpost.Change, newpost.Rating, newpost.Description, strings.Join(newpost.Sources, " "), newpost.Md5, newpost.Deleted)
 	if err != nil { return err }
 
 	query = "INSERT INTO post_tags SELECT $1 as post_id, tag_id FROM UNNEST($2::varchar[]) AS tag_name INNER JOIN tag_index USING (tag_name)"
-	_, err = tx.Exec(query, oldpost.Id, pq.Array(newpost.Tags()))
+	_, err = tx.Exec(query, old_id, pq.Array(newpost.Tags()))
 	if err != nil { return err }
 
 	settings.Transaction.commit = mine

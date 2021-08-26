@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"fmt"
 )
 
@@ -167,6 +168,52 @@ type TPostInfo struct {
 //	Artist      []string `json:"artist,omitempty"`
 }
 
+// the edit post endpoint returns this piece of shit instead of a real TPostInfo object. bodge it in and add a converter.
+type TPostEditInfo struct {
+	Id          int    `json:"id"`
+	Change      int    `json:"change_seq"`
+	Rating      string `json:"rating"`
+	Description string `json:"description"`
+	Source      string `json:"source"`
+	Md5         string `json:"md5"`
+	Deleted     bool   `json:"is_deleted"`
+
+	TagStringGeneral   string `json:"tag_string_general"`
+	TagStringSpecies   string `json:"tag_string_species"`
+	TagStringCharacter string `json:"tag_string_character"`
+	TagStringCopyright string `json:"tag_string_copyright"`
+	TagStringArtist    string `json:"tag_string_artist"`
+	TagStringInvalid   string `json:"tag_string_invalid"`
+	TagStringLore      string `json:"tag_string_lore"`
+	TagStringMeta      string `json:"tag_string_meta"`
+}
+
+func (this TPostEditInfo) TPostInfo() (*TPostInfo) {
+	return &TPostInfo{
+		Id: this.Id,
+		Change: this.Change,
+		Rating: this.Rating,
+		Description: this.Description,
+		Sources: strings.Split(this.Source, "\n"),
+		TPostFile: TPostFile{
+			Md5: this.Md5,
+		},
+		TPostFlags: TPostFlags{
+			Deleted: this.Deleted,
+		},
+		TPostTags: TPostTags{
+			General: strings.Split(this.TagStringGeneral, " "),
+			Species: strings.Split(this.TagStringSpecies, " "),
+			Character: strings.Split(this.TagStringCharacter, " "),
+			Copyright: strings.Split(this.TagStringCopyright, " "),
+			Artist: strings.Split(this.TagStringArtist, " "),
+			Invalid: strings.Split(this.TagStringInvalid, " "),
+			Lore: strings.Split(this.TagStringLore, " "),
+			Meta: strings.Split(this.TagStringMeta, " "),
+		},
+	}
+}
+
 type TUserInfo struct {
 	Id              int    `json:"id"`
 	CreatedAt       string `json:"created_at"`
@@ -203,6 +250,7 @@ type TPostInfoArray []TPostInfo
 type TApiStatus struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
+	Reason  string `json:"reason"`
 	Code   *string `json:"code"`
 }
 

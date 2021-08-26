@@ -55,6 +55,8 @@ func UploadFile(file_data io.Reader, upload_url, tags, rating, source, descripti
 	return &out, e
 }
 
+var PostIsDeleted error = errors.New("This post has been deleted.")
+
 func UpdatePost(user, apitoken string,
 		id int,
 		tagdiff TagDiff,				// empty to leave tags unchanged.
@@ -63,9 +65,14 @@ func UpdatePost(user, apitoken string,
 		source *string,					// nil to leave source unchanged
 		description *string,				// nil to leave description unchanged
 		reason *string) (*types.TPostInfo, error) {
-	url := fmt.Sprintf("/post/%s.json", id)
+	url := fmt.Sprintf("/posts/%d.json", id)
 
-	var post types.TPostInfo
+	var post struct {
+		types.TPostEditInfo
+		types.TApiStatus
+	}
+
+	post.Success = true
 
 	req := api.New(url).
 			Method(reqtify.PATCH).
@@ -86,7 +93,11 @@ func UpdatePost(user, apitoken string,
 		return nil, e
 	}
 
-	return &post, e
+	if post.Reason == "Access Denied: Post not visible to you" {
+		return nil, PostIsDeleted
+	}
+
+	return post.TPostEditInfo.TPostInfo(), e
 }
 
 func VotePost(user, apitoken string,
