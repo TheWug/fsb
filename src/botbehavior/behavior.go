@@ -86,17 +86,6 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 	return channel
 }
 
-func (this *Behavior) ProcessCallback(ctx *gogram.CallbackCtx) {
-	if ctx.Cb.Message == nil {
-		return // message is too old, just do nothing for now.
-	}
-
-	m := *ctx.Cb.Message
-	m.Text = ctx.Cb.Data
-	this.ForwardTo.ProcessMessage(gogram.NewMessageCtx(&m, false, ctx.Bot))
-	ctx.Bot.Remote.AnswerCallbackQuery(data.OCallback{Id: ctx.Cb.Id})
-}
-
 // inline query, do tag search.
 func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 	debugmode := strings.Contains(ctx.Query.Query, "special:debugoutput") && (ctx.Query.From.Id == this.MySettings.Owner)

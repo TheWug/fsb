@@ -612,6 +612,7 @@ birds. We just don't know.`
 }
 
 type HelpState struct {
+	gogram.StateIgnoreMessages
 }
 
 func (this *HelpState) Handle(ctx *gogram.MessageCtx) {
@@ -623,6 +624,8 @@ func (this *HelpState) Handle(ctx *gogram.MessageCtx) {
 }
 
 type LoginState struct {
+	gogram.StateIgnoreCallbacks
+
 	user	string
 	apikey	string
 }
@@ -681,6 +684,8 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 }
 
 type TagRuleState struct {
+	gogram.StateIgnoreCallbacks
+
 	tagwizardrules string
 	tagrulename string
 }
@@ -769,9 +774,8 @@ type PostState struct {
 	postreviewed	bool
 }
 
-func (this *PostState) Reset(ctx *gogram.MessageCtx) {
+func (this *PostState) Reset() {
 	this.postwizard.Reset()
-	ctx.SetState(nil)
 }
 
 func (this *PostState) SetTagRulesByName(my_id data.UserID, name string) {
@@ -784,167 +788,192 @@ func (this *PostState) WriteUserTagRules(my_id data.UserID, tagrules, name strin
 	storage.WriteUserTagRules(storage.UpdaterSettings{}, my_id, name, tagrules)
 }
 
+func (this *PostState) HandleCallback(ctx *gogram.CallbackCtx) {
+	newstate, response := this.HandleCmd(&ctx.Cmd, &ctx.Cb.From, ctx.GetState(), nil, ctx.MsgCtx.Msg, ctx.Bot)
+	ctx.SetState(newstate)
+	if response.Text != "" {
+		ctx.Respond(response)
+	}
+}
+
 func (this *PostState) Handle(ctx *gogram.MessageCtx) {
-	if ctx.Msg.From == nil {
-		return
+	if ctx.Msg.From == nil { return }
+	newstate, response := this.HandleCmd(&ctx.Cmd, ctx.Msg.From, ctx.GetState(), ctx.Msg, nil, ctx.Bot)
+	ctx.SetState(newstate)
+	if response.Text != "" {
+		ctx.Respond(response)
 	}
-	if ctx.Cmd.Command == "/cancel" {
-		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Command cancelled."}}, nil)
-		ctx.SetState(nil)
-		return
+}
+
+func (this *PostState) HandleCmd(cmd *gogram.CommandData,
+                                 from *data.TUser,
+                                 current_state gogram.State,
+                                 inbound_message *data.TMessage,
+                                 context_message *data.TMessage,
+                                 bot *gogram.TelegramBot) (gogram.State, data.OMessage) {
+
+	endstate := current_state
+	var response data.OMessage
+	response.ParseMode = data.ParseHTML
+
+	if cmd.Command == "/cancel" {
+		response.Text = "Command cancelled."
+		endstate = nil
+		return endstate, response
 	}
 
-	if ctx.GetState() == nil {
+	if current_state == nil {
 		this = &PostState{}
-		this.postwizard = *NewTagWizard(ctx)
-		rules, err := storage.GetUserTagRules(storage.UpdaterSettings{}, ctx.Msg.From.Id, "main")
-		if err != nil { ctx.Bot.ErrorLog.Println(err.Error()) }
+		m := inbound_message
+		if m == nil {
+			m = &data.TMessage{Chat: data.TChat{Id: data.ChatID(from.Id)}}
+		}
+		this.postwizard = *NewTagWizard(gogram.NewMessageCtx(m, false, bot))
+		rules, err := storage.GetUserTagRules(storage.UpdaterSettings{}, from.Id, "main")
+		if err != nil { bot.ErrorLog.Println(err.Error()) }
 		if err == nil { this.postwizard.SetNewRulesFromString(rules) }
-		ctx.SetState(this)
+		endstate = this
 	}
 
-	var prompt string
-	var reply *gogram.MessageCtx
-
-	if ctx.Cmd.Command == "/post" || ctx.Cmd.Command == "/file" || ctx.Cmd.Command == "/f" {
+	if cmd.Command == "/post" || cmd.Command == "/file" || cmd.Command == "/f" {
 		this.postfile.mode = none
 		this.posttagwiz = false
 		this.postmode = postfile
-	} else if ctx.Cmd.Command == "/tag" || ctx.Cmd.Command == "/t" {
+	} else if cmd.Command == "/tag" || cmd.Command == "/t" {
 		this.posttagwiz = false
 		this.postmode = posttags
-	} else if ctx.Cmd.Command == "/wizard" || ctx.Cmd.Command == "/w" {
+	} else if cmd.Command == "/wizard" || cmd.Command == "/w" {
 		this.posttagwiz = true
 		this.postmode = postwizard
-		this.SetTagRulesByName(ctx.Msg.From.Id, ctx.Cmd.Argstr)
-	} else if ctx.Cmd.Command == "/rating" || ctx.Cmd.Command == "/r" {
+		this.SetTagRulesByName(from.Id, cmd.Argstr)
+	} else if cmd.Command == "/rating" || cmd.Command == "/r" {
 		this.posttagwiz = false
 		this.postrating = ""
 		this.postmode = postrating
-	} else if ctx.Cmd.Command == "/source" || ctx.Cmd.Command == "/src" || ctx.Cmd.Command == "/s" {
+	} else if cmd.Command == "/source" || cmd.Command == "/src" || cmd.Command == "/s" {
 		this.posttagwiz = false
 		this.postsource = ""
 		this.postmode = postsource
-	} else if ctx.Cmd.Command == "/description" || ctx.Cmd.Command == "/desc" || ctx.Cmd.Command == "/d" {
+	} else if cmd.Command == "/description" || cmd.Command == "/desc" || cmd.Command == "/d" {
 		this.posttagwiz = false
 		this.postdescription = ""
 		this.postmode = postdescription
-	} else if ctx.Cmd.Command == "/parent" || ctx.Cmd.Command == "/p" {
+	} else if cmd.Command == "/parent" || cmd.Command == "/p" {
 		this.posttagwiz = false
 		this.postparent = nil
 		this.postmode = postparent
-	} else if ctx.Cmd.Command == "/upload" {
+	} else if cmd.Command == "/upload" {
 		this.postmode = postupload
-	} else if ctx.Cmd.Command == "/help" {
-		ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: ShowHelp("post"), ParseMode: data.ParseHTML}}, nil)
-		return
-	} else if ctx.Cmd.Command == "/z" && this.postmode == postwizard {
-		this.postwizard.ToggleTagsFromString(ctx.Cmd.Argstr)
+	} else if cmd.Command == "/help" {
+		response.Text = ShowHelp("post")
+		return endstate, response
+	} else if cmd.Command == "/z" && this.postmode == postwizard {
+		this.postwizard.ToggleTagsFromString(cmd.Argstr)
 		this.postwizard.UpdateMenu()
-	} else if ctx.Cmd.Command == "/next" && this.postmode == postwizard {
+	} else if cmd.Command == "/next" && this.postmode == postwizard {
 		this.postwizard.NextMenu()
-	} else if ctx.Cmd.Command == "/finish" && this.postmode == postwizard {
+	} else if cmd.Command == "/finish" && this.postmode == postwizard {
 		this.postwizard.FinishMenu()
 		this.postmode = postnext
-		prompt = "Done tagging.\n\n"
-	} else if ctx.Cmd.Command == "/again" && this.postmode == postwizard {
+		response.Text = "Done tagging.\n\n"
+	} else if cmd.Command == "/again" && this.postmode == postwizard {
 		this.postwizard.DoOver()
 	}
 
 	if this.postmode == postfile {
-		if ctx.Msg.Photo != nil { // inline photo
-			prompt = "That photo was compressed by telegram, and its quality may be severely degraded.  Send it as a file instead if you're sure.\n\n"
-		} else if ctx.Msg.Document != nil { // inline file
-			prompt = "Preparing to post file sent in this message.\n\n"
+		if inbound_message != nil && inbound_message.Photo != nil { // inline photo
+			response.Text = "That photo was compressed by telegram, and its quality may be severely degraded.  Send it as a file instead if you're sure.\n\n"
+		} else if inbound_message != nil && inbound_message.Document != nil { // inline file
+			response.Text = "Preparing to post file sent in this message.\n\n"
 			this.postfile.mode = file_id
-			this.postfile.file_id = ctx.Msg.Document.Id
+			this.postfile.file_id = inbound_message.Document.Id
 			this.postmode = postnext
-		} else if ctx.Msg.ReplyToMessage != nil && ctx.Msg.ReplyToMessage.Document != nil { // reply to file
-			reply = gogram.NewMessageCtx(ctx.Msg.ReplyToMessage, false, ctx.Bot)
-			prompt = "Preparing to post file sent in this message.\n\n"
+		} else if inbound_message != nil && inbound_message.ReplyToMessage != nil && inbound_message.ReplyToMessage.Document != nil { // reply to file
+			response.ReplyToId = &inbound_message.ReplyToMessage.Id
+			response.Text = "Preparing to post file sent in this message.\n\n"
 			this.postfile.mode = file_id
-			this.postfile.file_id = ctx.Msg.ReplyToMessage.Document.Id
+			this.postfile.file_id = inbound_message.ReplyToMessage.Document.Id
 			this.postmode = postnext
-		} else if strings.HasPrefix(ctx.Cmd.Argstr, "http://") || strings.HasPrefix(ctx.Cmd.Argstr, "https://") { // inline url
-			prompt = fmt.Sprintf("Preparing to post from <a href=\"%s\">this URL</a>.\n\n", ctx.Cmd.Argstr)
+		} else if strings.HasPrefix(cmd.Argstr, "http://") || strings.HasPrefix(cmd.Argstr, "https://") { // inline url
+			response.Text = fmt.Sprintf("Preparing to post from <a href=\"%s\">this URL</a>.\n\n", cmd.Argstr)
 			this.postfile.mode = url
-			this.postfile.url = ctx.Cmd.Argstr
+			this.postfile.url = cmd.Argstr
 			this.postmode = postnext
-		} else if ctx.Msg.ReplyToMessage != nil && ctx.Msg.ReplyToMessage.Photo != nil { // reply to photo
-			reply = gogram.NewMessageCtx(ctx.Msg.ReplyToMessage, false, ctx.Bot)
-			prompt = "That photo was compressed by telegram, and its quality may be severely degraded.  Send it as a file instead.\n\n"
-		} else if ctx.Msg.ReplyToMessage != nil || ctx.Cmd.Argstr != "" { // reply to unknown, or unknown
-			prompt = "Sorry, I don't know what to do with that.\n\nPlease send me a file. Either send (or forward) one directly, reply to one you sent earlier, or send a URL."
+		} else if inbound_message != nil && inbound_message.ReplyToMessage != nil && inbound_message.ReplyToMessage.Photo != nil { // reply to photo
+			response.ReplyToId = &inbound_message.ReplyToMessage.Id
+			response.Text = "That photo was compressed by telegram, and its quality may be severely degraded.  Send it as a file instead if you're sure.\n\n"
+		} else if inbound_message != nil && inbound_message.ReplyToMessage != nil || cmd.Argstr != "" { // reply to unknown, or unknown
+			response.Text = "Sorry, I don't know what to do with that.\n\nPlease send me a file. Either send (or forward) one directly, reply to one you sent earlier, or send a URL."
 		} else {
 			this.postmode = postnext
 		}
 	} else if this.postmode == postwizard {
-		if ctx.Cmd.Command == "" {
-			this.postwizard.MergeTagsFromString(ctx.Cmd.Argstr)
+		if cmd.Command == "" {
+			this.postwizard.MergeTagsFromString(cmd.Argstr)
 			this.postwizard.UpdateMenu()
 		}
-		if ctx.Cmd.Command == "/next" {
+		if cmd.Command == "/next" {
 			this.postwizard.NextMenu()
 		}
 	} else if this.postmode == posttags {
-		if ctx.Cmd.Argstr == "" {
-			prompt = "Please send some new tags."
+		if cmd.Argstr == "" {
+			response.Text = "Please send some new tags."
 		} else {
 			if this.postwizard.Len() != 0 {
-				prompt = fmt.Sprintf("Replaced previous tags.\n(%s)", this.postwizard.TagString())
+				response.Text = fmt.Sprintf("Replaced previous tags.\n(%s)", this.postwizard.TagString())
 			} else {
-				prompt = "Applied tags."
+				response.Text = "Applied tags."
 			}
 			this.postwizard.Reset()
-			this.postwizard.MergeTagsFromString(ctx.Cmd.Argstr)
+			this.postwizard.MergeTagsFromString(cmd.Argstr)
 			this.postmode = postnext
 		}
 	} else if this.postmode == postrating {
-		this.postrating = api.SanitizeRating(ctx.Cmd.Argstr)
-		if ctx.Cmd.Argstr == "" {
+		this.postrating = api.SanitizeRating(cmd.Argstr)
+		if cmd.Argstr == "" {
 			this.postmode = postnext
 		} else if this.postrating == "" {
-			prompt = "Sorry, that isn't a valid rating.\n\nPlease enter the post's rating! Safe, Questionable, or Explicit?"
+			response.Text = "Sorry, that isn't a valid rating.\n\nPlease enter the post's rating! Safe, Questionable, or Explicit?"
 		} else {
-			prompt = fmt.Sprintf("Set rating to %s.\n\n", this.postrating)
+			response.Text = fmt.Sprintf("Set rating to %s.\n\n", this.postrating)
 			this.postmode = postnext
 		}
 	} else if this.postmode == postsource {
-		this.postsource = ctx.Cmd.Argstr
+		this.postsource = cmd.Argstr
 		if this.postsource == "." { this.postsource = "" }
 		this.postmode = postnext
-		if ctx.Cmd.Argstr == "" {
-		} else if ctx.Cmd.Argstr == "." {
-			prompt = "Cleared sources.\n\n"
+		if cmd.Argstr == "" {
+		} else if cmd.Argstr == "." {
+			response.Text = "Cleared sources.\n\n"
 		} else {
-			prompt = "Set sources.\n\n"
+			response.Text = "Set sources.\n\n"
 		}
 	} else if this.postmode == postdescription {
-		this.postdescription = ctx.Cmd.Argstr
+		this.postdescription = cmd.Argstr
 		if this.postdescription == "." { this.postdescription = "" }
 		this.postmode = postnext
-		if ctx.Cmd.Argstr == "" {
-		} else if ctx.Cmd.Argstr == "." {
-			prompt = "Cleared description.\n\n"
+		if cmd.Argstr == "" {
+		} else if cmd.Argstr == "." {
+			response.Text = "Cleared description.\n\n"
 		} else {
-			prompt = "Set description.\n\n"
+			response.Text = "Set description.\n\n"
 		}
 	} else if this.postmode == postparent {
 		this.postmode = postnext
-		if ctx.Cmd.Argstr != "" {
-			num, err := strconv.Atoi(ctx.Cmd.Argstr)
+		if cmd.Argstr != "" {
+			num, err := strconv.Atoi(cmd.Argstr)
 			if err != nil {
-				submatches := apiurlmatch.FindStringSubmatch(ctx.Cmd.Argstr)
+				submatches := apiurlmatch.FindStringSubmatch(cmd.Argstr)
 				if len(submatches) != 0 {
-					num, err = strconv.Atoi(ctx.Cmd.Argstr)
+					num, err = strconv.Atoi(cmd.Argstr)
 				}
 			}
 			if err == nil {
 				this.postparent = &num
-				prompt = "Set parent post.\n\n"
+				response.Text = "Set parent post.\n\n"
 			} else {
 				this.postparent = nil
-				prompt = "Cleared parent post.\n\n"
+				response.Text = "Cleared parent post.\n\n"
 			}
 		}
 	} else if this.postmode == postupload {
@@ -956,37 +985,40 @@ func (this *PostState) Handle(ctx *gogram.MessageCtx) {
 			if this.postfile.mode == url {
 				post_url = this.postfile.url
 			} else {
-				file, err := ctx.Bot.Remote.GetFile(data.OGetFile{Id: this.postfile.file_id})
+				file, err := bot.Remote.GetFile(data.OGetFile{Id: this.postfile.file_id})
 				if err != nil || file == nil || file.FilePath == nil {
-					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while fetching %s, try sending it again?", this.postfile.file_id)}}, nil)
+					response.Text = "Error while fetching file, try sending it again?"
 					this.postmode = postnext
-					return
+					return endstate, response
 				}
-				post_filedata, err = ctx.Bot.Remote.DownloadFile(data.OFile{FilePath: *file.FilePath})
+				post_filedata, err = bot.Remote.DownloadFile(data.OFile{FilePath: *file.FilePath})
 				if err != nil || post_filedata == nil {
-					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error while downloading %s, try sending it again?", this.postfile.file_id)}}, nil)
+					response.Text = "Error while downloading file, try sending it again?"
 					this.postmode = postnext
-					return
+					return endstate, response
 				}
 			}
-			user, apikey, _, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+			user, apikey, _, err := storage.GetUserCreds(storage.UpdaterSettings{}, from.Id)
 			result, err := api.UploadFile(post_filedata, post_url, this.postwizard.TagString(), this.postrating, this.postsource, this.postdescription, this.postparent, user, apikey)
 			if err != nil || !result.Success {
 				if result.StatusCode == 403 {
-					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("It looks like your api key isn't valid, you need to login again.", *result.Reason)}}, nil)
-					this.Reset(ctx)
+					response.Text = "It looks like your api key isn't valid, you need to login again."
+					this.Reset()
+					endstate = nil
 				} else if result.Location != nil && result.StatusCode == 423 {
-					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("It looks like that file has already been posted. <a href=\"%s\">Check it out here.</a>", *result.Location), ParseMode: data.ParseHTML}}, nil)
-					this.Reset(ctx)
+					response.Text = fmt.Sprintf("It looks like that file has already been posted. <a href=\"%s\">Check it out here.</a>", *result.Location)
+					this.Reset()
+					endstate = nil
 				} else {
-					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("I'm having issues posting that file. (%s)", *result.Reason)}}, nil)
+					response.Text = fmt.Sprintf("I'm having issues posting that file. (%s)", *result.Reason)
 				}
 			} else {
-				ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Upload complete! <a href=\"%s\">Check it out.</a>", *result.Location), ParseMode: data.ParseHTML}}, nil)
-				this.Reset(ctx)
+				response.Text = fmt.Sprintf("Upload complete! <a href=\"%s\">Check it out.</a>", *result.Location)
+				this.Reset()
+				endstate = nil
 			}
 
-			if ctx.GetState() == nil { return }
+			if endstate == nil { return endstate, response }
 		}
 	}
 
@@ -995,56 +1027,51 @@ func (this *PostState) Handle(ctx *gogram.MessageCtx) {
 			newrating := this.postwizard.Rating()
 			if newrating != "" {
 				this.postrating = newrating
-				prompt = fmt.Sprintf("%sThe tags imply the rating of this post is %s.\n\n", prompt, this.postrating)
+				response.Text = fmt.Sprintf("%sThe tags imply the rating of this post is %s.\n\n", response.Text, this.postrating)
 			}
 		}
 
 		if this.postfile.mode == none {
-			prompt = fmt.Sprintf("%s%s", prompt,  "Please send me a file. Either send (or forward) one directly, reply to one you sent earlier, or send a URL.")
+			response.Text = fmt.Sprintf("%s%s", response.Text,  "Please send me a file. Either send (or forward) one directly, reply to one you sent earlier, or send a URL.")
 			this.postmode = postfile
 		} else if this.postwizard.Len() == 0 {
 			this.posttagwiz = true
 			this.postmode = postwizard
 		} else if this.postrating == "" {
-			prompt = "Please enter the post's rating! Safe, Questionable, or Explicit?"
+			response.Text = "Please enter the post's rating! Safe, Questionable, or Explicit?"
 			this.postmode = postrating
 		} else {
 			if this.postready == false {
-				prompt = fmt.Sprintf("%s%s", prompt, "Your post now has enough information to submit!\n\n")
+				response.Text = fmt.Sprintf("%s%s", response.Text, "Your post now has enough information to submit!\n\n")
 				this.postready = true
 			}
 
 			if this.postsource == "" {
-				prompt = fmt.Sprintf("%s%s", prompt, "Please enter the post source links.")
+				response.Text = fmt.Sprintf("%s%s", response.Text, "Please enter the post source links.")
 				this.postmode = postsource
 			} else if this.postdescription == "" {
-				prompt = fmt.Sprintf("%s%s", prompt, "Please enter the description.\n<a href=\"https://" + api.Endpoint + "/help/show/dtext\">Remember, you can use DText.</a>")
+				response.Text = fmt.Sprintf("%s%s", response.Text, "Please enter the description.\n<a href=\"https://" + api.Endpoint + "/help/show/dtext\">Remember, you can use DText.</a>")
 				this.postmode = postdescription
 			} else if this.postparent == nil {
-				prompt = fmt.Sprintf("%s%s", prompt, "Please enter the parent post.")
+				response.Text = fmt.Sprintf("%s%s", response.Text, "Please enter the parent post.")
 				this.postmode = postparent
 			} else if !this.postdone {
-				prompt = fmt.Sprintf("%sThat's it! You've entered all of the info.", prompt)
+				response.Text = fmt.Sprintf("%sThat's it! You've entered all of the info.", response.Text)
 				this.postdone = true
 			}
 		}
 	}
 
-	if prompt != "" {
-		if reply != nil {
-			reply.Reply(data.OMessage{SendData: data.SendData{Text: prompt, ParseMode: data.ParseHTML}})
-		} else {
-			ctx.Respond(data.OMessage{SendData: data.SendData{Text: prompt, ParseMode: data.ParseHTML}})
-		}
-	}
-
 	if this.posttagwiz && this.postmode == postwizard {
-		this.postwizard.SendWizard(int64(ctx.Msg.From.Id))
+		this.postwizard.SendWizard(int64(from.Id))
 		this.posttagwiz = false
 	}
+
+	return endstate, response
 }
 
 type JanitorState struct {
+	gogram.StateIgnoreMessages
 }
 
 func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {

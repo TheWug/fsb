@@ -75,8 +75,8 @@ func main() {
 
 	thebot.SetMessageCallback(machine)
 	thebot.SetStateMachine(machine)
+	thebot.SetCallbackCallback(machine)
 	thebot.SetInlineCallback(&behavior)
-	thebot.SetCallbackCallback(&behavior)
 	thebot.AddMaintenanceCallback(&behavior)
 
 	thebot.MainLoop()
