@@ -913,9 +913,13 @@ func CountTags(status chan string) (error) {
 	return nil
 }
 
-func LocalTagSearch(tag apitypes.TTagData) (apitypes.TResultArray, error) {
+func LocalTagSearch(tag apitypes.TTagData, ctrl EnumerateControl) (apitypes.TResultArray, error) {
+	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
+	defer ctrl.Transaction.Finalize(mine)
+	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
+
 	query := "SELECT post_id, (SELECT tag_name FROM tag_index WHERE tag_id = post_tags.tag_id) FROM (SELECT post_id FROM post_tags WHERE tag_id = $1) AS a INNER JOIN post_tags USING (post_id) ORDER BY post_id"
-	rows, err := Db_pool.Query(query, tag.Id)
+	rows, err := tx.Query(query, tag.Id)
 	if err != nil { return nil, err }
 
 	var out apitypes.TResultArray
@@ -935,6 +939,7 @@ func LocalTagSearch(tag apitypes.TTagData) (apitypes.TResultArray, error) {
 		out = append(out, item)
 	}
 
+	ctrl.Transaction.commit = mine
 	return out, nil
 }
 

@@ -1094,7 +1094,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		updated := 1
 		api_timeout := time.NewTicker(750 * time.Millisecond)
 		for _, v := range results {
-			posts, err := storage.LocalTagSearch(v.Tag)
+			posts, err := storage.LocalTagSearch(v.Tag, ctrl)
 			if err != nil {
 				sfx <- fmt.Sprintf(" (error: %s)", err.Error())
 				return
