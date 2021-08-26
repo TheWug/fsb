@@ -729,10 +729,13 @@ func (this *AutofixState) HandleCallback(ctx *gogram.CallbackCtx) {
 			botbehavior.PromptPost(ctx.Bot, post_info, post_info.PostId, nil, nil)
 		} else if ctx.Cmd.Command == "/af-commit" {
 			diff := post_info.Edit.GetChangeToApply()
+
 			if diff.IsZero() {
 				ctx.AnswerAsync(data.OCallback{Notification: "\u2139 No changes to apply."}, nil)
+				botbehavior.DismissPromptPost(ctx.Bot, post_info, diff, settings)
 				return
 			}
+
 			reason := "Manual tag cleanup: typos and concatenations (via KnottyBot)"
 			_, err = api.UpdatePost(user, api_key, post_info.PostId, diff, nil, nil, nil, nil, &reason)
 			if err != nil {

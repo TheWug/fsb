@@ -1048,6 +1048,10 @@ type PostSuggestedEdit struct {
 	AppliedEdits  map[string]bool        `json:"applied_edits"`
 }
 
+func (this *PostSuggestedEdit) SelectAutofix() {
+	for _, diff := range this.AutoFix { this.SelectDirect(diff.APIString()) }
+}
+
 func (this *PostSuggestedEdit) SelectDirect(api_string string) {
 	if this.SelectedEdits == nil {
 		this.SelectedEdits = make(map[string]bool)
@@ -1300,6 +1304,19 @@ func GetAutoFixHistoryForPosts(posts []int, settings UpdaterSettings) (map[int][
 	
 	settings.Transaction.commit = mine
 	return results, nil
+}
+
+func AddAutoFixHistoryForPost(post_id int, changes []string, settings UpdaterSettings) (error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
+
+	query := "INSERT INTO autofix_history (post_id, fix_ts, fix_change) SELECT $1, now(), change FROM UNNEST($2::varchar[]) AS change ON CONFLICT DO NOTHING"
+	_, err := tx.Exec(query, post_id, pq.Array(changes))
+	if err != nil { return err }
+
+	settings.Transaction.commit = mine
+	return nil
 }
 
 func FindPromptPost(id int, settings UpdaterSettings) (*PromptPostInfo, error) {

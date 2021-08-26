@@ -89,8 +89,10 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 			go func() {
 				for posts := range update_chan {
 					for _, p := range posts {
-						updated_post_ids = append(updated_post_ids, p.Id)
-						updated_posts[p.Id] = p
+						if !p.Deleted { // skip deleted posts since they can't be edited.
+							updated_post_ids = append(updated_post_ids, p.Id)
+							updated_posts[p.Id] = p
+						}
 					}
 				}
 				wg.Done()
@@ -100,7 +102,7 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 				tagindex.SyncPostsInternal(this.MySettings.SearchUser, this.MySettings.SearchAPIKey, settings, extra_expensive, extra_expensive, nil, nil, update_chan)
 				close(update_chan)
 				wg.Done()
-				if err != nil { log.Println(err.Error()) }
+				if err != nil { bot.ErrorLog.Println("SyncPostsInternal in maintenance routine:", err.Error()) }
 			}()
 
 			wg.Wait()
@@ -108,42 +110,28 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 			settings.Transaction.MarkForCommit()
 			settings.Transaction.Finalize(true)
 
-			updated_post_ids = []int{2278061, 2278890}
-			updated_posts = make(map[int]apitypes.TPostInfo)
-
-			for _, pid := range updated_post_ids {
-				post, err := api.FetchOnePost(this.MySettings.SearchUser, this.MySettings.SearchAPIKey, pid)
-				if err != nil { log.Println(err.Error()) }
-				updated_posts[pid] = *post
-			}
-
 			bot.Log.Println("Maintenance sync complete. Processing updated posts...")
 
 			settings.Transaction, err = storage.NewTxBox()
 			if err != nil {
-				bot.Log.Println("Error creating transaction:", err.Error())
+				bot.ErrorLog.Println("Error creating transaction:", err.Error())
 				continue
 			}
 
 			edits, err := storage.GetSuggestedPostEdits(updated_post_ids, settings)
 			if err != nil {
-				bot.Log.Println("Error in GetSuggestedPostEdits:", err.Error())
+				bot.ErrorLog.Println("Error in GetSuggestedPostEdits:", err.Error())
 				continue
 			}
 
 			autofixes, err := storage.GetAutoFixHistoryForPosts(updated_post_ids, settings) // map of id to array of tag diff
 			if err != nil {
-				bot.Log.Println("Error in GetAutoFixHistoryForPosts:", err.Error())
+				bot.ErrorLog.Println("Error in GetAutoFixHistoryForPosts:", err.Error())
 				continue
 			}
-
-			log.Println("updated ids:", updated_post_ids)
-			log.Println("updated posts:", updated_posts)
-			log.Println("edits:", edits)
-			log.Println("autofixes:", autofixes)
+			auto_user, auto_api_key := this.MySettings.DefaultSearchCredentials()
 
 			for id, edit := range edits {
-				log.Println("edit:", edit)
 				// remove any recent autofix changes from the autofix list, bit by bit.
 				// also filter out any edits which become no-ops
 				autofix := autofixes[id]
@@ -155,21 +143,32 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 					if !edit.AutoFix[i].IsZero() { new_autofix = append(new_autofix, edit.AutoFix[i]) }
 				}
 				edit.AutoFix = new_autofix
-				log.Println("edit:", edit)
 
-				// automatically apply any autofix edits that were made
+				edit.SelectAutofix()
+				auto_diff := edit.GetChangeToApply()
+				if !auto_diff.IsZero() {
+					_, err = api.UpdatePost(auto_user, auto_api_key, id, auto_diff, nil, nil, nil, nil, sptr("Automatic tag cleanup: typos and concatenations (via KnottyBot)"))
+					if err != nil {
+						bot.ErrorLog.Println("Error updating post:", err.Error())
+					} else {
+						edit.Apply()
+						var applied_api []string
+						for k, _ := range edit.AppliedEdits { applied_api = append(applied_api, k) }
+						storage.AddAutoFixHistoryForPost(id, applied_api, settings)
+					}
+				}
 
 				// generate a prompt post, or find an existing one and edit it
 				post_info, err := storage.FindPromptPost(id, settings)
 				if err != nil {
-					bot.Log.Println("Error in FindPromptPost:", err.Error())
+					bot.ErrorLog.Println("Error in FindPromptPost:", err.Error())
 					continue
 				}
 				post := updated_posts[id]
 				post_info = PromptPost(bot, post_info, id, &post, &edit)
 				err = storage.SavePromptPost(id, post_info, settings)
 				if err != nil {
-					bot.Log.Println("Error in SavePromptPost:", err.Error())
+					bot.ErrorLog.Println("Error in SavePromptPost:", err.Error())
 					continue
 				}
 			}
@@ -337,7 +336,7 @@ func PromptPost(bot *gogram.TelegramBot, post_info *storage.PromptPostInfo, id i
 		}
 
 		if err != nil {
-			bot.ErrorLog.Println(err.Error())
+			bot.ErrorLog.Println("Couldn't post message in PromptPost:", err.Error())
 			return nil
 		}
 
