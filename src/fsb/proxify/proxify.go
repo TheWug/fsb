@@ -4,10 +4,13 @@ import (
 	"github.com/thewug/gogram/data"
 
 	"api/types"
+	"api"
 	"strings"
 	"strconv"
 	"log"
 	"fmt"
+	"net/url"
+	"html"
 )
 
 func ContainsSafeRatingTag(tags string) (bool) {
@@ -21,29 +24,130 @@ func ContainsSafeRatingTag(tags string) (bool) {
 	return false
 }
 
-func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, query string, debugmode bool) (interface{}) {
-	salt := "x_"
-	postURL := ""
-	if force_safe {
-		postURL = fmt.Sprintf("https://%s/posts/%d", api.FilteredEndpoint, result.Id)
-	} else {
-		postURL = fmt.Sprintf("https://%s/posts/%d", api.Endpoint, result.Id)
+// takes an api URL and transforms the domain to filtered api.
+// building a filtered api URL from scratch is more efficient than using this,
+// so this should be used primarily for URLs retrieved from the API,
+// not ones assembled locally.
+
+func MaybeSafeify(u string, safe bool) string {
+	if !safe { return u }
+
+	URL, err := url.Parse(u)
+	if err != nil { return "" }
+
+	URL.Host = strings.Replace(URL.Host, api.Endpoint, api.FilteredEndpoint, -1)
+	return URL.String()
+}
+
+func domain(safe bool) string {
+	if safe { return api.FilteredEndpoint }
+	return api.Endpoint
+}
+
+func artistLink(artist string, safe bool) string {
+	return fmt.Sprintf(`<a href="https://%s/artists/show_or_new?name=%s">%s</a>`, domain(safe), url.QueryEscape(artist), html.EscapeString(strings.Replace(artist, "_", " ", -1)))
+}
+
+func characterLink(character string, safe bool) string {
+	return fmt.Sprintf(`<a href="https://%s/wiki_pages/show_or_new?title=%s">%s</a>`, domain(safe), url.QueryEscape(character), html.EscapeString(strings.Replace(character, "_", " ", -1)))
+}
+
+func sourceLine(url, display string) string {
+	return fmt.Sprintf(`<a href="%s">%s</a>`, url, display)
+}
+
+func sourcesList(sources []string) []string {
+	var output_source_list, all_sources []string
+	var unknown int
+
+	telegram_sticker_source := false
+
+	for _, source := range(sources) {
+		u, err := url.Parse(source)
+		if err != nil {
+			unknown++
+			continue
+		}
+
+		hostname := u.Hostname()
+		path := u.EscapedPath()
+
+		source_entry := sourceLine(source, "Source")
+
+		// figure out a way to pretty-print sources
+
+		if len(source_entry) == 0 {
+			unknown++
+			continue
+		} else {
+			output_source_list = append(output_source_list, source_entry)
+		}
 	}
 
-	raw_url := result.File_url
+	if unknown != 0 { output_source_list = append(output_source_list, fmt.Sprintf(`%d more...`, unknown)) }
+	return append(all_sources, "Sources: " + strings.Join(output_source_list, ", "))
+}
+
+func GenerateCaption(result types.TPostInfo, force_safe bool, query string) string {
+	post_url := fmt.Sprintf("https://%s/posts/%d", domain(force_safe), result.Id)
+	image_url := MaybeSafeify(result.File_url, force_safe)
+
+	var caption []string
+	// add the post and image links
+	caption = append(caption, fmt.Sprintf(`View <a href="%s">Post</a>, <a href="%s">Image</a>`, post_url, image_url))
+
+	// add the artist links
+	if len(result.Artist) == 0 {
+		caption = append(caption, fmt.Sprintf(`Art by %s`, artistLink("unknown_artist", force_safe)))
+	} else if len(result.Artist) <= 10 {
+		var artist_links []string
+		for _, artist := range(result.Artist) { artist_links = append(artist_links, artistLink(artist, force_safe)) }
+		caption = append(caption, fmt.Sprintf(`Art by %s`, strings.Join(artist_links, ", ")))
+	} else if len(result.Artist) > 10 {
+		caption = append(caption, "Art by more than 10 artists (see post)")
+	}
+
+	// add the character links
+	if len(result.Character) > 0 && len(result.Character) <= 10 {
+		var character_links []string
+		for _, char := range(result.Character) { character_links = append(character_links, characterLink(char, force_safe)) }
+		caption = append(caption, fmt.Sprintf(`Featuring %s`, strings.Join(character_links, ", ")))
+	} else if len(result.Character) > 10 {
+		caption = append(caption, "Featuring more than 10 characters (see post)")
+	}
+
+	// add generic source links
+	caption = append(caption, sourcesList(result.Sources)...)
+
+	// add search query
+	if query == "" {
+		caption = append(caption, fmt.Sprintf(`(from the front page)`))
+	} else {
+		caption = append(caption, fmt.Sprintf(`(search: %s)`, html.EscapeString(query)))
+	}
+
+	return strings.Join(caption, "\n")
+}
+
+// https://api/artists/show_or_new?name=dizzyvixen
+
+func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, query string, debugmode bool) (interface{}) {
+	salt := "x_"
+
 	width := result.Width
 	height := result.Height
 
-	caption := fmt.Sprintf("Full res: %s\n(search: %s)", postURL, query)
+	caption := GenerateCaption(result, force_safe, query)
 
 	if result.File_ext == "gif" {
 		foo := data.TInlineQueryResultGif{
 			Type:        "gif",
 			Id:          salt + result.Md5,
-			GifUrl:      raw_url,
+			GifUrl:      result.File_url,
 			ThumbUrl:    result.Preview_url,
 			GifWidth:    &width,
 			GifHeight:   &height,
+			ParseMode:   data.ParseHTML,
 			Caption:     &caption,
 			Title:       &caption,
 		}
@@ -57,8 +161,9 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 		// telegram's logic about what files bots can send is fucked. it's tied to web previewing logic somehow,
 		// and the limits seem to kick in long before the posted limits on the bot api say they should.
 		// here is a shitty heuristic which will hopefilly be good enough to at least make most of them display SOMETHING.
+		file_url := result.File_url
 		if width * height > 13000000 { // images larger than 13MP will use the sample image instead of the full res
-			raw_url = result.Sample_url
+			file_url = result.Sample_url
 			width = result.Sample_width
 			height = result.Sample_height
 		}
@@ -66,10 +171,11 @@ func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, q
 		foo := data.TInlineQueryResultPhoto{
 			Type:        "photo",
 			Id:          salt + result.Md5,
-			PhotoUrl:    raw_url,
+			PhotoUrl:    file_url,
 			ThumbUrl:    result.Preview_url,
 			PhotoWidth:  &width,
 			PhotoHeight: &height,
+			ParseMode:   data.ParseHTML,
 			Caption:     &caption,
 			Title:       &caption,
 		}
