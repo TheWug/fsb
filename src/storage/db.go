@@ -113,51 +113,59 @@ func DBInit(dburl string) (error) {
 	return nil
 }
 
-func WriteUserCreds(id int, username, key string) (error) {
-	tx, err := Db_pool.Begin()
-	if err != nil { return err }
+func WriteUserCreds(settings UpdaterSettings, id int, username, key string) (error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
 
-	var c committer
-	defer handle_transaction(&c, tx)
-
-	_, err = tx.Exec("INSERT INTO remote_user_credentials (telegram_id, api_user, api_apikey) VALUES ($1, $2, $3) " +
+	_, err := tx.Exec("INSERT INTO remote_user_credentials (telegram_id, api_user, api_apikey) VALUES ($1, $2, $3) " +
 			"ON CONFLICT (telegram_id) DO UPDATE SET api_user = EXCLUDED.api_user, api_apikey = EXCLUDED.api_apikey", id, username, key)
 	if (err != nil) { return err }
 
-	c.commit = true
+	settings.Transaction.commit = mine
 	return nil
 }
 
-func GetUserCreds(id int) (string, string, bool, error) {
-	row := Db_pool.QueryRow("SELECT api_user, api_apikey, privilege_janitorial FROM remote_user_credentials WHERE telegram_id = $1", id)
+func GetUserCreds(settings UpdaterSettings, id int) (string, string, bool, error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return "", "", false, settings.Transaction.err }
+
+	row := tx.QueryRow("SELECT api_user, api_apikey, privilege_janitorial FROM remote_user_credentials WHERE telegram_id = $1", id)
 	var user, key string
 	var privilege bool
 	err := row.Scan(&user, &key, &privilege)
 	if err == sql.ErrNoRows || len(user) == 0 || len(key) == 0 { err = ErrNoLogin }
+
+	settings.Transaction.commit = mine
 	return user, key, privilege, err
 }
 
-func WriteUserTagRules(id int, name, rules string) (error) {
-	tx, err := Db_pool.Begin()
-	if err != nil { return err }
+func WriteUserTagRules(settings UpdaterSettings, id int, name, rules string) (error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
 
-	var c committer
-	defer handle_transaction(&c, tx)
-
-	_, err = tx.Exec("DELETE FROM user_tagrules WHERE telegram_id = $1 AND name = $2", id, name)
+	_, err := tx.Exec("DELETE FROM user_tagrules WHERE telegram_id = $1 AND name = $2", id, name)
 	if (err != nil) { return err }
 	_, err = tx.Exec("INSERT INTO user_tagrules (telegram_id, name, rules) VALUES ($1, $2, $3)", id, name, rules)
 	if (err != nil) { return err }
 
-	c.commit = true
+	settings.Transaction.commit = mine
 	return nil
 }
 
-func GetUserTagRules(id int, name string) (string, error) {
-	row := Db_pool.QueryRow("SELECT rules FROM user_tagrules WHERE telegram_id = $1 AND name = $2", id, name)
+func GetUserTagRules(settings UpdaterSettings, id int, name string) (string, error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return "", settings.Transaction.err }
+
+	row := tx.QueryRow("SELECT rules FROM user_tagrules WHERE telegram_id = $1 AND name = $2", id, name)
 	var rules string
 	err := row.Scan(&rules)
 	if err == sql.ErrNoRows { err = nil } // no data for user is not an error.
+
+	settings.Transaction.commit = mine
 	return rules, err
 }
 

@@ -59,7 +59,7 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 	if debugmode { debugstr = ", DEBUG" }
 	log.Printf("[behavior] Received inline query (from %d %s%s): %s", ctx.Query.From.Id, ctx.Query.From.UsernameString(), debugstr, ctx.Query.Query)
 
-	user, apikey, _, err := storage.GetUserCreds(ctx.Query.From.Id)
+	user, apikey, _, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Query.From.Id)
 	if err == storage.ErrNoLogin {
 		user, apikey = this.MySettings.DefaultSearchCredentials()
 	}

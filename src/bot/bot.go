@@ -428,12 +428,12 @@ type UserState struct {
 
 func (this *UserState) SetTagRulesByName(name string) {
 	if name == "" { name = "main" }
-	rules, _ := storage.GetUserTagRules(this.my_id, name)
+	rules, _ := storage.GetUserTagRules(storage.UpdaterSettings{}, this.my_id, name)
 	this.postwizard.SetNewRulesFromString(rules)
 }
 
 func (this *UserState) WriteUserTagRules(tagrules, name string) {
-	storage.WriteUserTagRules(this.my_id, name, tagrules)
+	storage.WriteUserTagRules(storage.UpdaterSettings{}, this.my_id, name, tagrules)
 }
 
 func (this *UserState) Reset() {
@@ -444,7 +444,7 @@ func (this *UserState) Reset() {
 func NewUserState(ctx *gogram.MessageCtx) (*UserState) {
 	u := UserState{my_id: ctx.Msg.From.Id}
 	u.postwizard = *NewTagWizard(ctx)
-	rules, err := storage.GetUserTagRules(ctx.Msg.From.Id, "main")
+	rules, err := storage.GetUserTagRules(storage.UpdaterSettings{}, ctx.Msg.From.Id, "main")
 	if err != nil { ctx.Bot.ErrorLog.Println(err.Error()) }
 	if err == nil { u.postwizard.SetNewRulesFromString(rules) }
 	return &u
@@ -645,7 +645,7 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 		ctx.SetState(nil)
 		return
 	} else if ctx.Cmd.Command == "/logout" {
-		storage.WriteUserCreds(ctx.Msg.From.Id, "", "")
+		storage.WriteUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id, "", "")
 		ctx.ReplyAsync(data.OMessage{Text: "You are now logged out."}, nil)
 		ctx.SetState(nil)
 		return
@@ -665,7 +665,7 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 				success, err := api.TestLogin(this.user, this.apikey)
 				if success && err == nil {
 					ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("You are now logged in as <code>%s</code>.", this.user), ParseMode: data.HTML}, nil)
-					storage.WriteUserCreds(ctx.Msg.From.Id, this.user, this.apikey)
+					storage.WriteUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id, this.user, this.apikey)
 				} else if err != nil {
 					ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("An error occurred when testing if you were logged in! (%s)", html.EscapeString(err.Error())), ParseMode: data.HTML}, nil)
 				} else if !success {
@@ -744,7 +744,7 @@ func (this *TagRuleState) Handle(ctx *gogram.MessageCtx) {
 	if this.tagwizardrules != "" {
 		if this.tagrulename == "" { this.tagrulename = "main" }
 		this.tagwizardrules = strings.Replace(this.tagwizardrules, "\r", "", -1) // pesky windows carriage returns
-		storage.WriteUserTagRules(ctx.Msg.From.Id, this.tagrulename, this.tagwizardrules)
+		storage.WriteUserTagRules(storage.UpdaterSettings{}, ctx.Msg.From.Id, this.tagrulename, this.tagwizardrules)
 		if err := NewTagWizard(ctx).SetNewRulesFromString(this.tagwizardrules); err != nil {
 			ctx.RespondAsync(data.OMessage{Text: fmt.Sprintf("Error while parsing tag rules: %s", html.EscapeString(err.Error())), ParseMode: data.HTML}, nil)
 			return
@@ -777,12 +777,12 @@ func (this *PostState) Reset(ctx *gogram.MessageCtx) {
 
 func (this *PostState) SetTagRulesByName(my_id int, name string) {
 	if name == "" { name = "main" }
-	rules, _ := storage.GetUserTagRules(my_id, name)
+	rules, _ := storage.GetUserTagRules(storage.UpdaterSettings{}, my_id, name)
 	this.postwizard.SetNewRulesFromString(rules)
 }
 
 func (this *PostState) WriteUserTagRules(my_id int, tagrules, name string) {
-	storage.WriteUserTagRules(my_id, name, tagrules)
+	storage.WriteUserTagRules(storage.UpdaterSettings{}, my_id, name, tagrules)
 }
 
 func (this *PostState) Handle(ctx *gogram.MessageCtx) {
@@ -798,7 +798,7 @@ func (this *PostState) Handle(ctx *gogram.MessageCtx) {
 	if ctx.GetState() == nil {
 		this = &PostState{}
 		this.postwizard = *NewTagWizard(ctx)
-		rules, err := storage.GetUserTagRules(ctx.Msg.From.Id, "main")
+		rules, err := storage.GetUserTagRules(storage.UpdaterSettings{}, ctx.Msg.From.Id, "main")
 		if err != nil { ctx.Bot.ErrorLog.Println(err.Error()) }
 		if err == nil { this.postwizard.SetNewRulesFromString(rules) }
 		ctx.SetState(this)
@@ -970,7 +970,7 @@ func (this *PostState) Handle(ctx *gogram.MessageCtx) {
 					return
 				}
 			}
-			user, apikey, _, err := storage.GetUserCreds(ctx.Msg.From.Id)
+			user, apikey, _, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
 			result, err := api.UploadFile(post_filedata, post_url, this.postwizard.TagString(), this.postrating, this.postsource, this.postdescription, this.postparent, user, apikey)
 			if err != nil || !result.Success {
 				if result.StatusCode == 403 {
@@ -1054,7 +1054,7 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	user, apikey, janitor, err := storage.GetUserCreds(ctx.Msg.From.Id)
+	user, apikey, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
 	if !janitor {
 		// commands from non-authorized users are silently ignored
 		return

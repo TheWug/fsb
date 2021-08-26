@@ -128,7 +128,7 @@ func SyncTagsExternal(ctx *gogram.MessageCtx) {
 }
 
 func SyncTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
-	user, api_key, janitor, err := storage.GetUserCreds(ctx.Msg.From.Id)
+	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
 	if err != nil || !janitor { return err }
 
 	m := "Syncing tag database..."
@@ -284,7 +284,7 @@ func (this *SearchChanBox) Close() {
 }
 
 func SyncPosts(ctx *gogram.MessageCtx) {
-	user, api_key, janitor, err := storage.GetUserCreds(ctx.Msg.From.Id)
+	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
 	if err != nil || !janitor {
 		ctx.ReplyAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
 		return
@@ -648,7 +648,7 @@ func SyncPosts(ctx *gogram.MessageCtx) {
 }
 
 func UpdateAliases(ctx *gogram.MessageCtx) {
-	user, api_key, janitor, err := storage.GetUserCreds(ctx.Msg.From.Id)
+	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
 	if err != nil || !janitor {
 		ctx.ReplyAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
 		return
@@ -749,7 +749,7 @@ func RecountNegativeReal(user, api_key string, skip_update bool, broken_tags typ
 }
 
 func RecountNegative(ctx *gogram.MessageCtx) {
-	user, api_key, janitor, err := storage.GetUserCreds(ctx.Msg.From.Id)
+	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
 	if err != nil || !janitor {
 		ctx.ReplyAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
 		return
@@ -959,7 +959,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		}
 	}
 
-	user, api_key, janitor, err := storage.GetUserCreds(ctx.Msg.From.Id)
+	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
 	if (err != nil || !janitor) && fix {
 		ctx.ReplyAsync(data.OMessage{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.HTML}, nil)
 		return
@@ -1184,7 +1184,7 @@ type Triplet struct {
 }
 
 func Concatenations(ctx *gogram.MessageCtx) {
-	user, api_key, janitor, err := storage.GetUserCreds(ctx.Msg.From.Id)
+	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
 	if err != nil || !janitor { return }
 
 	var cats []Triplet
