@@ -1,7 +1,6 @@
 package botbehavior
 
 import (
-	"bot"
 	"fmt"
 	"fsb/proxify"
 	"fsb/errorlog"
@@ -18,6 +17,7 @@ func ShowHelp() {
 	fmt.Println("  logfile     - controls the file to log to.")
 	fmt.Println("  apikey      - sets the bot's telegram api token.")
 	fmt.Println("  dburl       - sets the bot's telegram api token.")
+	fmt.Println("  ownerid     - sets the bot's owner's account ID.")
 	fmt.Println("  api_name              - the common, colloquial name of the api service.")
 	fmt.Println("  api_endpoint          - the api endpoint hostname.")
 	fmt.Println("  api_filtered_endpoint - the api SSF endpoint hostname.")
@@ -25,19 +25,26 @@ func ShowHelp() {
 }
 
 type Behavior struct {
-	Bot *telebot.TelegramBot
+	ForwardTo *telebot.MessageStateMachine
 }
 
-func (this *Behavior) ProcessCallback(callback telegram.TCallbackQuery) {
-	bot.Handle(this.Bot, nil, &callback)
-}
-
-func (this *Behavior) ProcessMessage(message telegram.TMessage, edited bool) {
-	bot.Handle(this.Bot, &message, nil)
+func (this *Behavior) ProcessCallback(bot *telebot.TelegramBot, callback *telegram.TCallbackQuery) {
+	var ctx telebot.MsgContext
+	ctx.Bot = bot
+	if callback.Data != nil {
+		ctx.Cmd, ctx.CmdError = telebot.ParseCommandFromString(*callback.Data)
+	}
+	if callback.Message != nil {
+		ctx.Msg.Chat = callback.Message.Chat
+	}
+	ctx.Msg.From = &callback.From
+	ctx.Machine = this.ForwardTo
+	this.ForwardTo.FeedContext(&ctx)
+	bot.Remote.AnswerCallbackQuery(callback.Id, "", true)
 }
 
 // inline query, do tag search.
-func (this *Behavior) ProcessInlineQuery(q telegram.TInlineQuery) {
+func (this *Behavior) ProcessInlineQuery(b *telebot.TelegramBot, q *telegram.TInlineQuery) {
 	debugmode := strings.Contains(q.Query, "special:debugoutput")
 	q.Query = strings.Replace(q.Query, "special:debugoutput", "", -1)
 	var debugstr string
@@ -70,11 +77,11 @@ func (this *Behavior) ProcessInlineQuery(q telegram.TInlineQuery) {
 
 	// send them out
 	if len(inline_suggestions) != 0 {
-		e = this.Bot.Remote.AnswerInlineQuery(q, inline_suggestions, strconv.FormatInt(int64(offset + 1), 10))
+		e = b.Remote.AnswerInlineQuery(*q, inline_suggestions, strconv.FormatInt(int64(offset + 1), 10))
 		errorlog.ErrorLog("telegram", "telegram.AnswerInlineQuery", e)
 	}
 }
 
-func (this *Behavior) ProcessInlineQueryResult(r telegram.TChosenInlineResult) {
+func (this *Behavior) ProcessInlineQueryResult(b *telebot.TelegramBot, r *telegram.TChosenInlineResult) {
 	log.Printf("[main    ] Inline selection: %s (by %d %s)\n", r.Result_id, r.From.Id, r.From.UsernameString())
 }

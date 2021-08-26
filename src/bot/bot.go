@@ -5,6 +5,7 @@ import (
 	"telegram/telebot"
 	"storage"
 	"api"
+	"api/tagindex"
 
 	"fmt"
 	"strings"
@@ -12,6 +13,11 @@ import (
 	"regexp"
 	"strconv"
 	"sort"
+	"html"
+	"io/ioutil"
+	"io"
+
+	"errors"
 
 	"errors"
 
@@ -60,19 +66,12 @@ const (
 
 var apiurlmatch *regexp.Regexp
 var wizard_rule_done WizardRule = WizardRule{prompt: "You've finished the tag wizard."}
-var apiName string
 
 type settings interface {
 	GetApiEndpoint() string
-	GetApiName() string
 }
 
 func Init(s settings) error {
-	apiName = s.GetApiName()
-	if apiName == "" {
-		return errors.New("missing required parameters")
-	}
-
 	var err error
 	apiurlmatch, err = regexp.Compile(fmt.Sprintf(`https?://%s/post/show/(\d+)`, s))
 	return err
@@ -413,10 +412,6 @@ type PostFile struct {
 
 type UserState struct {
 	my_id		int
-	mode		int
-
-	user	string
-	apikey	string
 
 	postmode	int
 	postfile	PostFile
@@ -430,27 +425,12 @@ type UserState struct {
 	postdone	bool
 	postreviewed	bool
 
-	tagwizardrules  string
-	tagrulename     string
 }
 
 func (this *UserState) SetTagRulesByName(name string) {
 	if name == "" { name = "main" }
 	rules, _ := storage.GetUserTagRules(this.my_id, name)
 	this.postwizard.SetNewRulesFromString(rules)
-}
-
-func (this *UserState) WriteUserCreds(e6Username, e6Apikey string) {
-	storage.WriteUserCreds(this.my_id, e6Username, e6Apikey)
-}
-
-func (this *UserState) HasUserCreds() (bool) {
-	user, apikey, err := storage.GetUserCreds(this.my_id)
-	return user != "" && apikey != "" && err == nil
-}
-
-func (this *UserState) GetUserCreds() (string, string, error) {
-	return storage.GetUserCreds(this.my_id)
 }
 
 func (this *UserState) WriteUserTagRules(tagrules, name string) {
@@ -494,11 +474,12 @@ func GetUserState(from *telegram.TUser, bot *telebot.TelegramBot) (*UserState) {
 func ShowHelp(topic string) (string) {
 	// this works by filtering the full help document by the provided substring
 	// against the first token in the line, as a sort of poor man's help topic selector.
+	// the 
 	help :=
-`.public.example.wizard.post.advanced.faq.login.contact. Hello! I'm the <b>` + apiName + ` Telegram Bot</b>!
-.public.example.wizard.post.advanced.faq.login.contact. 
-.public.example.wizard.post.advanced.faq.login.contact. Content on ` + apiName + ` may be unsuitable for kids.
-.public.example.wizard.post.advanced.faq.login.contact. <b>You must be 18 or older to use this bot.</b>
+`.public.example.wizard.post.advanced.faq.login.contact. Hello! I'm the <b>` + api.ApiName + ` Telegram Bot</b>!
+.public.example.wizard.post.advanced.faq.login.contact.
+.public.example.wizard.post.advanced.faq.login.contact.  Content on ` + api.ApiName + ` may be unsuitable for kids.
+.public.example.wizard.post.advanced.faq.login.contact.  <b>You must be 18 or older to use this bot.</b>
 .public. 
 .public. This bot's commands and help messages should be used via PM.
 .advanced. 
@@ -506,19 +487,58 @@ func ShowHelp(topic string) (string) {
 .advanced. I work like @gif! Simply type my name, followed by search terms.
 .advanced. <code>@fsb frosted_butts</code>
 .advanced. All tags which are supported on the site work here!
-login.advanced. 
-login.advanced. <b>Using Your Account</b>
-login.advanced. Some of my features require you to connect your ` + apiName + ` account.
-login.advanced. <code>/login [user] [apikey] -</code> connect to your ` + apiName + ` account.
-login.advanced. <code>/logout                -</code> disconnect your account.
+login.advanced.janitor. 
+login.advanced.janitor. <b>Using Your Account</b>
+login.advanced.janitor. Some of my features require you to connect your ` + api.ApiName + ` account.
+login.advanced.janitor. <code>/login [user] [apikey] -</code> connect to your ` + api.ApiName + ` account.
+login.advanced.janitor. <code>/logout                -</code> disconnect your account.
 .advanced. 
 .advanced. <b>Posting</b>
-.advanced. Upload or edit posts. You must connect your ` + apiName + ` account.
+.advanced. Upload or edit posts. You must connect your ` + api.ApiName + ` account.
 .advanced. <code>/post        ... -</code> posts a new file.
 .advanced. <code>/settagrules ... -</code> updates your tag rules.
+janitor. 
+janitor. <b>Janitor features</b>
+janitor. I have some powerful features for manipulating posts. Use of these features is limited, contact the operator to apply for access. Remember that with great power comes great responsibility: these features can perform automated bulk edits and should be used with great carefulness. [X] indicates a deprecated (likely to be removed) command, and [D] or [U] indicates a development feature which may/may not be finished. Ask before using them.
+janitor. <code>/indextags        -</code> Syncs tag database.
+janitor. <code>      --full      -</code> Discard local database first.
+janitor. <code>/indextagaliases  -</code> Syncs alias database.
+janitor. <code>      --full      -</code> [U] Discard local database first.
+janitor. <code>/sync             -</code> [D] Fetches new data from the site.
+janitor. <code>      --all       -</code> [D] Fetch everything. (Default behavior)
+janitor. <code>      --posts     -</code> [D] Fetch posts and tags.
+janitor. <code>      --tags      -</code> [D] Fetch aliases and tags.
+janitor. <code>      --aliases   -</code> [D] Fetch tags only.
+janitor. <code>      --refetch   -</code> [D] Refetch everything, discard local copy.
+janitor. <code>/recountnegative  -</code> Triggers remote tagged post recount.
+janitor. <code>  --skipupdate    -</code> Don't refetch counts.
+janitor. <code>  --aliased       -</code> Apply to aliased tags instead of by count.
+janitor. <code>  --lessthan N    -</code> Apply to tags with count &lt; N (default 0)
+janitor. <code>/cats             -</code> [D] Deal with concatenated tags.
+janitor. <code>    --exclude T   -</code> [D] Flag T as not-a-cat.
+janitor. <code>    --mark C X Y  -</code> [D] Flag C as a cat of X and Y.
+janitor. <code>    --list        -</code> [D] List known cats.
+janitor. <code>    --fix C       -</code> [D] Fix all posts with known cat C.
+janitor. <code>    --search N    -</code> [D] Find possible cats with count >= N.
+janitor. <code>/findtagtypos TAG -</code> Find typos of TAG.
+janitor. <code>   --fix          -</code> fix typo for all non-excluded posts. (!!!)
+janitor. <code>   --mark         -</code> [U] saves listed typos for auto-flagging later.
+janitor. <code>   --include TAG  -</code> force inclusion of known unlisted typo.
+janitor. <code>   --exclude TAG  -</code> exclude minor false positive.
+janitor. <code>   --distinct TAG -</code> exclude major false positive and similar tags.
+janitor. <code>   --allow-short  -</code> don't refuse to run for very short tags.
+janitor. <code>   --threshhold N -</code> use N instead of auto-chosen edit distance.
+janitor. <code>   --show-zero    -</code> don't hide tags with no posts.
+janitor. <code>/recounttags      -</code> Update saved postcounts for tags.
+janitor. <code>   --real         -</code> Count actual posts by tag.
+janitor. <code>   --alias        -</code> Set alias count to that of their counterparts.
+janitor. <code>/syncposts        -</code> Update saved postcounts for tags.
+janitor. <code>   --full         -</code> Do full refetch instead of incremental.
+janitor. <code>   --restart      -</code> Abandon progress of full sync and start over.
+janitor. What do I do with these? Ask the operator. Don't guess.
 post. 
 post. Post Command
-post. Posting a file to ` + apiName + ` requires gathering some information. This command pulls everything together, and then does an upload. You must connect to your ` + apiName + ` account to use this.
+post. Posting a file to ` + api.ApiName + ` requires gathering some information. This command pulls everything together, and then does an upload. You must connect to your ` + api.ApiName + ` account to use this.
 post. <code>/post</code>
 post. <code>/post (reply to file)</code>
 post. <code>/post (file caption)</code> 
@@ -566,9 +586,9 @@ example. meta:NSFW . sex penis pussy penetration hx:rating:e
 example. meta:Kinky_stuff . pet_play food_fetish vore</pre>
 .faq. 
 .faq. <b>Important Info and FAQ</b>
-.faq. <code>*</code> Before posting to ` + apiName + `, please make sure you read the site's rules.
-.faq. <code>*</code> Your account standing is your responsibility.
-.faq. <code>*</code> Your ` + apiName + ` API key is NOT your password. Go here to find it.
+.faq. <code>*</code> Before posting to ` + api.ApiName + `, please make sure you read the site's rules.
+.faq. <code>*</code> Your account standing is your own responsibility.
+.faq. <code>*</code> Your ` + api.ApiName + ` API key is NOT your password. Go <a href="https://` + api.Endpoint + `/user/api_key">HERE</a> to find it.
 .faq. <code>*</code> To report a bug, see <code>/help contact.</code>
 contact. 
 contact. <b>Contacting the author</b>
@@ -577,13 +597,15 @@ contact. <code>/operator [what's wrong] -</code> Flag something for review.
 birds. What <b>are</b> birds?
 birds. We just don't know.`
 
+	topic = strings.ToLower(topic)
 	output := bytes.NewBuffer(nil)
 	for _, line := range strings.Split(help, "\n") {
 		chunks := strings.SplitN(line, ". ", 2)
+		if len(chunks) != 2 { continue } // discard malformed lines.
 		tokens := strings.Split(chunks[0], ".")
 		for _, blip := range tokens {
 			if blip == topic {
-				output.WriteString(chunks[1])
+				output.WriteString(strings.TrimSpace(chunks[1]))
 				output.WriteRune('\n')
 				break
 			}
@@ -595,413 +617,482 @@ birds. We just don't know.`
 	return out
 }
 
-func Handle(bot *telebot.TelegramBot, message *telegram.TMessage, callback *telegram.TCallbackQuery) {
-	var state *UserState
-	var from telegram.TUser
-	var cmd telebot.CommandData
-	var err error
+type HelpState struct {
+}
 
-	if message != nil {
-		// ignore messages without a sender completely.
-		if message.From == nil { return }
-		from = *message.From
-
-		cmd, err = bot.ParseCommand(message)
-	} else if callback != nil {
-		from = callback.From
-		if callback.Data != nil {
-			cmd, err = bot.ParseCommandFromString(*callback.Data)
-		}
+func (this *HelpState) Handle(ctx *telebot.MsgContext) {
+	topic := "public"
+	if ctx.Msg.Chat.Type == "private" {
+		topic = ctx.Cmd.Argstr
 	}
+	ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, ShowHelp(topic), nil, "HTML", nil, false, nil)
+}
 
-	state = GetUserState(&from, bot)
+type LoginState struct {
+	user	string
+	apikey	string
+}
 
-	if state.mode == root && message != nil { // general command accept state
-		if err != nil { return }
-
-		if message.Chat.Type != "private" {
-			if cmd.Command == "/help" {
-				bot.Remote.SendMessage(message.Chat.Id, ShowHelp("public"), nil, "HTML", nil, true)
-			} else if cmd.Command == "/login" {
-				bot.Remote.SendMessage(message.Chat.Id, "You should only use this command in private, to protect the security of your account.\n\nIf you accidentally posted your API key publicly, <a href=\"https://" + api.Endpoint + "/user/api_key\"go here to revoke it.</a>", &message.Message_id, "HTML", nil, false)
-			} else if cmd.Command == "/logout" {
-				state.mode = logout
-			} else if cmd.Command == "/post" {
-				if !state.HasUserCreds() {
-					bot.Remote.SendMessage(from.Id, "You must connect your " + apiName + " account to use this feature.", nil, "HTML", nil, true)
-					return
-				}
-				state.mode = post
-				state.postmode = postpublic
-			} else if cmd.Command == "/settagrules" {
-				state.mode = settagrules
-			}
-		} else {
-			if cmd.Command == "/help" {
-				bot.Remote.SendMessage(message.Chat.Id, ShowHelp(cmd.Argstr), nil, "HTML", nil, false)
-			} else if cmd.Command == "/login" {
-				state.mode = login
-			} else if cmd.Command == "/logout" {
-				state.mode = logout
-			} else if cmd.Command == "/post" {
-				if !state.HasUserCreds() {
-					bot.Remote.SendMessage(from.Id, "You must connect your " + apiName + " account to use this feature.", nil, "HTML", nil, true)
-					return
-				}
-				state.mode = post
-				state.postmode = postfile
-			} else if cmd.Command == "/settagrules" {
-				state.mode = settagrules
-			}
-		}
-
-		if state.mode == root { return }	
+func (this *LoginState) Handle(ctx *telebot.MsgContext) {
+	if ctx.Msg.From == nil {
+		return
 	}
-
-	if state.mode == login {
-		if cmd.Command == "/cancel" {
-			state.mode = root
-			bot.Remote.SendMessage(from.Id, "Command cancelled.", nil, "HTML", nil, false)
-			return
+	if ctx.Cmd.Command == "/cancel" {
+		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, "Command cancelled.", nil, "HTML", nil, false, nil)
+		ctx.SetState(nil)
+		return
+	} else if ctx.Msg.Chat.Type != "private" && ctx.Cmd.Command == "/login" {
+		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, "You should only use this command in private, to protect the security of your account.\n\nIf you accidentally posted your API key publicly, <a href=\"https://" + api.Endpoint + "/user/api_key\">go here to revoke it.</a>", &ctx.Msg.Message_id, "HTML", nil, false, nil)
+		ctx.SetState(nil)
+		return
+	} else if ctx.Cmd.Command == "/logout" {
+		storage.WriteUserCreds(ctx.Msg.From.Id, "", "")
+		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, "You are now logged out.", nil, "HTML", nil, true, nil)
+		ctx.SetState(nil)
+		return
+	} else {
+		if ctx.GetState() == nil {
+			this = &LoginState{}
+			ctx.SetState(this)
 		}
-		for _, token := range cmd.Args {
+		for _, token := range ctx.Cmd.Args {
 			if token == "" {
-			} else if state.user == "" {
-				state.user = token
-			} else if state.apikey == "" {
-				state.apikey = token
+			} else if this.user == "" {
+				this.user = token
+			} else if this.apikey == "" {
+				this.apikey = token
 			}
-			if state.user != "" && state.apikey != "" {
-				success, err := api.TestLogin(state.user, state.apikey)
+			if this.user != "" && this.apikey != "" {
+				success, err := api.TestLogin(this.user, this.apikey)
 				if success && err == nil {
-					bot.Remote.SendMessage(from.Id, fmt.Sprintf("You are now logged in as <code>%s</code>.", state.user), nil, "HTML", nil, true)
-					state.WriteUserCreds(state.user, state.apikey)
+					ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, fmt.Sprintf("You are now logged in as <code>%s</code>.", this.user), nil, "HTML", nil, true, nil)
+					storage.WriteUserCreds(ctx.Msg.From.Id, this.user, this.apikey)
 				} else if err != nil {
-					bot.Remote.SendMessage(from.Id, fmt.Sprintf("An error occurred when testing if you were logged in! (%s)", err.Error()), nil, "HTML", nil, true)
+					ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, fmt.Sprintf("An error occurred when testing if you were logged in! (%s)", html.EscapeString(err.Error())), nil, "HTML", nil, true, nil)
 				} else if !success {
-					bot.Remote.SendMessage(from.Id, "Login failed! (api key invalid?)", nil, "HTML", nil, true)
+					ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, "Login failed! (api key invalid?)", nil, "HTML", nil, true, nil)
 				}
-				state.Reset()
+				ctx.SetState(nil)
 				return
 			}
 		}
 
-		if state.user == "" {
-			bot.Remote.SendMessage(from.Id, "Please send your " + apiName + " username.", nil, "HTML", nil, true)
-		} else if state.apikey == "" {
-			bot.Remote.SendMessage(from.Id, "Please send your " + apiName + " <a href=\"https://" + api.Endpoint + "/user/api_key\">API Key</a>. (not your password!)", nil, "HTML", nil, true)
+		if this.user == "" {
+			ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, "Please send your " + api.ApiName + " username.", nil, "HTML", nil, true, nil)
+		} else if this.apikey == "" {
+			ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, "Please send your " + api.ApiName + " <a href=\"https://" + api.Endpoint + "/user/api_key\">API Key</a>. (not your password!)", nil, "HTML", nil, true, nil)
 		}
 		return
-	} else if state.mode == logout {
-		bot.Remote.SendMessage(from.Id, "You are now logged out.", nil, "HTML", nil, true)
-		state.WriteUserCreds("", "")
-		state.mode = root
+	}
+}
+
+type TagRuleState struct {
+	tagwizardrules string
+	tagrulename string
+}
+
+func (this *TagRuleState) Handle(ctx *telebot.MsgContext) {
+	if ctx.Msg.From == nil {
 		return
-	} else if state.mode == settagrules {
-		if cmd.Command == "/cancel" {
-			state.Reset()
-			bot.Remote.SendMessage(from.Id, "Command cancelled.", nil, "HTML", nil, true)
+	}
+	if ctx.Cmd.Command == "/cancel" {
+		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, "Command cancelled.", nil, "HTML", nil, false, nil)
+		ctx.SetState(nil)
+		return
+	}
+
+	if ctx.GetState() == nil {
+		this = &TagRuleState{}
+		ctx.SetState(this)
+	}
+
+	var doc *telegram.TDocument
+	if ctx.Msg.Document != nil {
+		doc = ctx.Msg.Document
+	} else if ctx.Msg.Reply_to_message != nil && ctx.Msg.Reply_to_message.Document != nil {
+		doc = ctx.Msg.Reply_to_message.Document
+	}
+
+	if doc != nil {
+		if !strings.HasSuffix(doc.File_name, ".txt") {
+			ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, fmt.Sprintf("%s isn't a plain text file.", doc.File_name), nil, "HTML", nil, true, nil)
 			return
 		}
-
-		var doc *telegram.TDocument
-		if message != nil && message.Document != nil {
-			doc = message.Document
-		} else if message != nil && message.Reply_to_message != nil && message.Reply_to_message.Document != nil {
-			doc = message.Reply_to_message.Document
+		file, err := ctx.Bot.Remote.GetFile(doc.File_id)
+		if err != nil || file == nil || file.File_path == nil {
+			ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, fmt.Sprintf("Error while fetching %s, try sending it again?", doc.File_name), nil, "HTML", nil, true, nil)
+			return
 		}
+		file_data, err := ctx.Bot.Remote.DownloadFile(*file.File_path)
+		if err != nil || file_data == nil {
+			ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, fmt.Sprintf("Error while downloading %s, try sending it again?", doc.File_name), nil, "HTML", nil, true, nil)
+			return
+		}
+		b, err := ioutil.ReadAll(file_data)
+		if err != nil || b == nil {
+			ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, fmt.Sprintf("Error while reading %s, try sending it again?", doc.File_name), nil, "HTML", nil, true, nil)
+			return
+		}
+		this.tagwizardrules = string(b)
+	}
+	if ctx.Cmd.Argstr != "" {
+		this.tagrulename = ctx.Cmd.Argstr
+	} else {
+		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, "Send some new tag rules in a text file.", nil, "HTML", nil, true, nil)
+		return
+	}
 
-		if doc != nil {
-			if !strings.HasSuffix(doc.File_name, ".txt") {
-				bot.Remote.SendMessage(from.Id, fmt.Sprintf("%s isn't a plain text file.", doc.File_name), nil, "HTML", nil, true)
-				return
-			}
-			file, err := bot.Remote.GetFile(doc.File_id)
-			if err != nil || file == nil || file.File_path == nil {
-				bot.Remote.SendMessage(from.Id, fmt.Sprintf("Error while fetching %s, try sending it again?", doc.File_name), nil, "HTML", nil, true)
-				return
-			}
-			file_data, err := bot.Remote.DownloadFile(*file.File_path)
-			if err != nil || file_data == nil {
-				bot.Remote.SendMessage(from.Id, fmt.Sprintf("Error while downloading %s, try sending it again?", doc.File_name), nil, "HTML", nil, true)
-				return
-			}
-			state.tagwizardrules = string(file_data)
-		} else if cmd.Argstr != "" {
-			state.tagrulename = cmd.Argstr
+	if this.tagwizardrules != "" {
+		if this.tagrulename == "" { this.tagrulename = "main" }
+		this.tagwizardrules = strings.Replace(this.tagwizardrules, "\r", "", -1) // pesky windows carriage returns
+		storage.WriteUserTagRules(ctx.Msg.From.Id, this.tagrulename, this.tagwizardrules)
+		if err := NewTagWizard(ctx.Bot).SetNewRulesFromString(this.tagwizardrules); err != nil {
+			ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, fmt.Sprintf("Error while parsing tag rules: %s", err.Error()), nil, "HTML", nil, true, nil)
+			return
 		} else {
-			bot.Remote.SendMessage(from.Id, "Send some new tag rules in a text file.", nil, "HTML", nil, true)
+			ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, "Set new tag rules.", nil, "HTML", nil, true, nil)
+			ctx.SetState(nil)
 			return
 		}
+	}
+}
 
-		if state.tagwizardrules != "" {
-			if state.tagrulename == "" { state.tagrulename = "main" }
-			state.tagwizardrules = strings.Replace(state.tagwizardrules, "\r", "", -1) // pesky windows carriage returns
-			state.WriteUserTagRules(state.tagwizardrules, state.tagrulename)
-			if err := state.postwizard.SetNewRulesFromString(state.tagwizardrules); err != nil {
-				bot.Remote.SendMessage(from.Id, fmt.Sprintf("Error while parsing tag rules: %s", err.Error()), nil, "HTML", nil, true)
-				return
+type PostState struct {
+	postmode	int
+	postfile	PostFile
+	postrating	string
+	posttagwiz	bool
+	postwizard	TagWizard
+	postsource      string
+	postdescription string
+	postparent     *int
+	postready	bool
+	postdone	bool
+	postreviewed	bool
+}
+
+func (this *PostState) Reset(ctx *telebot.MsgContext) {
+	if this.postwizard.chat_id != 0 && this.postwizard.wizard_id != 0 {
+		ctx.Bot.Remote.DeleteMessage(this.postwizard.chat_id, this.postwizard.wizard_id)
+	}
+	ctx.SetState(nil)
+}
+
+func (this *PostState) SetTagRulesByName(my_id int, name string) {
+	if name == "" { name = "main" }
+	rules, _ := storage.GetUserTagRules(my_id, name)
+	this.postwizard.SetNewRulesFromString(rules)
+}
+
+func (this *PostState) WriteUserTagRules(my_id int, tagrules, name string) {
+	storage.WriteUserTagRules(my_id, name, tagrules)
+}
+
+func (this *PostState) Handle(ctx *telebot.MsgContext) {
+	if ctx.Msg.From == nil {
+		return
+	}
+	if ctx.Cmd.Command == "/cancel" {
+		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.Chat.Id, "Command cancelled.", nil, "HTML", nil, false, nil)
+		ctx.SetState(nil)
+		return
+	}
+
+	if ctx.GetState() == nil {
+		this = &PostState{}
+		ctx.SetState(this)
+	}
+
+	var prompt string
+	var reply *int
+
+	if ctx.Cmd.Command == "/post" || ctx.Cmd.Command == "/file" || ctx.Cmd.Command == "/f" {
+		this.postfile.mode = none
+		this.posttagwiz = false
+		this.postmode = postfile
+	} else if ctx.Cmd.Command == "/tag" || ctx.Cmd.Command == "/t" {
+		this.posttagwiz = false
+		this.postmode = posttags
+	} else if ctx.Cmd.Command == "/wizard" || ctx.Cmd.Command == "/w" {
+		this.posttagwiz = true
+		this.postmode = postwizard
+		this.SetTagRulesByName(ctx.Msg.From.Id, ctx.Cmd.Argstr)
+	} else if ctx.Cmd.Command == "/rating" || ctx.Cmd.Command == "/r" {
+		this.posttagwiz = false
+		this.postrating = ""
+		this.postmode = postrating
+	} else if ctx.Cmd.Command == "/source" || ctx.Cmd.Command == "/src" || ctx.Cmd.Command == "/s" {
+		this.posttagwiz = false
+		this.postsource = ""
+		this.postmode = postsource
+	} else if ctx.Cmd.Command == "/description" || ctx.Cmd.Command == "/desc" || ctx.Cmd.Command == "/d" {
+		this.posttagwiz = false
+		this.postdescription = ""
+		this.postmode = postdescription
+	} else if ctx.Cmd.Command == "/parent" || ctx.Cmd.Command == "/p" {
+		this.posttagwiz = false
+		this.postparent = nil
+		this.postmode = postparent
+	} else if ctx.Cmd.Command == "/upload" {
+		this.postmode = postupload
+	} else if ctx.Cmd.Command == "/help" {
+		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, ShowHelp("post"), reply, "HTML", nil, true, nil)
+		return
+	} else if ctx.Cmd.Command == "/z" && this.postmode == postwizard {
+		this.postwizard.ToggleTagsFromString(ctx.Cmd.Argstr)
+		this.postwizard.UpdateMenu()
+	} else if ctx.Cmd.Command == "/next" && this.postmode == postwizard {
+		this.postwizard.NextMenu()
+	} else if ctx.Cmd.Command == "/finish" && this.postmode == postwizard {
+		this.postwizard.FinishMenu()
+		this.postmode = postnext
+		prompt = "Done tagging.\n\n"
+	} else if ctx.Cmd.Command == "/again" && this.postmode == postwizard {
+		this.postwizard.DoOver()
+	}
+
+	if this.postmode == postfile || this.postmode == postpublic {
+		if ctx.Msg.Photo != nil { // inline photo
+			prompt = "That photo was compressed by telegram, and its quality may be severely degraded.  Send it as a file instead if you're sure.\n\n"
+		} else if ctx.Msg.Document != nil { // inline file
+			prompt = "Preparing to post file sent in this message.\n\n"
+			this.postfile.mode = file_id
+			this.postfile.file_id = ctx.Msg.Document.File_id
+			if this.postmode == postpublic {
+				fwd, err := ctx.Bot.Remote.ForwardMessage(ctx.Msg.From.Id, ctx.Msg.Chat.Id, ctx.Msg.Message_id, true)
+				if err == nil { reply = &fwd.Message_id }
+			} else { reply = &ctx.Msg.Message_id }
+			this.postmode = postnext
+		} else if ctx.Msg.Reply_to_message != nil && ctx.Msg.Reply_to_message.Document != nil { // reply to file
+			prompt = "Preparing to post file sent in this message.\n\n"
+			this.postfile.mode = file_id
+			this.postfile.file_id = ctx.Msg.Reply_to_message.Document.File_id
+			if this.postmode == postpublic {
+				fwd, err := ctx.Bot.Remote.ForwardMessage(ctx.Msg.From.Id, ctx.Msg.Chat.Id, ctx.Msg.Reply_to_message.Message_id, true)
+				if err == nil { reply = &fwd.Message_id }
+			} else { reply = &ctx.Msg.Reply_to_message.Message_id }
+			this.postmode = postnext
+		} else if strings.HasPrefix(ctx.Cmd.Argstr, "http://") || strings.HasPrefix(ctx.Cmd.Argstr, "https://") { // inline url
+			prompt = fmt.Sprintf("Preparing to post from <a href=\"%s\">this URL</a>.\n\n", ctx.Cmd.Argstr)
+			this.postfile.mode = url
+			this.postfile.url = ctx.Cmd.Argstr
+			this.postmode = postnext
+		} else if ctx.Msg.Reply_to_message != nil && ctx.Msg.Reply_to_message.Photo != nil { // reply to photo
+			prompt = "That photo was compressed by telegram, and its quality may be severely degraded.  Send it as a file instead.\n\n"
+			if this.postmode != postpublic { reply = &ctx.Msg.Reply_to_message.Message_id }
+		} else if ctx.Msg.Reply_to_message != nil || ctx.Cmd.Argstr != "" { // reply to unknown, or unknown
+			prompt = "Sorry, I don't know what to do with that.\n\nPlease send me a file. Either send (or forward) one directly, reply to one you sent earlier, or send a URL."
+			reply = &ctx.Msg.Message_id
+		} else {
+			this.postmode = postnext
+		}
+	} else if this.postmode == postwizard {
+		if ctx.Cmd.Command == "" {
+			this.postwizard.MergeTagsFromString(ctx.Cmd.Argstr)
+			this.postwizard.UpdateMenu()
+		}
+		if ctx.Cmd.Command == "/next" {
+			this.postwizard.NextMenu()
+		}
+	} else if this.postmode == posttags {
+		if ctx.Cmd.Argstr == "" {
+			prompt = "Please send some new tags."
+		} else {
+			if this.postwizard.Len() != 0 {
+				prompt = fmt.Sprintf("Replaced previous tags.\n(%s)", this.postwizard.TagString())
 			} else {
-				bot.Remote.SendMessage(from.Id, "Set new tag rules.", nil, "HTML", nil, true)
-				state.Reset()
-				return
+				prompt = "Applied tags."
+			}
+			this.postwizard.Reset()
+			this.postwizard.MergeTagsFromString(ctx.Cmd.Argstr)
+			this.postmode = postnext
+		}
+	} else if this.postmode == postrating {
+		this.postrating = api.SanitizeRating(ctx.Cmd.Argstr)
+		if ctx.Cmd.Argstr == "" {
+			this.postmode = postnext
+		} else if this.postrating == "" {
+			prompt = "Sorry, that isn't a valid rating.\n\nPlease enter the post's rating! Safe, Questionable, or Explicit?"
+		} else {
+			prompt = fmt.Sprintf("Set rating to %s.\n\n", this.postrating)
+			this.postmode = postnext
+		}
+	} else if this.postmode == postsource {
+		this.postsource = ctx.Cmd.Argstr
+		if this.postsource == "." { this.postsource = "" }
+		this.postmode = postnext
+		if ctx.Cmd.Argstr == "" {
+		} else if ctx.Cmd.Argstr == "." {
+			prompt = "Cleared sources.\n\n"
+		} else {
+			prompt = "Set sources.\n\n"
+		}
+	} else if this.postmode == postdescription {
+		this.postdescription = ctx.Cmd.Argstr
+		if this.postdescription == "." { this.postdescription = "" }
+		this.postmode = postnext
+		if ctx.Cmd.Argstr == "" {
+		} else if ctx.Cmd.Argstr == "." {
+			prompt = "Cleared description.\n\n"
+		} else {
+			prompt = "Set description.\n\n"
+		}
+	} else if this.postmode == postparent {
+		this.postmode = postnext
+		if ctx.Cmd.Argstr != "" {
+			num, err := strconv.Atoi(ctx.Cmd.Argstr)
+			if err != nil {
+				submatches := apiurlmatch.FindStringSubmatch(ctx.Cmd.Argstr)
+				if len(submatches) != 0 {
+					num, err = strconv.Atoi(ctx.Cmd.Argstr)
+				}
+			}
+			if err == nil {
+				this.postparent = &num
+				prompt = "Set parent post.\n\n"
+			} else {
+				this.postparent = nil
+				prompt = "Cleared parent post.\n\n"
 			}
 		}
-	} else if state.mode == post {
-		if cmd.Command == "/cancel" {
-			state.Reset()
-			bot.Remote.SendMessage(from.Id, "Command cancelled.", nil, "HTML", nil, true)
-			return
-		}
-
-		var prompt, callback_message string
-		var reply *int
-
-		if cmd.Command == "/file" || cmd.Command == "/f" {
-			state.postfile.mode = none
-			state.posttagwiz = false
-			state.postmode = postfile
-		} else if cmd.Command == "/tag" || cmd.Command == "/t" {
-			state.posttagwiz = false
-			state.postmode = posttags
-		} else if cmd.Command == "/wizard" || cmd.Command == "/w" {
-			state.posttagwiz = true
-			state.postmode = postwizard
-			state.SetTagRulesByName(cmd.Argstr)
-		} else if cmd.Command == "/rating" || cmd.Command == "/r" {
-			state.posttagwiz = false
-			state.postrating = ""
-			state.postmode = postrating
-		} else if cmd.Command == "/source" || cmd.Command == "/src" || cmd.Command == "/s" {
-			state.posttagwiz = false
-			state.postsource = ""
-			state.postmode = postsource
-		} else if cmd.Command == "/description" || cmd.Command == "/desc" || cmd.Command == "/d" {
-			state.posttagwiz = false
-			state.postdescription = ""
-			state.postmode = postdescription
-		} else if cmd.Command == "/parent" || cmd.Command == "/p" {
-			state.posttagwiz = false
-			state.postparent = 0
-			state.postmode = postparent
-		} else if cmd.Command == "/upload" {
-			state.postmode = postupload
-		} else if cmd.Command == "/help" {
-			bot.Remote.SendMessage(from.Id, ShowHelp("post"), reply, "HTML", nil, true)
-			return
-		}
-
-		if message != nil && (state.postmode == postfile || state.postmode == postpublic) {
-			if message.Photo != nil { // inline photo
-				prompt = "That photo was compressed by telegram, and its quality may be severely degraded.  Send it as a file instead.\n\n"
-			} else if message.Document != nil { // inline file
-				prompt = "Preparing to post file sent in this message.\n\n"
-				state.postfile.mode = file_id
-				state.postfile.file_id = message.Document.File_id
-				if state.postmode == postpublic {
-					fwd, err := bot.Remote.ForwardMessage(from.Id, message.Chat.Id, message.Message_id, true)
-					if err == nil { reply = &fwd.Message_id }
-				} else { reply = &message.Message_id }
-				state.postmode = postnext
-			} else if message.Reply_to_message != nil && message.Reply_to_message.Document != nil { // reply to file
-				prompt = "Preparing to post file sent in this message.\n\n"
-				state.postfile.mode = file_id
-				state.postfile.file_id = message.Reply_to_message.Document.File_id
-				if state.postmode == postpublic {
-					fwd, err := bot.Remote.ForwardMessage(from.Id, message.Chat.Id, message.Reply_to_message.Message_id, true)
-					if err == nil { reply = &fwd.Message_id }
-				} else { reply = &message.Reply_to_message.Message_id }
-				state.postmode = postnext
-			} else if strings.HasPrefix(cmd.Argstr, "http://") || strings.HasPrefix(cmd.Argstr, "https://") { // inline url
-				prompt = fmt.Sprintf("Preparing to post from <a href=\"%s\">this URL</a>.\n\n", cmd.Argstr)
-				state.postfile.mode = url
-				state.postfile.url = cmd.Argstr
-				state.postmode = postnext
-			} else if message.Reply_to_message != nil && message.Reply_to_message.Photo != nil { // reply to photo
-				prompt = "That photo was compressed by telegram, and its quality may be severely degraded.  Send it as a file instead.\n\n"
-				if state.postmode != postpublic { reply = &message.Reply_to_message.Message_id }
-			} else if message.Reply_to_message != nil || cmd.Argstr != "" { // reply to unknown, or unknown
-				prompt = "Sorry, I don't know what to do with that.\n\nPlease send me a file. Either send (or forward) one directly, reply to one you sent earlier, or send a URL."
-				reply = &message.Message_id
+	} else if this.postmode == postupload {
+		if this.postfile.mode == none || this.postwizard.Len() < 6 || this.postrating == "" {
+			this.postmode = postnext
+		} else {
+			var post_url string
+			var post_filedata io.ReadCloser
+			if this.postfile.mode == url {
+				post_url = this.postfile.url
 			} else {
-				state.postmode = postnext
+				file, err := ctx.Bot.Remote.GetFile(this.postfile.file_id)
+				if err != nil || file == nil || file.File_path == nil {
+					ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, fmt.Sprintf("Error while fetching %s, try sending it again?", this.postfile.file_id), nil, "HTML", nil, true, nil)
+					this.postmode = postnext
+					return
+				}
+				post_filedata, err = ctx.Bot.Remote.DownloadFile(*file.File_path)
+				if err != nil || post_filedata == nil {
+					ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, fmt.Sprintf("Error while downloading %s, try sending it again?", this.postfile.file_id), nil, "HTML", nil, true, nil)
+					this.postmode = postnext
+					return
+				}
 			}
-		} else if callback != nil {
-			if cmd.Command == "/z" {
-				state.postwizard.ToggleTagsFromString(cmd.Argstr)
-				state.postwizard.UpdateMenu()
-			} else if cmd.Command == "/next" {
-				state.postwizard.NextMenu()
-			} else if cmd.Command == "/finish" {
-				state.postwizard.FinishMenu()
-				state.postmode = postnext
-				prompt = "Done tagging.\n\n"
-			} else if cmd.Command == "/again" {
-				state.postwizard.DoOver()
-			}
-		} else if message != nil && state.postmode == postwizard {
-			if cmd.Command == "" {
-				state.postwizard.MergeTagsFromString(cmd.Argstr)
-				state.postwizard.UpdateMenu()
-			}
-			if cmd.Command == "/next" {
-				state.postwizard.NextMenu()
-			}
-		} else if message != nil && state.postmode == posttags {
-			if cmd.Argstr == "" {
-				prompt = "Please send some new tags."
-			} else {
-				if state.postwizard.Len() != 0 {
-					prompt = fmt.Sprintf("Replaced previous tags.\n(%s)", state.postwizard.TagString())
+			user, apikey, _, err := storage.GetUserCreds(ctx.Msg.From.Id)
+			result, err := api.UploadFile(post_filedata, post_url, this.postwizard.TagString(), this.postrating, this.postsource, this.postdescription, this.postparent, user, apikey)
+			if err != nil || !result.Success {
+				if result.StatusCode == 403 {
+					ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, fmt.Sprintf("It looks like your api key isn't valid, you need to login again.", *result.Reason), nil, "HTML", nil, true, nil)
+					this.Reset(ctx)
+				} else if result.Location != nil && result.StatusCode == 423 {
+					ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, fmt.Sprintf("It looks like that file has already been posted. <a href=\"%s\">Check it out here.</a>", *result.Location), nil, "HTML", nil, true, nil)
+					this.Reset(ctx)
 				} else {
-					prompt = "Applied tags."
+					ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, fmt.Sprintf("I'm having issues posting that file. (%s)", *result.Reason), nil, "HTML", nil, true, nil)
 				}
-				state.postwizard.Reset()
-				state.postwizard.MergeTagsFromString(cmd.Argstr)
-				state.postmode = postnext
-			}
-		} else if message != nil && state.postmode == postrating {
-			state.postrating = api.SanitizeRating(cmd.Argstr)
-			if cmd.Argstr == "" {
-				state.postmode = postnext
-			} else if state.postrating == "" {
-				prompt = "Sorry, that isn't a valid rating.\n\nPlease enter the post's rating! Safe, Questionable, or Explicit?"
 			} else {
-				prompt = fmt.Sprintf("Set rating to %s.\n\n", state.postrating)
-				state.postmode = postnext
+				ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, fmt.Sprintf("Upload complete! <a href=\"%s\">Check it out.</a>", *result.Location), nil, "HTML", nil, true, nil)
+				this.Reset(ctx)
 			}
-		} else if message != nil && state.postmode == postsource {
-			state.postsource = cmd.Argstr
-			if state.postsource == "." { state.postsource = "" }
-			state.postmode = postnext
-			if cmd.Argstr == "" {
-			} else if cmd.Argstr == "." {
-				prompt = "Cleared sources.\n\n"
-			} else {
-				prompt = "Set sources.\n\n"
-			}
-		} else if message != nil && state.postmode == postdescription {
-			state.postdescription = cmd.Argstr
-			if state.postdescription == "." { state.postdescription = "" }
-			state.postmode = postnext
-			if cmd.Argstr == "" {
-			} else if cmd.Argstr == "." {
-				prompt = "Cleared description.\n\n"
-			} else {
-				prompt = "Set description.\n\n"
-			}
-		} else if message != nil && state.postmode == postparent {
-			state.postmode = postnext
-			if cmd.Argstr != "" {
-				num, err := strconv.Atoi(cmd.Argstr)
-				if err != nil {
-					submatches := apiurlmatch.FindStringSubmatch(cmd.Argstr)
-					if len(submatches) != 0 {
-						num, err = strconv.Atoi(cmd.Argstr)
-					}
-				}
-				if err == nil {
-					state.postparent = num
-					prompt = "Set parent post.\n\n"
-				} else {
-					state.postparent = 0
-					prompt = "Cleared parent post.\n\n"
-				}
-			}
-		} else if state.postmode == postupload {
-			if state.postfile.mode == none || state.postwizard.Len() < 6 || state.postrating == "" {
-				state.postmode = postnext
-			} else {
-				var post_url string
-				var post_filedata []byte
-				if state.postfile.mode == url {
-					post_url = state.postfile.url
-				} else {
-					file, err := bot.Remote.GetFile(state.postfile.file_id)
-					if err != nil || file == nil || file.File_path == nil {
-						bot.Remote.SendMessage(from.Id, fmt.Sprintf("Error while fetching %s, try sending it again?", state.postfile.file_id), nil, "HTML", nil, true)
-						state.postmode = postnext
-						return
-					}
-					post_filedata, err = bot.Remote.DownloadFile(*file.File_path)
-					if err != nil || post_filedata == nil {
-						bot.Remote.SendMessage(from.Id, fmt.Sprintf("Error while downloading %s, try sending it again?", state.postfile.file_id), nil, "HTML", nil, true)
-						state.postmode = postnext
-						return
-					}
-				}
-				user, apikey, err := state.GetUserCreds()
-				result, err := api.UploadFile(post_filedata, post_url, state.postwizard.TagString(), state.postrating, state.postsource, state.postdescription, state.postparent, user, apikey)
-				if err != nil || !result.Success {
-					if result.StatusCode == 403 {
-						bot.Remote.SendMessage(from.Id, fmt.Sprintf("It looks like your api key isn't valid, you need to login again.", *result.Reason), nil, "HTML", nil, true)
-						state.Reset()
-					} else if result.Location != nil && result.StatusCode == 423 {
-						bot.Remote.SendMessage(from.Id, fmt.Sprintf("It looks like that file has already been posted. <a href=\"%s\">Check it out here.</a>", *result.Location), nil, "HTML", nil, true)
-						state.Reset()
-					} else {
-						bot.Remote.SendMessage(from.Id, fmt.Sprintf("I'm having issues posting that file. (%s)", *result.Reason), nil, "HTML", nil, true)
-					}
-				} else {
-					bot.Remote.SendMessage(from.Id, fmt.Sprintf("Upload complete! <a href=\"%s\">Check it out.</a>", *result.Location), nil, "HTML", nil, true)
-					state.Reset()
-				}
 
-				if state.mode == root { return }
+			if ctx.GetState() == nil { return }
+		}
+	}
+
+	if this.postmode == postnext {
+		if this.postrating == "" {
+			newrating := this.postwizard.Rating()
+			if newrating != "" {
+				this.postrating = newrating
+				prompt = fmt.Sprintf("%sThe tags imply the rating of this post is %s.\n\n", prompt, this.postrating)
 			}
 		}
 
-		if state.postmode == postnext {
-			if state.postrating == "" {
-				newrating := state.postwizard.Rating()
-				if newrating != "" {
-					state.postrating = newrating
-					prompt = fmt.Sprintf("%sThe tags imply the rating of this post is %s.\n\n", prompt, state.postrating)
-				}
+		if this.postfile.mode == none {
+			prompt = fmt.Sprintf("%s%s", prompt,  "Please send me a file. Either send (or forward) one directly, reply to one you sent earlier, or send a URL.")
+			this.postmode = postfile
+		} else if this.postwizard.Len() == 0 {
+			this.posttagwiz = true
+			this.postmode = postwizard
+		} else if this.postrating == "" {
+			prompt = "Please enter the post's rating! Safe, Questionable, or Explicit?"
+			this.postmode = postrating
+		} else {
+			if this.postready == false {
+				prompt = fmt.Sprintf("%s%s", prompt, "Your post now has enough information to submit!\n\n")
+				this.postready = true
 			}
 
-			if state.postfile.mode == none {
-				prompt = fmt.Sprintf("%s%s", prompt,  "Please send me a file. Either send (or forward) one directly, reply to one you sent earlier, or send a URL.")
-				state.postmode = postfile
-			} else if state.postwizard.Len() == 0 {
-				state.posttagwiz = true
-				state.postmode = postwizard
-			} else if state.postrating == "" {
-				prompt = "Please enter the post's rating! Safe, Questionable, or Explicit?"
-				state.postmode = postrating
-			} else {
-				if state.postready == false {
-					prompt = fmt.Sprintf("%s%s", prompt, "Your post now has enough information to submit!\n\n")
-					state.postready = true
-				}
-
-				if state.postsource == "" {
-					prompt = fmt.Sprintf("%s%s", prompt, "Please enter the post source links.")
-					state.postmode = postsource
-				} else if state.postdescription == "" {
-					prompt = fmt.Sprintf("%s%s", prompt, "Please enter the description.\n<a href=\"https://" + api.Endpoint + "/help/show/dtext\">Remember, you can use DText.</a>")
-					state.postmode = postdescription
-				} else if state.postparent == 0 {
-					prompt = fmt.Sprintf("%s%s", prompt, "Please enter the parent post.")
-					state.postmode = postparent
-				} else if !state.postdone {
-					prompt = fmt.Sprintf("%sThat's it! You've entered all of the info.", prompt)
-					state.postdone = true
-				}
+			if this.postsource == "" {
+				prompt = fmt.Sprintf("%s%s", prompt, "Please enter the post source links.")
+				this.postmode = postsource
+			} else if this.postdescription == "" {
+				prompt = fmt.Sprintf("%s%s", prompt, "Please enter the description.\n<a href=\"https://" + api.Endpoint + "/help/show/dtext\">Remember, you can use DText.</a>")
+				this.postmode = postdescription
+			} else if this.postparent == nil {
+				prompt = fmt.Sprintf("%s%s", prompt, "Please enter the parent post.")
+				this.postmode = postparent
+			} else if !this.postdone {
+				prompt = fmt.Sprintf("%sThat's it! You've entered all of the info.", prompt)
+				this.postdone = true
 			}
 		}
+	}
 
-		if prompt != "" {
-			bot.Remote.SendMessage(from.Id, prompt, reply, "HTML", nil, true)
-		}
+	if prompt != "" {
+		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, prompt, reply, "HTML", nil, true, nil)
+	}
 
-		if callback != nil {
-			bot.Remote.AnswerCallbackQuery(callback.Id, callback_message, true)
-		}
+	if this.posttagwiz && this.postmode == postwizard {
+		this.postwizard.SendWizard(int64(ctx.Msg.From.Id))
+		this.posttagwiz = false
+	}
+}
 
-		if state.posttagwiz && state.postmode == postwizard {
-			state.postwizard.SendWizard(int64(from.Id))
-			state.posttagwiz = false
-		}
+type JanitorState struct {
+}
+
+func (this *JanitorState) Handle(ctx *telebot.MsgContext) {
+	if ctx.Msg.From == nil {
+		// ignore messages not sent by a user.
+		return
+	}
+
+	user, apikey, janitor, err := storage.GetUserCreds(ctx.Msg.From.Id)
+	if !janitor {
+		// commands from non-authorized users are silently ignored
+		return
+	}
+	if err != nil {
+		ctx.Bot.Remote.SendMessageAsync(ctx.Msg.From.Id, "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", nil, "HTML", nil, true, nil)
+		return
+	}
+
+	if ctx.Cmd.Command == "/indextags" {
+		go tagindex.SyncTagsExternal(ctx.Bot, &ctx.Msg, ctx.Cmd)
+	} else if ctx.Cmd.Command == "/indextagaliases" {
+		go tagindex.UpdateAliases(ctx.Bot, &ctx.Msg)
+	} else if ctx.Cmd.Command == "/recountnegative" {
+		go tagindex.RecountNegative(ctx.Bot, &ctx.Msg, ctx.Cmd)
+	} else if ctx.Cmd.Command == "/cats" {
+		go tagindex.Concatenations(ctx.Bot, &ctx.Msg, ctx.Cmd)
+	} else if ctx.Cmd.Command == "/blits" {
+		go tagindex.Blits(ctx.Bot, &ctx.Msg, ctx.Cmd)
+	} else if ctx.Cmd.Command == "/findtagtypos" {
+		go tagindex.FindTagTypos(ctx.Bot, &ctx.Msg, ctx.Cmd)
+	} else if ctx.Cmd.Command == "/recounttags" {
+		go tagindex.RecountTagsExternal(ctx.Bot, &ctx.Msg, ctx.Cmd)
+	} else if ctx.Cmd.Command == "/syncposts" {
+		go tagindex.SyncPosts(ctx.Bot, &ctx.Msg, ctx.Cmd)
+	} else if ctx.Cmd.Command == "/editposttest" {
+		post := 2893902 // https://api-host/post/show/2893902
+		newtags := "1:1 2021 anthro beastars canid canine canis clothed clothing fur grey_body grey_fur hi_res javigameboy legoshi_(beastars) male mammal simple_background solo teeth wolf"
+		oldtags := "1:1 2021 anthro beastars canid canine canis clothed clothing fur grey_body grey_fur hi_res javigameboy legoshi_(beastars) male mammal simple_background solo teeth wolf"
+		sources := "https://twitter.com/Javigameboy/status/1429921007721062401"
+		description := ""
+		parent_post := -1
+		rating := "safe"
+	
+		reason := "API Update Test (should be NOOP)"
+		api.UpdatePost(user, apikey, post, &oldtags, &newtags, &rating, &parent_post, &sources, &description, &reason)
 	}
 }

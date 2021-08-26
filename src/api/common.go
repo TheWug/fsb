@@ -1,6 +1,9 @@
 package api
 
 import (
+        "github.com/thewug/reqtify"
+        "time"
+
 	"strings"
 	"net/http"
 	"errors"
@@ -8,26 +11,32 @@ import (
 
 // common state for the entire api package.
 
+var ApiName          string
 var Endpoint         string
 var FilteredEndpoint string
 var StaticPrefix     string
 
 var userAgent string = "KnottyBot (telegram, v1.0, operator: snergal)"
+var api reqtify.Reqtifier
 
 type settings interface {
+	GetApiName() string
 	GetApiEndpoint() string
 	GetApiFilteredEndpoint() string
 	GetApiStaticPrefix() string
 }
 
 func Init(s settings) error {
+	ApiName = s.GetApiName()
 	Endpoint = s.GetApiEndpoint()
 	FilteredEndpoint = s.GetApiFilteredEndpoint()
 	StaticPrefix = s.GetApiStaticPrefix()
 
-	if Endpoint == "" || FilteredEndpoint == "" || StaticPrefix == "" {
+	if ApiName == "" || Endpoint == "" || FilteredEndpoint == "" || StaticPrefix == "" {
 		return errors.New("missing required parameter")
 	}
+
+	api = reqtify.New(fmt.Sprintf("https://%s", Endpoint), time.NewTicker(750 * time.Millisecond), nil, nil, userAgent)
 
 	return nil
 }
@@ -38,22 +47,4 @@ func SanitizeRating(input string) (string) {
 	if input == "questionable" || input == "q" { return "questionable" }
 	if input == "safe" || input == "s" { return "safe" }
 	return ""
-}
-
-var apiClient *http.Client = &http.Client{Transport: &http.Transport{} }
-
-func apiGet(url string) (*http.Response, error) {
-        req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-        req.Header.Set("User-Agent", userAgent)
-
-	return apiClient.Do(req)
-}
-
-func apiDo(req *http.Request) (resp *http.Response, err error) {
-        req.Header.Set("User-Agent", userAgent)
-	return apiClient.Do(req)
 }

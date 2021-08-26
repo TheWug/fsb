@@ -1,7 +1,7 @@
 package proxify
 
 import (
-	"api"
+	"api/types"
 	"telegram"
 	"strings"
 	"strconv"
@@ -35,7 +35,8 @@ func ContainsSafeRatingTag(tags string) (bool) {
 	return false
 }
 
-func ConvertApiResultToTelegramInline(result api.TSearchResult, force_safe bool, query string, debugmode bool) (interface{}) {
+func ConvertApiResultToTelegramInline(result types.TSearchResult, force_safe bool, query string, debugmode bool) (interface{}) {
+	salt := "x_"
 	postURL := ""
 	if force_safe {
 		postURL = fmt.Sprintf("https://%s/post/show/%d", api.FilteredEndpoint, result.Id)
@@ -52,9 +53,9 @@ func ConvertApiResultToTelegramInline(result api.TSearchResult, force_safe bool,
 	if result.File_ext == "gif" {
 		foo := telegram.TInlineQueryResultGif{
 			Type:         "gif",
-			Id:           result.Md5,
-			Gif_url:      WugURL(raw_url),
-			Thumb_url:    WugURL(result.Preview_url),
+			Id:           salt + result.Md5,
+			Gif_url:      raw_url,
+			Thumb_url:    result.Preview_url,
 			Gif_width:    &width,
 			Gif_height:   &height,
 			Caption:      &caption,
@@ -78,9 +79,9 @@ func ConvertApiResultToTelegramInline(result api.TSearchResult, force_safe bool,
 
 		foo := telegram.TInlineQueryResultPhoto{
 			Type:         "photo",
-			Id:           result.Md5,
-			Photo_url:    WugURL(raw_url),
-			Thumb_url:    WugURL(result.Preview_url),
+			Id:           salt + result.Md5,
+			Photo_url:    raw_url,
+			Thumb_url:    result.Preview_url,
 			Photo_width:  &width,
 			Photo_height: &height,
 			Caption:      &caption,
@@ -104,7 +105,7 @@ func Offset(last string) (y int) {
 	return
 }
 
-func GenerateDebugText(iqr interface{}, result api.TSearchResult) {
+func GenerateDebugText(iqr interface{}, result types.TSearchResult) {
 
 	imt := telegram.TInputMessageTextContent{
 		Message_text: "",

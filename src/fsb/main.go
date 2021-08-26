@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"botbehavior"
+	"bot"
 	"telegram/telebot"
 
 	bbot "bot"
@@ -29,14 +30,15 @@ func main() {
 		}
 	}
 
-	var bot telebot.TelegramBot
+	var thebot telebot.TelegramBot
+	machine := telebot.NewMessageStateMachine()
 	var settings botbehavior.Settings
 	var behavior botbehavior.Behavior
+	behavior.ForwardTo = machine
 
-	settings.Bot = &bot
-	behavior.Bot = &bot
+	settings.Bot = &thebot
 
-	e := bot.Init(settingsFile, &settings)
+	e := thebot.Init(settingsFile, &settings)
 	if e != nil {
 		fmt.Println(e.Error())
 		os.Exit(1)
@@ -54,8 +56,27 @@ func main() {
 		os.Exit(1)
 	}
 
-	bot.SetMessageCallback(&behavior)
-	bot.SetInlineCallback(&behavior)
-	bot.SetCallbackCallback(&behavior)
-	bot.MainLoop()
+	thebot.SetMessageCallback(machine)
+	thebot.SetInlineCallback(&behavior)
+	thebot.SetCallbackCallback(&behavior)
+
+	var help bot.HelpState
+	var login bot.LoginState
+	var post bot.PostState
+	var janitor bot.JanitorState
+	machine.AddCommand("/help", &help)
+	machine.AddCommand("/login", &login)
+	machine.AddCommand("/logout", &login)
+	machine.AddCommand("/post", &post)
+	machine.AddCommand("/indextags", &janitor)
+	machine.AddCommand("/indextagaliases", &janitor)
+	machine.AddCommand("/recountnegative", &janitor)
+	machine.AddCommand("/cats", &janitor)
+	machine.AddCommand("/blits", &janitor)
+	machine.AddCommand("/findtagtypos", &janitor)
+	machine.AddCommand("/recounttags", &janitor)
+	machine.AddCommand("/syncposts", &janitor)
+	machine.AddCommand("/editposttest", &janitor)
+
+	thebot.MainLoop()
 }
