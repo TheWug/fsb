@@ -34,6 +34,7 @@ func ShowHelp() {
 	fmt.Println("  search_apikey    - api key with which unathenticated searches are performed.")
 	fmt.Println("  results_per_page - max number of telegram inline results to return at a time in searches.")
 	fmt.Println("  owner               - numeric telegram user ID of bot operator.")
+	fmt.Println("  home                - numeric telegram chat ID of bot's service chat.")
 	fmt.Println("  no_results_photo_id - base64 telegram photo ID of 'no results' placeholder photo.")
 	fmt.Println("  error_photo_id      - base64 telegram photo ID of 'error' placeholder photo.")
 }
@@ -173,7 +174,7 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 					continue
 				}
 				post := updated_posts[id]
-				post_info = PromptPost(bot, post_info, id, &post, &edit)
+				post_info = this.PromptPost(bot, post_info, id, &post, &edit)
 				err = storage.SavePromptPost(id, post_info, settings)
 				if err != nil {
 					bot.ErrorLog.Println("Error in SavePromptPost:", err.Error())
@@ -237,7 +238,7 @@ func GetInlineKeyboardForEdit(edit *storage.PostSuggestedEdit) (*data.TInlineKey
 	return &keyboard
 }
 
-func PromptPost(bot *gogram.TelegramBot, post_info *storage.PromptPostInfo, id int, post *apitypes.TPostInfo, edit *storage.PostSuggestedEdit) (*storage.PromptPostInfo) {
+func (this *Behavior) PromptPost(bot *gogram.TelegramBot, post_info *storage.PromptPostInfo, id int, post *apitypes.TPostInfo, edit *storage.PostSuggestedEdit) (*storage.PromptPostInfo) {
 	create_mode := (post_info == nil)
 
 	if create_mode {
@@ -260,7 +261,7 @@ func PromptPost(bot *gogram.TelegramBot, post_info *storage.PromptPostInfo, id i
 
 	send := data.SendData{
 		TargetData: data.TargetData{
-			ChatId: data.ChatID(-1001429698294), // project 621
+			ChatId: this.MySettings.Home,
 		},
 		ParseMode: data.ParseHTML,
 		DisableNotification: true,
@@ -356,7 +357,7 @@ func PromptPost(bot *gogram.TelegramBot, post_info *storage.PromptPostInfo, id i
 	return post_info
 }
 
-func DismissPromptPost(bot *gogram.TelegramBot, post_info *storage.PromptPostInfo, diff apitypes.TagDiff, settings storage.UpdaterSettings) error {
+func (this *Behavior) DismissPromptPost(bot *gogram.TelegramBot, post_info *storage.PromptPostInfo, diff apitypes.TagDiff, settings storage.UpdaterSettings) error {
 	if post_info == nil { return nil }
 
 	bot.Remote.DeleteMessageAsync(data.ODelete{SourceChatId: post_info.ChatId, SourceMessageId: post_info.MsgId}, nil)
@@ -381,7 +382,7 @@ func DismissPromptPost(bot *gogram.TelegramBot, post_info *storage.PromptPostInf
 	return storage.SavePromptPost(post_info.PostId, nil, settings)
 }
 
-func ClearPromptPostsOlderThan(bot *gogram.TelegramBot, time_ago time.Duration) error {
+func (this *Behavior) ClearPromptPostsOlderThan(bot *gogram.TelegramBot, time_ago time.Duration) error {
 	var err error
 	var settings storage.UpdaterSettings
 	settings.Transaction, err = storage.NewTxBox()
@@ -392,7 +393,7 @@ func ClearPromptPostsOlderThan(bot *gogram.TelegramBot, time_ago time.Duration) 
 	if err != nil { return err }
 
 	for _, post_info := range post_infos {
-		DismissPromptPost(bot, &post_info, apitypes.TagDiff{}, settings)
+		this.DismissPromptPost(bot, &post_info, apitypes.TagDiff{}, settings)
 	}
 
 	settings.Transaction.MarkForCommit()

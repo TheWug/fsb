@@ -59,7 +59,7 @@ func main() {
 	var post bot.PostState
 	var janitor bot.JanitorState
 	var votes bot.VoteState
-	var autofix bot.AutofixState
+	autofix := bot.AutofixState{Behavior: &behavior}
 	machine.AddCommand("/help", &help)
 	machine.AddCommand("/login", &login)
 	machine.AddCommand("/logout", &login)

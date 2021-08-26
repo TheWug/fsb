@@ -665,6 +665,7 @@ func (this *HelpState) Handle(ctx *gogram.MessageCtx) {
 }
 
 type AutofixState struct {
+	Behavior *botbehavior.Behavior
 }
 
 func (this *AutofixState) GetInterval() int64 {
@@ -674,7 +675,7 @@ func (this *AutofixState) GetInterval() int64 {
 func (this *AutofixState) DoMaintenance(bot *gogram.TelegramBot) {
 	go func() {
 		// clear prompt_post table of entries that are older than 24 hours
-		botbehavior.ClearPromptPostsOlderThan(bot, time.Hour * 24)
+		this.Behavior.ClearPromptPostsOlderThan(bot, time.Hour * 24)
 	}()
 }
 
@@ -730,13 +731,13 @@ func (this *AutofixState) HandleCallback(ctx *gogram.CallbackCtx) {
 				}
 			}
 			err = storage.SavePromptPost(post_info.PostId, post_info, settings)
-			botbehavior.PromptPost(ctx.Bot, post_info, post_info.PostId, nil, nil)
+			this.Behavior.PromptPost(ctx.Bot, post_info, post_info.PostId, nil, nil)
 		} else if ctx.Cmd.Command == "/af-commit" {
 			diff := post_info.Edit.GetChangeToApply()
 
 			if diff.IsZero() {
 				ctx.AnswerAsync(data.OCallback{Notification: "\u2139 No changes to apply."}, nil)
-				botbehavior.DismissPromptPost(ctx.Bot, post_info, diff, settings)
+				this.Behavior.DismissPromptPost(ctx.Bot, post_info, diff, settings)
 				return
 			}
 
@@ -748,7 +749,7 @@ func (this *AutofixState) HandleCallback(ctx *gogram.CallbackCtx) {
 			}
 
 			post_info.Edit.Apply()
-			botbehavior.DismissPromptPost(ctx.Bot, post_info, diff, settings)
+			this.Behavior.DismissPromptPost(ctx.Bot, post_info, diff, settings)
 			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F539 Changes saved."}, nil)
 
 			if post != nil {
@@ -757,7 +758,7 @@ func (this *AutofixState) HandleCallback(ctx *gogram.CallbackCtx) {
 				return
 			}
 		} else if ctx.Cmd.Command == "/af-dismiss" {
-			err = botbehavior.DismissPromptPost(ctx.Bot, post_info, apitypes.TagDiff{}, settings)
+			err = this.Behavior.DismissPromptPost(ctx.Bot, post_info, apitypes.TagDiff{}, settings)
 			if err != nil {
 				if err != nil { ctx.Bot.ErrorLog.Println("Failed to dismiss prompt post:", err.Error()) }
 				return

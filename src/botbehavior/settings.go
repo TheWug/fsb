@@ -22,6 +22,7 @@ type Settings struct {
 	ApiStaticPrefix     string `json:"api_static_prefix"`
 
 	Owner   data.UserID `json:"owner"`
+	Home    data.ChatID `json:"home"`
 
 	ResultsPerPage int `json:"results_per_page"`
 
