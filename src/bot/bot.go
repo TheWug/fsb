@@ -969,12 +969,18 @@ func (this *VoteState) HandleCmd(from *data.TUser, cmd *gogram.CommandData, repl
 	return response, false
 }
 
-type EditState struct {
-	user, api_key string
+type esp struct {
+	User string `json:"user"`
+	ApiKey string `json:"apikey"`
 
-	MsgId data.MsgID
-	ChatId data.ChatID
-	PostId int
+	MsgId data.MsgID `json:"msgid"`
+	ChatId data.ChatID `json:"chatid"`
+	PostId int `json:"postid"`
+}
+
+type EditState struct {
+
+	data esp
 }
 
 func (this *EditState) Handle(ctx *gogram.MessageCtx) {
@@ -996,7 +1002,7 @@ func (this *EditState) HandleCallback(ctx *gogram.CallbackCtx) {
 	settings := storage.UpdaterSettings{Transaction: txbox}
 	defer settings.Transaction.Finalize(true)
 
-	p, err := dialogs.LoadEditPrompt(settings, this.MsgId, this.ChatId)
+	p, err := dialogs.LoadEditPrompt(settings, this.data.MsgId, this.data.ChatId)
 	if err != nil {
 		ctx.Bot.ErrorLog.Println("Error loading edit prompt: ", err.Error())
 		return
@@ -1040,7 +1046,7 @@ func (this *EditState) HandleCallback(ctx *gogram.CallbackCtx) {
 			if p.Description != "" { description = &p.Description }
 			if p.Reason != "" { reason = &p.Reason }
 
-			update, err := api.UpdatePost(this.user, this.api_key, p.PostId, p.TagChanges, rating, parent, p.SourceChanges, description, reason)
+			update, err := api.UpdatePost(this.data.User, this.data.ApiKey, p.PostId, p.TagChanges, rating, parent, p.SourceChanges, description, reason)
 			if err != nil {
 				ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "An error occurred when editing the post! Try again later."}}, nil)
 				ctx.Bot.ErrorLog.Println("Error updating post: ", err.Error())
@@ -1082,7 +1088,7 @@ func (this *EditState) Freeform(ctx *gogram.MessageCtx) {
 	settings := storage.UpdaterSettings{Transaction: txbox}
 	defer settings.Transaction.Finalize(true)
 
-	p, err := dialogs.LoadEditPrompt(settings, this.MsgId, this.ChatId)
+	p, err := dialogs.LoadEditPrompt(settings, this.data.MsgId, this.data.ChatId)
 	if err != nil {
 		ctx.Bot.ErrorLog.Println("Error occurred loading edit prompt: ", err.Error())
 		return
@@ -1150,7 +1156,7 @@ func (this *EditState) Cancel(ctx *gogram.MessageCtx) {
 	settings := storage.UpdaterSettings{Transaction: txbox}
 	defer settings.Transaction.Finalize(true)
 
-	p, err := dialogs.LoadEditPrompt(settings, this.MsgId, this.ChatId)
+	p, err := dialogs.LoadEditPrompt(settings, this.data.MsgId, this.data.ChatId)
 	if err != nil { ctx.Bot.ErrorLog.Println(err.Error()) }
 	p.State = dialogs.DISCARDED
 	p.Prefix = ""
@@ -1258,11 +1264,13 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 
 	prompt := e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx)
 	this = &EditState{
-		user: user,
-		api_key: api_key,
-		MsgId: prompt.Msg.Id,
-		ChatId: prompt.Msg.Chat.Id,
-		PostId: post,
+		data: esp{
+			User: user,
+			ApiKey: api_key,
+			MsgId: prompt.Msg.Id,
+			ChatId: prompt.Msg.Chat.Id,
+			PostId: post,
+		},
 	}
 
 	ctx.SetState(this)
