@@ -497,23 +497,9 @@ func (this *VoteState) HandleCmd(from *data.TUser, cmd *gogram.CommandData, repl
 
 	var id int
 	if len(cmd.Args) > 0 {
-		id, err = strconv.Atoi(cmd.Args[0])
-		if err != nil {
-			response.Text = fmt.Sprintf("Error parsing post ID: %s", err.Error())
-			return response, true
-		}
-	} else {
-		if reply_message != nil {
-			text := reply_message.Text
-			if text == nil { text = reply_message.Caption }
-			if text != nil {
-				potential_id := apiextra.GetPostIDFromText(*text)
-				if potential_id != apiextra.NONEXISTENT_POST {
-					// if we are a reply to a message, AND that message has text or a caption, AND that text contains a post URL, yoink it.
-					id = potential_id
-				}
-			}
-		}
+		id = apiextra.GetPostIDFromText(cmd.Args[0])
+	} else if reply_message != nil {
+		id = apiextra.GetPostIDFromMessage(reply_message)
 	}
 
 	// if after all that, the id is still the zero value, that means we didn't find one, so die
