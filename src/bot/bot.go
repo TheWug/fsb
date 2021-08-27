@@ -751,7 +751,7 @@ func (this *AutofixState) HandleCallback(ctx *gogram.CallbackCtx) {
 				ctx.AnswerAsync(data.OCallback{Notification: "\U0001F539 Changes saved."}, nil)
 
 				if post != nil {
-					err = storage.UpdatePost(apitypes.TPostInfo{Id: post_info.PostId}, *post, settings)
+					err = storage.UpdatePost(*post, settings)
 					if err != nil { ctx.Bot.ErrorLog.Println("Failed to locally update post:", err.Error()) }
 				}
 			}

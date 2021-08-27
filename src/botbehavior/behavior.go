@@ -165,7 +165,7 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 						storage.AddAutoFixHistoryForPost(id, applied_api, settings)
 
 						if post != nil {
-							err = storage.UpdatePost(apitypes.TPostInfo{Id: id}, *post, settings)
+							err = storage.UpdatePost(*post, settings)
 							if err != nil {
 								bot.ErrorLog.Println("Failed to locally update post:", err.Error())
 								continue
