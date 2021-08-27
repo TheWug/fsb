@@ -11,6 +11,7 @@ import (
 
 	"log"
 	"os"
+	"time"
 )
 
 const MAX_RESULTS_PER_PAGE = 50
@@ -100,5 +101,7 @@ func (this *Settings) DefaultSearchCredentials() (storage.UserCreds) {
 	return storage.UserCreds{
 		User: this.SearchUser,
 		ApiKey: this.SearchAPIKey,
+		Blacklist: api.DefaultBlacklist,
+		BlacklistFetched: time.Now(),
 	}
 }

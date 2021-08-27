@@ -845,13 +845,15 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 				ctx.DeleteAsync(nil)
 			}
 			if this.user != "" && this.apikey != "" {
-				_, success, err := api.TestLogin(this.user, this.apikey)
+				user, success, err := api.TestLogin(this.user, this.apikey)
 				if success && err == nil {
 					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("You are now logged in as <code>%s</code>.\n\nTo protect the security of your account, I have deleted the message containing your API key.", this.user), ParseMode: data.ParseHTML}}, nil)
 					storage.WriteUserCreds(storage.UpdaterSettings{}, storage.UserCreds{
 						TelegramId: ctx.Msg.From.Id,
 						User: this.user,
 						ApiKey: this.apikey,
+						Blacklist: user.Blacklist,
+						BlacklistFetched: time.Now(),
 					})
 					ctx.SetState(nil)
 				} else if err != nil {

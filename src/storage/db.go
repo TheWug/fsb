@@ -37,6 +37,8 @@ type UserCreds struct {
 	TelegramId tgtypes.UserID
 	User, ApiKey string
 	Janitor bool
+	Blacklist string
+	BlacklistFetched time.Time
 }
 
 func WriteUserCreds(settings UpdaterSettings, creds UserCreds) (error) {
@@ -45,13 +47,15 @@ func WriteUserCreds(settings UpdaterSettings, creds UserCreds) (error) {
 	if settings.Transaction.err != nil { return settings.Transaction.err }
 
 	query := `
-INSERT INTO remote_user_credentials (telegram_id, api_user, api_key)
-VALUES ($1, $2, $3)
+INSERT INTO remote_user_credentials (telegram_id, api_user, api_key, api_blacklist, api_blacklist_last_updated)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (telegram_id) DO UPDATE
 SET	api_user = EXCLUDED.api_user,
-	api_key = EXCLUDED.api_key
+	api_key = EXCLUDED.api_key,
+	api_blacklist = EXCLUDED.api_blacklist,
+	api_blacklist_last_updated = EXCLUDED.api_blacklist_last_updated
 `
-	_, err := tx.Exec(query, creds.TelegramId, creds.User, creds.ApiKey)
+	_, err := tx.Exec(query, creds.TelegramId, creds.User, creds.ApiKey, creds.Blacklist, creds.BlacklistFetched)
 	if (err != nil) { return err }
 
 	settings.Transaction.commit = mine
@@ -65,9 +69,9 @@ func GetUserCreds(settings UpdaterSettings, id tgtypes.UserID) (UserCreds, error
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return creds, settings.Transaction.err }
 
-	row := tx.QueryRow("SELECT api_user, api_key, privilege_janitorial FROM remote_user_credentials WHERE telegram_id = $1", id)
+	row := tx.QueryRow("SELECT api_user, api_key, privilege_janitorial, api_blacklist, api_blacklist_last_updated FROM remote_user_credentials WHERE telegram_id = $1", id)
 
-	err := row.Scan(&creds.User, &creds.ApiKey, &creds.Janitor)
+	err := row.Scan(&creds.User, &creds.ApiKey, &creds.Janitor, &creds.Blacklist, &creds.BlacklistFetched)
 	if err == sql.ErrNoRows || len(creds.User) == 0 || len(creds.ApiKey) == 0 { err = ErrNoLogin }
 
 	settings.Transaction.commit = mine
