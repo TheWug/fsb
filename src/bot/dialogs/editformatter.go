@@ -79,12 +79,6 @@ func (this EditFormatter) Warnings(b *bytes.Buffer, prompt *EditPrompt) {
 
 func (this EditFormatter) GenerateMessage(prompt *EditPrompt) string {
 	var b bytes.Buffer
-	b.WriteString(prompt.Prefix)
-	if b.Len() != 0 { b.WriteString("\n\n") }
-
-	if prompt.State != DISCARDED {
-		this.Warnings(&b, prompt)
-	}
 
 	if prompt.State == SAVED {
 		if (prompt.IsNoop()) {
@@ -99,11 +93,26 @@ func (this EditFormatter) GenerateMessage(prompt *EditPrompt) string {
 			}
 		}
 		prompt.PostStatus(&b)
+		b.WriteRune('\n')
+
+		this.Warnings(&b, prompt)
 	} else if prompt.State == DISCARDED {
 		b.WriteString(fmt.Sprintf("Changes discarded for <a href=\"https://" + api.Endpoint + "/posts/%d\">Post #%d</a>\n", prompt.PostId, prompt.PostId))
 	} else {
-		b.WriteString(fmt.Sprintf("Now editing <a href=\"https://" + api.Endpoint + "/posts/%d\">Post #%d</a>\n", prompt.PostId, prompt.PostId))
+		b.WriteString(fmt.Sprintf("Now editing <a href=\"https://" + api.Endpoint + "/posts/%d\">Post #%d</a>\nCurrently editing: <code>", prompt.PostId, prompt.PostId))
+		b.WriteString(GetNameOfState(prompt.State))
+		b.WriteString("</code>\n\n")
+
+		prompt_string := strings.TrimSpace(prompt.Prefix)
+		b.WriteString(prompt_string)
+		if len(prompt_string) > 0 {
+			b.WriteString("\n\n")
+		}
+
 		prompt.PostStatus(&b)
+		b.WriteRune('\n')
+
+		this.Warnings(&b, prompt)
 	}
 	return b.String()
 }

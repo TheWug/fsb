@@ -715,7 +715,6 @@ func (this *EditState) Cancel(ctx *gogram.MessageCtx) {
 	if err != nil { ctx.Bot.ErrorLog.Println(err.Error()) }
 	if p != nil {
 		p.State = dialogs.DISCARDED
-		p.Prefix = ""
 		p.Finalize(settings, ctx.Bot, nil, dialogs.NewEditFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
 	}
 	ctx.SetState(nil)
