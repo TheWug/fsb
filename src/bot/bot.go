@@ -915,7 +915,7 @@ func (this *PostState) HandleCallback(ctx *gogram.CallbackCtx) {
 	settings := storage.UpdaterSettings{Transaction: txbox}
 	defer settings.Transaction.Finalize(true)
 
-	p, err := dialogs.LoadPostPrompt(settings, this.data.MsgId, this.data.ChatId)
+	p, err := dialogs.LoadPostPrompt(settings, this.data.MsgId, this.data.ChatId, ctx.Cb.From.Id, "main")
 	if err != nil {
 		ctx.Bot.ErrorLog.Println("Error loading edit prompt: ", err.Error())
 		return
@@ -980,6 +980,13 @@ func (this *PostState) Post(ctx *gogram.MessageCtx) {
 	if postnow {
 		p.CommitPost(user, api_key, ctx, storage.UpdaterSettings{})
 	} else {
+		tagrules, err := storage.GetUserTagRules(storage.UpdaterSettings{}, ctx.Msg.From.Id, "main")
+		if err != nil {
+			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Couldn't load your tag rules for some reason."}}, nil)
+			return
+		}
+
+		p.TagWizard.SetNewRulesFromString(tagrules)
 		p.ResetState()
 		prompt := p.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
 		ctx.SetState(PostStateFactoryWithData(nil, this.StateBasePersistent, psp{
@@ -1000,7 +1007,7 @@ func (this *PostState) Cancel(ctx *gogram.MessageCtx) {
 	settings := storage.UpdaterSettings{Transaction: txbox}
 	defer settings.Transaction.Finalize(true)
 
-	p, err := dialogs.LoadPostPrompt(settings, this.data.MsgId, this.data.ChatId)
+	p, err := dialogs.LoadPostPrompt(settings, this.data.MsgId, this.data.ChatId, ctx.Msg.From.Id, "main")
 	if err != nil { ctx.Bot.ErrorLog.Println(err.Error()) }
 	if p != nil {
 		p.State = dialogs.DISCARDED
@@ -1020,7 +1027,7 @@ func (this *PostState) Freeform(ctx *gogram.MessageCtx) {
 	settings := storage.UpdaterSettings{Transaction: txbox}
 	defer settings.Transaction.Finalize(true)
 
-	p, err := dialogs.LoadPostPrompt(settings, this.data.MsgId, this.data.ChatId)
+	p, err := dialogs.LoadPostPrompt(settings, this.data.MsgId, this.data.ChatId, ctx.Msg.From.Id, "main")
 	if err != nil {
 		ctx.Bot.ErrorLog.Println("Error occurred loading edit prompt: ", err.Error())
 		return

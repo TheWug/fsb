@@ -171,7 +171,7 @@ func (this PostFormatter) Warnings(b *bytes.Buffer, prompt *PostPrompt) {
 		warnings = append(warnings, "No file selected!")
 	}
 
-	if prompt.Tags.Len() < 6 {
+	if prompt.TagWizard.Len() < 6 {
 		warnings = append(warnings, "Not enough tags, each post must have at least 6! Add some more before committing.")
 	}
 

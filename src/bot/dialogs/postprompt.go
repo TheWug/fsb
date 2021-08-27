@@ -3,6 +3,7 @@ package dialogs
 import (
 	"api"
 	"api/tags"
+	"api/tags/wizard"
 	"storage"
 	"apiextra"
 
@@ -28,13 +29,17 @@ func PostPromptID() data.DialogID {
 	return POST_PROMPT_ID
 }
 
-func LoadPostPrompt(settings storage.UpdaterSettings, msg_id data.MsgID, chat_id data.ChatID) (*PostPrompt, error) {
+func LoadPostPrompt(settings storage.UpdaterSettings, msg_id data.MsgID, chat_id data.ChatID, user_id data.UserID, api_user string) (*PostPrompt, error) {
 	found, err := storage.FetchDialogPost(settings, msg_id, chat_id)
 	if err != nil { return nil, err }
 	if found == nil { return nil, nil }
 	if found.DialogId != PostPromptID() { return nil, dialog.ErrDialogTypeMismatch }
 
+	tagrules, err := storage.GetUserTagRules(settings, user_id, "main")
+	if err != nil { return nil, err }
+
 	var pp PostPrompt
+	pp.TagWizard.SetNewRulesFromString(tagrules)
 	err = json.Unmarshal(found.DialogData, &pp)
 	pp.TelegramDialogPost.Load(found, PostPromptID(), &pp)
 	return &pp, nil
@@ -48,7 +53,7 @@ type PostPrompt struct {
 	State string `json:"state"`
 
 	// stuff to generate the post info
-	Tags tags.TagSet `json:"tags"`
+	TagWizard wizard.TagWizard `json:"tagwiz"`
 	Sources tags.StringSet `json:"sources"` // not actually tags, but you can treat them the same.
 	SeenSources map[string]int `json:"source_seen"`
 	SeenSourcesReverse []string `json:"source_seen_rev"`
@@ -69,7 +74,8 @@ func (this *PostPrompt) ID() data.DialogID {
 
 func (this *PostPrompt) ApplyReset(state string) {
 	if state == WAIT_TAGS || state == WAIT_ALL {
-		this.Tags.Reset()
+		this.TagWizard.Reset()
+		this.Prefix = this.TagWizard.Prompt()
 	}
 
 	if state == WAIT_SOURCE || state == WAIT_ALL {
@@ -160,9 +166,9 @@ func (this *PostPrompt) PostStatus(b *bytes.Buffer) {
 		b.WriteString("</code>\n")
 		no_changes = false
 	}
-	if this.Tags.Len() != 0 {
+	if this.TagWizard.Len() != 0 {
 		b.WriteString("Tags: <code>")
-		b.WriteString(html.EscapeString(this.Tags.String()))
+		b.WriteString(html.EscapeString(this.TagWizard.Tags().String()))
 		b.WriteString("</code>\n")
 		no_changes = false
 	}
@@ -193,7 +199,7 @@ func (this *PostPrompt) PostStatus(b *bytes.Buffer) {
 func (this *PostPrompt) IsComplete() error {
 	if len(this.Rating) == 0 {
 		return errors.New("You must specify a rating!")
-	} else if this.Tags.Len() < 6 {
+	} else if this.TagWizard.Len() < 6 {
 		return errors.New("You must specify at least six tags!")
 	} else if this.File.Mode == PF_UNSET {
 		return errors.New("You must specify a file!")
@@ -227,7 +233,7 @@ func (this *PostPrompt) CommitPost(user, api_key string, ctx *gogram.MessageCtx,
 		}
 	}
 
-	status, err := api.UploadFile(post_filedata, post_url, this.Tags, this.Rating, this.Sources.StringWithDelimiter("\n"), this.Description, parent, user, api_key)
+	status, err := api.UploadFile(post_filedata, post_url, this.TagWizard.Tags(), this.Rating, this.Sources.StringWithDelimiter("\n"), this.Description, parent, user, api_key)
 	if err != nil {
 		ctx.Bot.ErrorLog.Println("Error updating post: ", err.Error())
 		return nil, errors.New("An error occurred when editing the post! Double check your info, or try again later.")
@@ -307,7 +313,7 @@ func (this *PostPrompt) ParseArgs(ctx *gogram.MessageCtx) (bool, error) {
 	for _, token := range ctx.Cmd.Args {
 		if mode != root {
 			if mode == posttags {
-				this.Tags.ApplyString(token)
+				this.TagWizard.MergeTagsFromString(token)
 			} else if mode == postsource {
 				this.Sources.ApplyArray(strings.Split(token, "\n"))
 			} else if mode == postrating {
@@ -361,7 +367,7 @@ func (this *PostPrompt) HandleCallback(ctx *gogram.CallbackCtx, settings storage
 		if len(ctx.Cmd.Args) != 1 { return }
 		this.ApplyReset(ctx.Cmd.Args[0])
 	case "/tags":
-		this.Prefix = "Enter a list of tags, seperated by spaces. You can remove tags by prefixing them with a minus (-)."
+		this.Prefix = this.TagWizard.Prompt()
 		this.State = WAIT_TAGS
 	case "/sources":
 		if len(ctx.Cmd.Args) == 2 {
@@ -405,13 +411,16 @@ func (this *PostPrompt) HandleCallback(ctx *gogram.CallbackCtx, settings storage
 		this.Prefix = ""
 		this.State = DISCARDED
 		ctx.SetState(nil)
+	case wizard.CMD_NEXT, wizard.CMD_RESTART, wizard.CMD_DONE, wizard.CMD_TAGS:
+		this.TagWizard.ButtonPressed(ctx.Cb.Data)
+		this.Prefix = this.TagWizard.Prompt()
 	default:
 	}
 }
 
 func (this *PostPrompt) HandleFreeform(ctx *gogram.MessageCtx) {
 	if this.State == WAIT_TAGS {
-		this.Tags.ApplyString(ctx.Msg.PlainText())
+		this.TagWizard.MergeTagsFromString(ctx.Msg.PlainText())
 		this.Prefix = "Got it. Continue sending more tag changes, and pick a button from below when you're done."
 	} else if this.State == WAIT_SOURCE {
 		for _, source := range strings.Split(ctx.Msg.PlainText(), "\n") {
