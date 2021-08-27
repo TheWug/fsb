@@ -12,11 +12,11 @@ type FailedCall struct {
 	Success bool `json:"success"`
 }
 
-func TestLogin(user, apitoken string) (bool, error) {
+func TestLogin(user, apitoken string) (*types.TUserInfo, bool, error) {
 	u, err := FetchUser(user, apitoken)
-	if err != nil { return false, err }
+	if err != nil { return nil, false, err }
 	// email is only populated if we are logged into the account we are querying.
-	return (u != nil && u.Email != ""), nil
+	return u, (u != nil && u.Email != ""), nil
 }
 
 func ListTags(user, apitoken string, options types.ListTagsOptions) (types.TTagInfoArray, error) {
