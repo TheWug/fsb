@@ -14,7 +14,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"log"
+	"html"
 	"strconv"
 	"strings"
 	"sync"
@@ -278,21 +278,21 @@ func (this *Behavior) PromptPost(bot *gogram.TelegramBot, post_info *storage.Pro
 	// figure out what we should say for what tags we're changing
 	var edit_string bytes.Buffer
 	if len(post_info.Edit.Prompt) != 0 {
-		edit_string.WriteString(fmt.Sprintf("Manual fixes available:\n<pre>%s</pre>\n", post_info.Edit.Prompt.Flatten().APIString()))
+		edit_string.WriteString(fmt.Sprintf("Manual fixes available:\n<pre>%s</pre>\n", html.EscapeString(post_info.Edit.Prompt.Flatten().APIString())))
 	}
 	if len(post_info.Edit.AutoFix) != 0 {
-		edit_string.WriteString(fmt.Sprintf("Automatic fixes applied:\n<pre>%s</pre>\n", post_info.Edit.AutoFix.Flatten().APIString()))
+		edit_string.WriteString(fmt.Sprintf("Automatic fixes applied:\n<pre>%s</pre>\n", html.EscapeString(post_info.Edit.AutoFix.Flatten().APIString())))
 	}
 
 	// figure out what the message should be
 	if post_info.PostType == "png" || post_info.PostType == "jpg" {
-		send.Text = fmt.Sprintf("Post ID %d\n<a href=\"%s\">Image</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post_info.PostId, post_info.PostURL, post_info.PostId, edit_string.String())
+		send.Text = fmt.Sprintf("Post ID <pre>%d</pre>\n<a href=\"%s\">Image</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post_info.PostId, post_info.PostURL, post_info.PostId, edit_string.String())
 	} else if post_info.PostType == "gif" {
-		send.Text = fmt.Sprintf("Post ID %d\n<a href=\"%s\">Animation</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post_info.PostId, post_info.PostURL, post_info.PostId, edit_string.String())
+		send.Text = fmt.Sprintf("Post ID <pre>%d</pre>\n<a href=\"%s\">Animation</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post_info.PostId, post_info.PostURL, post_info.PostId, edit_string.String())
 	} else if post_info.PostType == "webm" {
-		send.Text = fmt.Sprintf("Post ID %d (%s file, no preview available)\nView it using the links below.\n\n<a href=\"%s\">Video</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post_info.PostId, post_info.PostType, post_info.PostURL, post_info.PostId, edit_string.String())
+		send.Text = fmt.Sprintf("Post ID <pre>%d</pre> (%s file, no preview available)\nView it using the links below.\n\n<a href=\"%s\">Video</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post_info.PostId, post_info.PostType, post_info.PostURL, post_info.PostId, edit_string.String())
 	} else { // SWF, or any other unrecognized file type
-		send.Text = fmt.Sprintf("Post ID %d (%s file, no preview available)\nView it using the links below.\n\n<a href=\"%s\">File</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post_info.PostId, post_info.PostType, post_info.PostURL, post_info.PostId, edit_string.String())
+		send.Text = fmt.Sprintf("Post ID <pre>%d</pre> (%s file, no preview available)\nView it using the links below.\n\n<a href=\"%s\">File</a>\n<a href=\"https://" + api.Endpoint + "/posts/%d\">Post</a>\n%s", post_info.PostId, post_info.PostType, post_info.PostURL, post_info.PostId, edit_string.String())
 	}
 
 	if !create_mode {
@@ -371,7 +371,7 @@ func (this *Behavior) DismissPromptPost(bot *gogram.TelegramBot, post_info *stor
 
 	if !diff.IsZero() || len(post_info.Edit.AutoFix) > 0 {
 		api_string := diff.APIString()
-		edit_string := fmt.Sprintf("Applied the following tags:\n<pre>%s</pre>", ternary(len(api_string) != 0, api_string, "[no changes made]"))
+		edit_string := fmt.Sprintf("Applied the following tags:\n<pre>%s</pre>", ternary(len(api_string) != 0, html.EscapeString(api_string), "[no changes made]"))
 		message := ""
 		// figure out what the message should be
 		if post_info.PostType == "png" || post_info.PostType == "jpg" {
@@ -415,7 +415,7 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 
 	var debugstr string
 	if debugmode { debugstr = ", DEBUG" }
-	log.Printf("[behavior] Received inline query (from %d %s%s): %s", ctx.Query.From.Id, ctx.Query.From.UsernameString(), debugstr, ctx.Query.Query)
+	ctx.Bot.Log.Printf("[behavior] Received inline query (from %d %s%s): %s", ctx.Query.From.Id, ctx.Query.From.UsernameString(), debugstr, ctx.Query.Query)
 
 	user, apikey, _, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Query.From.Id)
 	if err == storage.ErrNoLogin {
@@ -481,12 +481,12 @@ func (this *Behavior) GetNoResultsPlaceholder(query string) *data.TInlineQueryRe
 		Id: "no-results",
 		PhotoId: this.MySettings.NoResultsPhotoID,
 		InputMessageContent: &data.TInputMessageTextContent{
-			MessageText: fmt.Sprintf("There are no results on " + api.ApiName + " for <code>%s</code> :(", query),
+			MessageText: fmt.Sprintf("There are no results on " + api.ApiName + " for <code>%s</code> :(", html.EscapeString(query)),
 			ParseMode: data.ParseHTML,
 		},
 	}
 }
 
 func (this *Behavior) ProcessInlineQueryResult(ctx *gogram.InlineResultCtx) {
-	log.Printf("[behavior] Inline selection: %s (by %d %s)\n", ctx.Result.ResultId, ctx.Result.From.Id, ctx.Result.From.UsernameString())
+	ctx.Bot.Log.Printf("[behavior] Inline selection: %s (by %d %s)\n", ctx.Result.ResultId, ctx.Result.From.Id, ctx.Result.From.UsernameString())
 }
