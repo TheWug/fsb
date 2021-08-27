@@ -101,34 +101,33 @@ func CompareRequests(req1, req2 reqtify.RequestImpl) bool {
 	return true
 }
 
-func TestTagSearch(t *testing.T) {
+func TestListPosts(t *testing.T) {
 	examiner := apiMock.Examine()
 	var wg sync.WaitGroup
 
 	var tuples = []struct{
 		user, apikey string
-		tags string
-		page, limit int
+		options types.ListPostOptions
 		response http.Response
 		err error
 		expectedRequest reqtify.RequestImpl
 		expectedOutput types.TPostInfoArray
 		expectedError error
 	}{
-		{"testuser", "testpassword", "+tag -othertag", 1, 100,
+		{"testuser", "testpassword", types.ListPostOptions{SearchQuery: "tag -othertag", Page: types.Page(10), Limit: 100},
 			http.Response{Status: "200 Testing", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"posts":[]}`))},
 			nil,
 			reqtify.RequestImpl{URLPath: "/posts.json", Verb: reqtify.GET,
-				QueryParams: url.Values{"tags":[]string{"+tag -othertag"}, "page":[]string{"1"}, "limit":[]string{"100"}},
+				QueryParams: url.Values{"tags":[]string{"tag -othertag"}, "page":[]string{"10"}, "limit":[]string{"100"}},
 				BasicUser: "testuser", BasicPassword: "testpassword",
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
 			nil,
 			nil},
-		{"testuser2", "testpassword2", "+tag -othertag anotherthing", 2, 200,
+		{"testuser2", "testpassword2", types.ListPostOptions{SearchQuery: "tag -othertag anotherthing", Page: types.After(10), Limit: 50},
 			http.Response{Status: "200 Testing Different", StatusCode: 200, Body: ioutil.NopCloser(strings.NewReader(`{"posts":[` + samplePostJson + `]}`))},
 			nil,
 			reqtify.RequestImpl{URLPath: "/posts.json", Verb: reqtify.GET,
-				QueryParams: url.Values{"tags":[]string{"+tag -othertag anotherthing"}, "page":[]string{"2"}, "limit":[]string{"200"}},
+				QueryParams: url.Values{"tags":[]string{"tag -othertag anotherthing"}, "page":[]string{"a10"}, "limit":[]string{"50"}},
 				BasicUser: "testuser2", BasicPassword: "testpassword2",
 				Response: []reqtify.ResponseUnmarshaller{reqtify.FromJSON(nil)}},
 			types.TPostInfoArray{samplePost},
@@ -141,7 +140,7 @@ func TestTagSearch(t *testing.T) {
 
 		wg.Add(1)
 		go func() {
-			posts, err = TagSearch(x.user, x.apikey, x.tags, x.page, x.limit)
+			posts, err = ListPosts(x.user, x.apikey, x.options)
 			wg.Done()
 		}()
 

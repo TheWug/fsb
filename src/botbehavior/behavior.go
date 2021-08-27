@@ -453,7 +453,7 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 
 	offset, err := proxify.Offset(ctx.Query.Offset)
 	if err == nil {
-		search_results, err := api.TagSearch(user, apikey, ctx.Query.Query, offset + 1, q.resultsperpage)
+		search_results, err := api.ListPosts(user, apikey, apitypes.ListPostOptions{SearchQuery: ctx.Query.Query, Page: apitypes.Page(offset + 1), Limit: q.resultsperpage})
 		errorlog.ErrorLog(ctx.Bot.ErrorLog, "api", "api.TagSearch", err)
 		iqa = this.ApiResultsToInlineResponse(ctx.Query.Query, search_results, offset, err, q)
 	} else {

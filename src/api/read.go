@@ -5,31 +5,11 @@ import (
 
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 )
 
 type FailedCall struct {
 	Success bool `json:"success"`
-}
-
-func TagSearch(user, apitoken string, tags string, page int, limit int) (types.TPostInfoArray, error) {
-	temp := struct {
-		Posts types.TPostInfoArray `json:"posts"`
-	}{}
-
-	url := "/posts.json"
-	r, e := api.New(url).
-			BasicAuthentication(user, apitoken).
-			URLArg("tags", tags).
-			URLArg("page", strconv.Itoa(page)).
-			URLArg("limit", strconv.Itoa(limit)).
-			JSONInto(&temp).
-			Do()
-
-	APILog(url, user, len(temp.Posts), r, e)
-
-	return temp.Posts, e
 }
 
 func TestLogin(user, apitoken string) (bool, error) {
