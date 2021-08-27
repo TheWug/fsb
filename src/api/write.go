@@ -211,15 +211,3 @@ func UnfavoritePost(user, apitoken string,
 
 	return e
 }
-
-// this is a little trick given to me by kiranoot. sometimes the post count for a tag will get fudged up, and it can be fixed by
-// searching for that single tag and trying to view a page of results past the end. there is a limit of 750 pages of results though
-// and pagination doesn't work automatically when enumerating results using the before_id mechanism, so this can only work for tags
-// with less than 320 * 750 = 240000 results (which is all but the 40 or so most popular tags).
-// after calling it, the count will be reset to the number of non-deleted posts with the tag.
-
-// with next-gen, do we even need to keep this?
-func FixPostcountForTag(user, apitoken, tag string) (error) {
-	_, e := TagSearch(user, apitoken, tag, 750, 320)
-	return e
-}
