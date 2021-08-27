@@ -42,6 +42,8 @@ func Init(s settings) error {
 	return nil
 }
 
+const DefaultBlacklist string = "gore\nscat\nwatersports\nyoung -rating:s\nloli\nshota"
+
 // filters rating tags into valid rating letters.
 // "clean" is not a valid rating, but for convenience, it is treated as identical to "safe".
 func SanitizeRating(input string) (string, error) {

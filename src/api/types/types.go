@@ -240,6 +240,7 @@ type TUserInfo struct {
 	CanUploadFree   bool   `json:"can_upload_free"`
 	LevelString     string `json:"level_string"`
 	Email           string `json:"email"` // only present when logged in, and only for your own account
+	Blacklist       string `json:"blacklisted_tags"`
 }
 
 func (this *TPostInfo) Tags() ([]string) {
