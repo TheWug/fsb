@@ -12,7 +12,7 @@ import (
 )
 
 type EditFormatterBase struct {
-	private_mode bool
+	request_reply bool
 }
 
 type EditFormatter struct {
@@ -41,12 +41,12 @@ func (this EditFormatterBase) WarningsBase(b *bytes.Buffer, warnings []string) {
 	b.WriteRune('\n')
 }
 
-func NewEditFormatter(privacy_mode bool, err error) EditFormatter {
-	return EditFormatter{EditFormatterBase{privacy_mode}, err}
+func NewEditFormatter(request_reply bool, err error) EditFormatter {
+	return EditFormatter{EditFormatterBase{request_reply}, err}
 }
 
-func NewPostFormatter(privacy_mode bool, result *api.UploadCallResult) PostFormatter {
-	return PostFormatter{EditFormatterBase{privacy_mode}, result}
+func NewPostFormatter(request_reply bool, result *api.UploadCallResult) PostFormatter {
+	return PostFormatter{EditFormatterBase{request_reply}, result}
 }
 
 func (this EditFormatter) Warnings(b *bytes.Buffer, prompt *EditPrompt) {
@@ -69,7 +69,7 @@ func (this EditFormatter) Warnings(b *bytes.Buffer, prompt *EditPrompt) {
 		}
 	}
 
-	if this.private_mode && !(prompt.State == SAVED || prompt.State == DISCARDED) {
+	if this.request_reply && !(prompt.State == SAVED || prompt.State == DISCARDED) {
 		warnings = append(warnings, "Be sure to <b>reply</b> to my messages! (<a href=\"https://core.telegram.org/bots#privacy-mode\">why?</a>)")
 	}
 
@@ -186,7 +186,7 @@ func (this PostFormatter) Warnings(b *bytes.Buffer, prompt *PostPrompt) {
 		warnings = append(warnings, "You must specify a rating!")
 	}
 
-	if this.private_mode && !(prompt.State == SAVED || prompt.State == DISCARDED) {
+	if this.request_reply && !(prompt.State == SAVED || prompt.State == DISCARDED) {
 		warnings = append(warnings, "Be sure to <b>reply</b> to my messages in groups! (<a href=\"https://core.telegram.org/bots#privacy-mode\">why?</a>)")
 	}
 

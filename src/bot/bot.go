@@ -935,23 +935,23 @@ func (this *PostState) HandleCallback(ctx *gogram.CallbackCtx) {
 	if p.State == dialogs.SAVED {
 		upload_result, err := p.CommitPost(this.data.User, this.data.ApiKey, gogram.NewMessageCtx(ctx.Cb.Message, false, ctx.Bot), settings)
 		if err == nil && upload_result != nil && upload_result.Success {
-			p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, upload_result))
+			p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Cb.Message.Chat.Type != data.Private, upload_result))
 			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F7E2 Edit submitted."}, nil)
 			ctx.SetState(nil)
 		} else if err != nil {
 			ctx.AnswerAsync(data.OCallback{Notification: fmt.Sprintf("\U0001F534 %s", err.Error())}, nil)
-			p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+			p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
 			p.State = dialogs.WAIT_MODE
 		} else if upload_result != nil && !upload_result.Success {
 			if upload_result.Reason == nil { upload_result.Reason = new(string) }
 			ctx.AnswerAsync(data.OCallback{Notification: fmt.Sprintf("\U0001F534 Error: %s", *upload_result.Reason)}, nil)
-			p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, upload_result))
+			p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Cb.Message.Chat.Type != data.Private, upload_result))
 			p.State = dialogs.WAIT_MODE
 		}
 	} else if p.State == dialogs.DISCARDED {
-		p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+		p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
 	} else {
-		p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+		p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Cb.Message.Chat.Type != data.Private, nil))
 	}
 	settings.Transaction.MarkForCommit()
 }
@@ -1038,7 +1038,7 @@ func (this *PostState) Post(ctx *gogram.MessageCtx) {
 
 		p.TagWizard.SetNewRulesFromString(tagrules)
 		p.ResetState()
-		prompt := p.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+		prompt := p.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, nil))
 		ctx.SetState(PostStateFactoryWithData(nil, this.StateBasePersistent, psp{
 			User: user,
 			ApiKey: api_key,
@@ -1062,7 +1062,7 @@ func (this *PostState) Cancel(ctx *gogram.MessageCtx) {
 	if p != nil {
 		p.State = dialogs.DISCARDED
 		p.Prefix = ""
-		p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+		p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, nil))
 	}
 	ctx.SetState(nil)
 	settings.Transaction.MarkForCommit()
@@ -1085,7 +1085,7 @@ func (this *PostState) Freeform(ctx *gogram.MessageCtx) {
 
 	p.HandleFreeform(ctx)
 
-	p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+	p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, nil))
 	settings.Transaction.MarkForCommit()
 }
 
