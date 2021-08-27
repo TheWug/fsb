@@ -5,6 +5,7 @@ import (
 	"botbehavior"
 	"api"
 	"api/tagindex"
+	"api/tags"
 	apitypes "api/types"
 	"apiextra"
 	"storage"
@@ -154,7 +155,7 @@ func (this *WizardRule) ParseFromString(line string) (error) {
 	return nil
 }
 
-func (this *WizardRule) PrereqsSatisfied(tags *api.TagSet) (bool) {
+func (this *WizardRule) PrereqsSatisfied(tags *tags.TagSet) (bool) {
 	for _, tag := range this.prereqs {
 		if _, ok := tags.Tags[tag]; !ok {
 			return false
@@ -185,7 +186,7 @@ func TagWizardMarkupHelper(tag string) (bool, bool, bool, string) {
 	return false, false, false, tag
 }
 
-func (this *WizardRule) DoImplicit(tags *api.TagSet) {
+func (this *WizardRule) DoImplicit(tags *tags.TagSet) {
 	for _, o := range this.options {
 		_, set, unset, tag := TagWizardMarkupHelper(o)
 		if set { tags.SetTag(tag) }
@@ -197,7 +198,7 @@ func strPtr(a string) (*string) {
 	return &a
 }
 
-func (this *WizardRule) GetButtons(tags *api.TagSet) ([]data.TInlineKeyboardButton) {
+func (this *WizardRule) GetButtons(tags *tags.TagSet) ([]data.TInlineKeyboardButton) {
 	var out []data.TInlineKeyboardButton
 	for _, o := range this.options {
 		hide, _, _, tag := TagWizardMarkupHelper(o)
@@ -239,7 +240,7 @@ func (this *WizardRuleset) AddRule(r *WizardRule) {
 
 type TagWizard struct {
 	ctx          *gogram.MessageCtx
-	tags         *api.TagSet
+	tags         *tags.TagSet
 	rules         WizardRuleset
 	current_rule *WizardRule
 	wizard_ctx   *gogram.MessageCtx
@@ -304,7 +305,7 @@ func (this *TagWizard) Abort() {
 }
 
 func (this *TagWizard) Reset() {
-	if this.tags == nil { this.tags = api.NewTagSet() }
+	if this.tags == nil { this.tags = tags.NewTagSet() }
 	if this.wizard_ctx != nil { this.wizard_ctx.DeleteAsync(nil) }
 	*this = TagWizard{tags: this.tags, rules: this.rules, ctx: this.ctx}
 	this.tags.Reset()
@@ -312,12 +313,12 @@ func (this *TagWizard) Reset() {
 }
 
 func (this *TagWizard) Len() (int) {
-	if this.tags == nil { this.tags = api.NewTagSet() }
+	if this.tags == nil { this.tags = tags.NewTagSet() }
 	return this.tags.Len()
 }
 
 func (this *TagWizard) Rating() (string) {
-	if this.tags == nil { this.tags = api.NewTagSet() }
+	if this.tags == nil { this.tags = tags.NewTagSet() }
 	return this.tags.Rating()
 }
 
@@ -410,7 +411,7 @@ func (this *TagWizard) DoOver() {
 }
 
 func NewTagWizard(ctx *gogram.MessageCtx) (*TagWizard) {
-	w := TagWizard{tags: api.NewTagSet(), rules:WizardRuleset{visitval: 1}, ctx: ctx}
+	w := TagWizard{tags: tags.NewTagSet(), rules:WizardRuleset{visitval: 1}, ctx: ctx}
 	return &w
 }
 

@@ -1,8 +1,7 @@
-package api
+package tags
 
 import (
 	"api/types"
-	"api/tags"
 
 	"bytes"
 	"strings"
@@ -25,7 +24,7 @@ func (this *TagSet) ApplyTag(t string) {
 		t = strings.ToLower(t[1:])
 		if strings.Contains(t, "*") { // if it's a negative wildcard
 			for k, _ := range this.Tags { // for every tag we have
-				if tags.WildcardMatch(t, k) { this.ClearTag(k) } // delete it if it matches the wildcard
+				if WildcardMatch(t, k) { this.ClearTag(k) } // delete it if it matches the wildcard
 			}
 		} else { this.ClearTag(t) } // if it's just a regular negative, delete it normally
 	} else {
