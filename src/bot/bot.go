@@ -1087,7 +1087,7 @@ func (this *EditState) HandleCallback(ctx *gogram.CallbackCtx) {
 			if p.Description != "" { description = &p.Description }
 			if p.Reason != "" { reason = &p.Reason }
 
-			update, err := api.UpdatePost(this.data.User, this.data.ApiKey, p.PostId, p.TagChanges, rating, parent, p.SourceChanges.APIArray(), description, reason)
+			update, err := api.UpdatePost(this.data.User, this.data.ApiKey, p.PostId, p.TagChanges, rating, parent, p.SourceChanges.Array(), description, reason)
 			if err != nil {
 				ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "An error occurred when editing the post! Try again later."}}, nil)
 				ctx.Bot.ErrorLog.Println("Error updating post: ", err.Error())

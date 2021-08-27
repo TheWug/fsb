@@ -1138,8 +1138,8 @@ func GetSuggestedPostEdits(posts []int, settings UpdaterSettings) (map[int]PostS
 
 		diff := populate(id, mode)
 
-		diff.RemoveTag(typo)
-		diff.AddTag(fixed)
+		diff.Remove(typo)
+		diff.Add(fixed)
 	}
 
 	query = "SELECT post_id, tag_cat_name, tag_1_name, tag_2_name, mode FROM cats_identified INNER JOIN tag_index ON tag_cat_name = tag_name INNER JOIN post_tags USING (tag_id) WHERE mode IN ($1, $2) AND post_id = ANY($3::int[])"
@@ -1156,9 +1156,9 @@ func GetSuggestedPostEdits(posts []int, settings UpdaterSettings) (map[int]PostS
 
 		diff := populate(id, mode)
 
-		diff.RemoveTag(cat)
-		diff.AddTag(first)
-		diff.AddTag(second)
+		diff.Remove(cat)
+		diff.Add(first)
+		diff.Add(second)
 	}
 
 	settings.Transaction.commit = mine

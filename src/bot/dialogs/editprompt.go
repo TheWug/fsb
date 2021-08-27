@@ -106,8 +106,8 @@ type EditPrompt struct {
 func (this *EditPrompt) ApplyReset(state string) {
 	switch state {
 	case WAIT_ALL:
-		this.TagChanges.Reset()
-		this.SourceChanges.Reset()
+		this.TagChanges.Clear()
+		this.SourceChanges.Clear()
 		this.SeenSources = nil
 		this.SeenSourcesReverse = nil
 		for s, _ := range this.OrigSources {
@@ -119,9 +119,9 @@ func (this *EditPrompt) ApplyReset(state string) {
 		this.Reason = ""
 		this.File = PostFile{}
 	case WAIT_TAGS:
-		this.TagChanges.Reset()
+		this.TagChanges.Clear()
 	case WAIT_SOURCE:
-		this.SourceChanges.Reset()
+		this.SourceChanges.Clear()
 		this.SeenSources = nil
 		this.SeenSourcesReverse = nil
 		for s, _ := range this.OrigSources {
@@ -154,26 +154,26 @@ func (this *EditPrompt) SourceStringLiteral(source string, pick bool) {
 
 	_, live := this.OrigSources[source]
 	if !live && pick {
-		this.SourceChanges.AddTag(source)
+		this.SourceChanges.Add(source)
 	} else if live && !pick {
-		this.SourceChanges.RemoveTag(source)
+		this.SourceChanges.Remove(source)
 	} else {
-		this.SourceChanges.ResetTag(source)
+		this.SourceChanges.Reset(source)
 	}
 }
 
 func (this *EditPrompt) SourceStringPrefixed(source string) {
 	if strings.HasPrefix(source, "-") {
-		this.SourceChanges.RemoveTag(source[1:])
+		this.SourceChanges.Remove(source[1:])
 	} else if strings.HasPrefix(source, "=") {
-		this.SourceChanges.ResetTag(source[1:])
+		this.SourceChanges.Reset(source[1:])
 	} else {
 		if strings.HasPrefix(source, "+") {
 			source = source[1:]
 		}
 
 		this.SeeSource(source)
-		this.SourceChanges.AddTag(source)
+		this.SourceChanges.Add(source)
 	}
 }
 
@@ -270,7 +270,7 @@ func (this *EditPrompt) PostStatus(b *bytes.Buffer) {
 	}
 	if !this.SourceChanges.IsZero() {
 		b.WriteString("Sources:\n<pre>  ")
-		b.WriteString(html.EscapeString(this.SourceChanges.APIStringWithDelimiter("\n")))
+		b.WriteString(html.EscapeString(this.SourceChanges.StringWithDelimiter("\n")))
 		b.WriteString("</pre>\n")
 		no_changes = false
 	}

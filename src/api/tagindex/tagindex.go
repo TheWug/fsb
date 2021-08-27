@@ -1273,8 +1273,8 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 
 			for _, post := range array {
 				d := diffs[post.Id]
-				d.AddTag(start_tag)
-				d.RemoveTag(v.Tag.Name)
+				d.Add(start_tag)
+				d.Remove(v.Tag.Name)
 				diffs[post.Id] = d
 			}
 		}
@@ -1723,9 +1723,9 @@ func Concatenations(ctx *gogram.MessageCtx) {
 		reason := fmt.Sprintf("Bulk retag: %s --> %s, %s (fixed concatenated tags)", cats[i].tag.Name, cats[i].subtag1.Name, cats[i].subtag2.Name)
 		for _, p := range posts {
 			var diff tags.TagDiff
-			diff.AddTag(cats[i].subtag1.Name)
-			diff.AddTag(cats[i].subtag2.Name)
-			diff.RemoveTag(cats[i].tag.Name)
+			diff.Add(cats[i].subtag1.Name)
+			diff.Add(cats[i].subtag2.Name)
+			diff.Remove(cats[i].tag.Name)
 			newp, err := api.UpdatePost(user, api_key, p.Id, diff, nil, nil, nil, nil, &reason)
 			err = nil
 			if err != nil {
