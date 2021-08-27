@@ -49,7 +49,7 @@ type PostPrompt struct {
 	dialog.TelegramDialogPost `json:"-"`
 
 	PostId int `json:"post_id"`
-	Prefix string `json:"prefix"`
+	Status string `json:"status"`
 	State string `json:"state"`
 
 	// stuff to generate the post info
@@ -75,7 +75,7 @@ func (this *PostPrompt) ID() data.DialogID {
 func (this *PostPrompt) ApplyReset(state string) {
 	if state == WAIT_TAGS || state == WAIT_ALL {
 		this.TagWizard.Reset()
-		this.Prefix = this.TagWizard.Prompt()
+		this.Status = this.TagWizard.Prompt()
 	}
 
 	if state == WAIT_SOURCE || state == WAIT_ALL {
@@ -142,7 +142,7 @@ func (this *PostPrompt) SeeSource(source string) {
 
 func (this *PostPrompt) ResetState() {
 	this.State = WAIT_MODE
-	this.Prefix = "What would you like to edit? Pick a button from below."
+	this.Status = "What would you like to edit? Pick a button from below."
 }
 
 func (this *PostPrompt) PostStatus(b *bytes.Buffer) {
@@ -367,7 +367,7 @@ func (this *PostPrompt) HandleCallback(ctx *gogram.CallbackCtx, settings storage
 		if len(ctx.Cmd.Args) != 1 { return }
 		this.ApplyReset(ctx.Cmd.Args[0])
 	case "/tags":
-		this.Prefix = this.TagWizard.Prompt()
+		this.Status = this.TagWizard.Prompt()
 		this.State = WAIT_TAGS
 	case "/sources":
 		if len(ctx.Cmd.Args) == 2 {
@@ -376,7 +376,7 @@ func (this *PostPrompt) HandleCallback(ctx *gogram.CallbackCtx, settings storage
 			if err != nil { return }
 			this.SourceButton(index, pick)
 		}
-		this.Prefix = "Post some sources, seperated by newlines. You can remove sources by prefixing them with a minus (-)."
+		this.Status = "Post some sources, seperated by newlines. You can remove sources by prefixing them with a minus (-)."
 		this.State = WAIT_SOURCE
 	case "/rating":
 		if len(ctx.Cmd.Args) == 1 {
@@ -386,10 +386,10 @@ func (this *PostPrompt) HandleCallback(ctx *gogram.CallbackCtx, settings storage
 				this.Rating = rating
 			}
 		}
-		this.Prefix = "Post the new rating."
+		this.Status = "Post the new rating."
 		this.State = WAIT_RATING
 	case "/description":
-		this.Prefix = `Post the new description. You can use <a href="https://" + api.Endpoint + "/help/dtext">dtext</a>.`
+		this.Status = `Post the new description. You can use <a href="https://" + api.Endpoint + "/help/dtext">dtext</a>.`
 		this.State = WAIT_DESC
 	case "/parent":
 		if len(ctx.Cmd.Args) == 1 {
@@ -398,22 +398,22 @@ func (this *PostPrompt) HandleCallback(ctx *gogram.CallbackCtx, settings storage
 				this.Parent = parent
 			}
 		}
-		this.Prefix = `Post the new parent.`
+		this.Status = `Post the new parent.`
 		this.State = WAIT_PARENT
 	case "/file":
-		this.Prefix = `Upload a file.`
+		this.Status = `Upload a file.`
 		this.State = WAIT_FILE
 	case "/save":
-		this.Prefix = ""
+		this.Status = ""
 		this.State = SAVED
 	case "/discard":
 		ctx.AnswerAsync(data.OCallback{Notification: "\U0001F534 Edit discarded."}, nil) // finalize dialog post and discard edit
-		this.Prefix = ""
+		this.Status = ""
 		this.State = DISCARDED
 		ctx.SetState(nil)
 	case wizard.CMD_NEXT, wizard.CMD_RESTART, wizard.CMD_DONE, wizard.CMD_TAGS:
 		this.TagWizard.ButtonPressed(ctx.Cb.Data)
-		this.Prefix = this.TagWizard.Prompt()
+		this.Status = this.TagWizard.Prompt()
 	default:
 	}
 }
@@ -421,17 +421,17 @@ func (this *PostPrompt) HandleCallback(ctx *gogram.CallbackCtx, settings storage
 func (this *PostPrompt) HandleFreeform(ctx *gogram.MessageCtx) {
 	if this.State == WAIT_TAGS {
 		this.TagWizard.MergeTagsFromString(ctx.Msg.PlainText())
-		this.Prefix = "Got it. Continue sending more tag changes, and pick a button from below when you're done."
+		this.Status = "Got it. Continue sending more tag changes, and pick a button from below when you're done."
 	} else if this.State == WAIT_SOURCE {
 		for _, source := range strings.Split(ctx.Msg.PlainText(), "\n") {
 			this.SourceStringPrefixed(source)
 		}
-		this.Prefix = "Got it. Continue sending more source changes, and pick a button from below when you're done."
+		this.Status = "Got it. Continue sending more source changes, and pick a button from below when you're done."
 	} else if this.State == WAIT_RATING {
-		rating, err := api.SanitizeRatingForEdit(ctx.Msg.PlainText())
+		rating, err := api.SanitizeRating(ctx.Msg.PlainText())
 
 		if err != nil {
-			this.Prefix = "Please enter a <i>valid</i> rating. (Pick from <code>explicit</code>, <code>questionable</code>, <code>safe</code>, or <code>original</code>.)"
+			this.Status = "Please enter a <i>valid</i> rating. (Pick from <code>explicit</code>, <code>questionable</code>, <code>safe</code>, or <code>original</code>.)"
 		} else {
 			this.Rating = rating
 			this.ResetState()
@@ -443,7 +443,7 @@ func (this *PostPrompt) HandleFreeform(ctx *gogram.MessageCtx) {
 		parent := apiextra.GetParentPostFromText(ctx.Msg.PlainText())
 
 		if parent == apiextra.NONEXISTENT_PARENT {
-			this.Prefix = "Please enter a <i>valid</i> parent post. (You can either send a link to an " + api.ApiName + " post, a bare numeric ID, 'none' for no parent, or 'original' to not attempt to update the parent at all.)"
+			this.Status = "Please enter a <i>valid</i> parent post. (You can either send a link to an " + api.ApiName + " post, a bare numeric ID, 'none' for no parent, or 'original' to not attempt to update the parent at all.)"
 		} else {
 			this.Parent = parent
 			this.ResetState()
@@ -473,7 +473,7 @@ func (this *PostPrompt) HandleFreeform(ctx *gogram.MessageCtx) {
 		if done {
 			this.ResetState()
 		} else {
-			this.Prefix = "Please send a new file. You can upload a new one, reply to or forward an existing one, or send a URL to upload from. (Only certain whitelisted domains can be used for URL uploads, see <a href=\"https://" + api.Endpoint + "/upload_whitelists\">" + api.ApiName + "'s upload whitelist</a>.)"
+			this.Status = "Please send a new file. You can upload a new one, reply to or forward an existing one, or send a URL to upload from. (Only certain whitelisted domains can be used for URL uploads, see <a href=\"https://" + api.Endpoint + "/upload_whitelists\">" + api.ApiName + "'s upload whitelist</a>.)"
 		}
 	} else {
 		return
