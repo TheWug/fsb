@@ -1083,7 +1083,8 @@ func (this *EditState) HandleCallback(ctx *gogram.CallbackCtx) {
 		p.Prefix = `Upload a file.`
 		p.State = dialogs.WAIT_FILE
 	case "/save":
-		ctx.Answer(data.OCallback{Notification: "\U0001F7E2 Edit submitted."})
+		ctx.AnswerAsync(data.OCallback{Notification: "\U0001F7E2 Edit submitted."}, nil)
+		p.CommitEdit(this.data.User, this.data.ApiKey, gogram.NewMessageCtx(ctx.Cb.Message, false, ctx.Bot), settings)
 		ctx.SetState(nil)
 		settings.Transaction.MarkForCommit()
 		return
