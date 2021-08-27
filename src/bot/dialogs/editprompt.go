@@ -3,6 +3,7 @@ package dialogs
 import (
 	"storage"
 
+	"api"
 	"api/tags"
 
 	"github.com/thewug/gogram"
@@ -406,6 +407,37 @@ func (this *EditPrompt) GenerateMarkup() interface{} {
 	}
 	kb.Buttons = append(extra_buttons, kb.Buttons...)
 	return kb
+}
+
+func (this *EditPrompt) CommitEdit(user, api_key string, ctx *gogram.MessageCtx, settings storage.UpdaterSettings) {
+	this.Prefix = ""
+	this.State = SAVED
+	this.Finalize(settings, ctx.Bot, ctx)
+	if !this.IsNoop() {
+		var rating *string
+		var parent *int
+		var description *string
+		var reason *string
+
+		if this.Rating != "" { rating = &this.Rating }
+		if this.Parent != 0 { parent = &this.Parent }
+		if this.Description != "" { description = &this.Description }
+		if this.Reason != "" { reason = &this.Reason }
+
+		update, err := api.UpdatePost(user, api_key, this.PostId, this.TagChanges, rating, parent, this.SourceChanges.Array(), description, reason)
+		if err != nil {
+			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "An error occurred when editing the post! Try again later."}}, nil)
+			ctx.Bot.ErrorLog.Println("Error updating post: ", err.Error())
+			return
+		}
+
+		if update != nil {
+			err = storage.UpdatePost(*update, settings)
+			if err != nil {
+				ctx.Bot.ErrorLog.Println("Error updating internal post: ", err.Error())
+			}
+		}
+	}
 }
 
 func EditPromptID() data.DialogID {

@@ -1083,36 +1083,7 @@ func (this *EditState) HandleCallback(ctx *gogram.CallbackCtx) {
 		p.Prefix = `Upload a file.`
 		p.State = dialogs.WAIT_FILE
 	case "/save":
-		p.Prefix = ""
-		p.State = dialogs.SAVED
-		p.Finalize(settings, ctx.Bot, nil)
 		ctx.Answer(data.OCallback{Notification: "\U0001F7E2 Edit submitted."})
-		if !p.IsNoop() {
-			var rating *string
-			var parent *int
-			var description *string
-			var reason *string
-
-			if p.Rating != "" { rating = &p.Rating }
-			if p.Parent != 0 { parent = &p.Parent }
-			if p.Description != "" { description = &p.Description }
-			if p.Reason != "" { reason = &p.Reason }
-
-			update, err := api.UpdatePost(this.data.User, this.data.ApiKey, p.PostId, p.TagChanges, rating, parent, p.SourceChanges.Array(), description, reason)
-			if err != nil {
-				ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "An error occurred when editing the post! Try again later."}}, nil)
-				ctx.Bot.ErrorLog.Println("Error updating post: ", err.Error())
-				return
-			}
-
-			if update != nil {
-				err = storage.UpdatePost(*update, settings)
-				if err != nil {
-					ctx.Bot.ErrorLog.Println("Error updating internal post: ", err.Error())
-					return
-				}
-			}
-		}
 		ctx.SetState(nil)
 		settings.Transaction.MarkForCommit()
 		return
@@ -1348,35 +1319,7 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 	}
 
 	if savenow {
-		e.Prefix = ""
-		e.State = dialogs.SAVED
-		e.Finalize(storage.UpdaterSettings{}, ctx.Bot, ctx)
-		if !e.IsNoop() {
-			var rating *string
-			var parent *int
-			var description *string
-			var reason *string
-
-			if e.Rating != "" { rating = &e.Rating }
-			if e.Parent != 0 { parent = &e.Parent }
-			if e.Description != "" { description = &e.Description }
-			if e.Reason != "" { reason = &e.Reason }
-
-			update, err := api.UpdatePost(user, api_key, e.PostId, e.TagChanges, rating, parent, e.SourceChanges.Array(), description, reason)
-			if err != nil {
-				ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "An error occurred when editing the post! Try again later."}}, nil)
-				ctx.Bot.ErrorLog.Println("Error updating post: ", err.Error())
-				return
-			}
-
-			if update != nil {
-				err = storage.UpdatePost(*update, storage.UpdaterSettings{})
-				if err != nil {
-					ctx.Bot.ErrorLog.Println("Error updating internal post: ", err.Error())
-					return
-				}
-			}
-		}
+		e.CommitEdit(user, api_key, ctx, storage.UpdaterSettings{})
 	} else {
 		e.ResetState()
 		prompt := e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx)
