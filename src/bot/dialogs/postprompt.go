@@ -227,7 +227,7 @@ func (this *PostPrompt) CommitPost(user, api_key string, ctx *gogram.MessageCtx,
 		}
 	}
 
-	status, err := api.UploadFile(post_filedata, post_url, this.Tags.String(), this.Rating, this.Sources.StringWithDelimiter("\n"), this.Description, parent, user, api_key)
+	status, err := api.UploadFile(post_filedata, post_url, this.Tags, this.Rating, this.Sources.StringWithDelimiter("\n"), this.Description, parent, user, api_key)
 	if err != nil {
 		ctx.Bot.ErrorLog.Println("Error updating post: ", err.Error())
 		return nil, errors.New("An error occurred when editing the post! Double check your info, or try again later.")

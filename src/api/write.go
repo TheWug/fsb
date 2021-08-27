@@ -24,7 +24,7 @@ type UploadCallResult struct {
 	Status     string
 }
 
-func UploadFile(file_data io.Reader, upload_url, tags, rating, source, description string, parent *int, user, apitoken string) (*UploadCallResult, error) {
+func UploadFile(file_data io.Reader, upload_url string, tags tags.TagSet, rating, source, description string, parent *int, user, apitoken string) (*UploadCallResult, error) {
 	url := "/uploads.json"
 
 	out := UploadCallResult{}
@@ -34,7 +34,7 @@ func UploadFile(file_data io.Reader, upload_url, tags, rating, source, descripti
 			BasicAuthentication(user, apitoken).
 			FormArg("upload[source]", source).
 			FormArg("upload[description]", description).
-			FormArg("upload[tag_string]", tags).
+			FormArg("upload[tag_string]", tags.String()).
 			FormArg("upload[rating]", rating).
 			JSONInto(&out).
 			Multipart()
