@@ -738,24 +738,22 @@ func (this *AutofixState) HandleCallback(ctx *gogram.CallbackCtx) {
 			if diff.IsZero() {
 				ctx.AnswerAsync(data.OCallback{Notification: "\u2139 No changes to apply."}, nil)
 				this.Behavior.DismissPromptPost(ctx.Bot, post_info, diff, settings)
-				return
-			}
+			} else {
+				reason := "Manual tag cleanup: typos and concatenations (via KnottyBot)"
+				post, err := api.UpdatePost(user, api_key, post_info.PostId, diff, nil, nil, nil, nil, &reason)
+				if err != nil {
+					ctx.AnswerAsync(data.OCallback{Notification: "\u26A0 An error occurred when trying to update the post! Try again later."}, nil)
+					return
+				}
 
-			reason := "Manual tag cleanup: typos and concatenations (via KnottyBot)"
-			post, err := api.UpdatePost(user, api_key, post_info.PostId, diff, nil, nil, nil, nil, &reason)
-			if err != nil {
-				ctx.AnswerAsync(data.OCallback{Notification: "\u26A0 An error occurred when trying to update the post! Try again later."}, nil)
-				return
-			}
+				post_info.Edit.Apply()
+				this.Behavior.DismissPromptPost(ctx.Bot, post_info, diff, settings)
+				ctx.AnswerAsync(data.OCallback{Notification: "\U0001F539 Changes saved."}, nil)
 
-			post_info.Edit.Apply()
-			this.Behavior.DismissPromptPost(ctx.Bot, post_info, diff, settings)
-			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F539 Changes saved."}, nil)
-
-			if post != nil {
-				err = storage.UpdatePost(apitypes.TPostInfo{Id: post_info.PostId}, *post, settings)
-				if err != nil { ctx.Bot.ErrorLog.Println("Failed to locally update post:", err.Error()) }
-				return
+				if post != nil {
+					err = storage.UpdatePost(apitypes.TPostInfo{Id: post_info.PostId}, *post, settings)
+					if err != nil { ctx.Bot.ErrorLog.Println("Failed to locally update post:", err.Error()) }
+				}
 			}
 		} else if ctx.Cmd.Command == "/af-dismiss" {
 			err = this.Behavior.DismissPromptPost(ctx.Bot, post_info, apitypes.TagDiff{}, settings)
