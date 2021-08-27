@@ -107,7 +107,7 @@ type EditPrompt struct {
 	dialog.TelegramDialogPost `json:"-"`
 
 	PostId int `json:"post_id"`
-	Prefix string `json:"prefix"`
+	Status string `json:"status"`
 	State string `json:"state"`
 
 	// stuff to generate the post info
@@ -258,7 +258,7 @@ func (this *EditPrompt) Finalize(settings storage.UpdaterSettings, bot *gogram.T
 
 func (this *EditPrompt) ResetState() {
 	this.State = WAIT_MODE
-	this.Prefix = "What would you like to edit? Pick a button from below."
+	this.Status = "What would you like to edit? Pick a button from below."
 }
 
 func (this *EditPrompt) IsNoop() bool {
@@ -489,7 +489,7 @@ func (this *EditPrompt) HandleCallback(ctx *gogram.CallbackCtx, settings storage
 		if len(ctx.Cmd.Args) != 1 { return }
 		this.ApplyReset(ctx.Cmd.Args[0])
 	case "/tags":
-		this.Prefix = "Enter a list of tag changes, seperated by spaces. You can clear tags by prefixing them with a minus (-) and reset them by prefixing with an equals (=)."
+		this.Status = "Enter a list of tag changes, seperated by spaces. You can clear tags by prefixing them with a minus (-) and reset them by prefixing with an equals (=)."
 		this.State = WAIT_TAGS
 	case "/sources":
 		if len(ctx.Cmd.Args) == 2 {
@@ -498,7 +498,7 @@ func (this *EditPrompt) HandleCallback(ctx *gogram.CallbackCtx, settings storage
 			if err != nil { return }
 			this.SourceButton(index, pick)
 		}
-		this.Prefix = "Post some source changes, seperated by newlines. You can remove sources by prefixing them with a minus (-)."
+		this.Status = "Post some source changes, seperated by newlines. You can remove sources by prefixing them with a minus (-)."
 		this.State = WAIT_SOURCE
 	case "/rating":
 		if len(ctx.Cmd.Args) == 1 {
@@ -508,10 +508,10 @@ func (this *EditPrompt) HandleCallback(ctx *gogram.CallbackCtx, settings storage
 				this.Rating = rating
 			}
 		}
-		this.Prefix = "Post the new rating."
+		this.Status = "Post the new rating."
 		this.State = WAIT_RATING
 	case "/description":
-		this.Prefix = `Post the new description. You can use <a href="https://" + api.Endpoint + "/help/dtext">dtext</a>.`
+		this.Status = `Post the new description. You can use <a href="https://" + api.Endpoint + "/help/dtext">dtext</a>.`
 		this.State = WAIT_DESC
 	case "/parent":
 		if len(ctx.Cmd.Args) == 1 {
@@ -520,20 +520,20 @@ func (this *EditPrompt) HandleCallback(ctx *gogram.CallbackCtx, settings storage
 				this.Parent = parent
 			}
 		}
-		this.Prefix = `Post the new parent.`
+		this.Status = `Post the new parent.`
 		this.State = WAIT_PARENT
 	case "/reason":
-		this.Prefix = "Why are you editing this post? Post an edit reason, 250 characters max."
+		this.Status = "Why are you editing this post? Post an edit reason, 250 characters max."
 		this.State = WAIT_REASON
 	case "/file":
-		this.Prefix = `Upload a file.`
+		this.Status = `Upload a file.`
 		this.State = WAIT_FILE
 	case "/save":
-		this.Prefix = ""
+		this.Status = ""
 		this.State = SAVED
 	case "/discard":
 		ctx.AnswerAsync(data.OCallback{Notification: "\U0001F534 Edit discarded."}, nil) // finalize dialog post and discard edit
-		this.Prefix = ""
+		this.Status = ""
 		this.State = DISCARDED
 		ctx.SetState(nil)
 	default:
@@ -543,17 +543,17 @@ func (this *EditPrompt) HandleCallback(ctx *gogram.CallbackCtx, settings storage
 func (this *EditPrompt) HandleFreeform(ctx *gogram.MessageCtx) {
 	if this.State == WAIT_TAGS {
 		this.TagChanges.ApplyString(ctx.Msg.PlainText())
-		this.Prefix = "Got it. Continue sending more tag changes, and pick a button from below when you're done."
+		this.Status = "Got it. Continue sending more tag changes, and pick a button from below when you're done."
 	} else if this.State == WAIT_SOURCE {
 		for _, source := range strings.Split(ctx.Msg.PlainText(), "\n") {
 			this.SourceStringPrefixed(source)
 		}
-		this.Prefix = "Got it. Continue sending more source changes, and pick a button from below when you're done."
+		this.Status = "Got it. Continue sending more source changes, and pick a button from below when you're done."
 	} else if this.State == WAIT_RATING {
 		rating, err := api.SanitizeRatingForEdit(ctx.Msg.PlainText())
 
 		if err != nil {
-			this.Prefix = "Please enter a <i>valid</i> rating. (Pick from <code>explicit</code>, <code>questionable</code>, <code>safe</code>, or <code>original</code>.)"
+			this.Status = "Please enter a <i>valid</i> rating. (Pick from <code>explicit</code>, <code>questionable</code>, <code>safe</code>, or <code>original</code>.)"
 		} else {
 			this.Rating = rating
 			this.ResetState()
@@ -565,7 +565,7 @@ func (this *EditPrompt) HandleFreeform(ctx *gogram.MessageCtx) {
 		parent := apiextra.GetParentPostFromText(ctx.Msg.PlainText())
 
 		if parent == apiextra.NONEXISTENT_PARENT {
-			this.Prefix = "Please enter a <i>valid</i> parent post. (You can either send a link to an " + api.ApiName + " post, a bare numeric ID, 'none' for no parent, or 'original' to not attempt to update the parent at all.)"
+			this.Status = "Please enter a <i>valid</i> parent post. (You can either send a link to an " + api.ApiName + " post, a bare numeric ID, 'none' for no parent, or 'original' to not attempt to update the parent at all.)"
 		} else {
 			this.Parent = parent
 			this.ResetState()
@@ -598,7 +598,7 @@ func (this *EditPrompt) HandleFreeform(ctx *gogram.MessageCtx) {
 		if done {
 			this.ResetState()
 		} else {
-			this.Prefix = "Please send a new file. You can upload a new one, reply to or forward an existing one, or send a URL to upload from. (Only certain whitelisted domains can be used for URL uploads, see <a href=\"https://" + api.Endpoint + "/upload_whitelists\">" + api.ApiName + "'s upload whitelist</a>.)"
+			this.Status = "Please send a new file. You can upload a new one, reply to or forward an existing one, or send a URL to upload from. (Only certain whitelisted domains can be used for URL uploads, see <a href=\"https://" + api.Endpoint + "/upload_whitelists\">" + api.ApiName + "'s upload whitelist</a>.)"
 		}
 	} else {
 		return

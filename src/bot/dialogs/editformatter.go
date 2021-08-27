@@ -103,7 +103,7 @@ func (this EditFormatter) GenerateMessage(prompt *EditPrompt) string {
 		b.WriteString(GetNameOfState(prompt.State))
 		b.WriteString("</code>\n\n")
 
-		prompt_string := strings.TrimSpace(prompt.Prefix)
+		prompt_string := strings.TrimSpace(prompt.Status)
 		b.WriteString(prompt_string)
 		if len(prompt_string) > 0 {
 			b.WriteString("\n\n")
