@@ -91,7 +91,6 @@ func main() {
 	machine.AddCommand("/recounttags", &janitor)
 	machine.AddCommand("/syncposts", &janitor)
 	machine.AddCommand("/resynclist", &janitor)
-	machine.AddCommand("/editposttest", &janitor)
 	machine.AddCommand("/parseexpression", &janitor)
 	machine.AddCommand("/upvote", &votes)
 	machine.AddCommand("/downvote", &votes)
