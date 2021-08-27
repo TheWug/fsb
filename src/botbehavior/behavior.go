@@ -411,13 +411,41 @@ func (this *Behavior) ClearPromptPostsOlderThan(bot *gogram.TelegramBot, time_ag
 	return nil
 }
 
+type QuerySettings struct {
+	debugmode      bool
+	resultsperpage int
+}
+
 // inline query, do tag search.
 func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
-	debugmode := strings.Contains(ctx.Query.Query, "special:debugoutput") && (ctx.Query.From.Id == this.MySettings.Owner)
-	ctx.Query.Query = strings.Replace(ctx.Query.Query, "special:debugoutput", "", -1)
+	var q QuerySettings
+	q.resultsperpage = this.MySettings.ResultsPerPage
+
+	var new_query []string
+	for _, tok := range(strings.Split(ctx.Query.Query, " ")) {
+		// tokens which have the fsbdebug: prefix, or which are blank, are stripped from the query
+		if strings.HasPrefix(strings.ToLower(tok), "fsbdebug:") {
+			ctx.Bot.Log.Println(tok)
+			tok = tok[len("fsbdebug:"):] // blindly chop prefix off, since it's case insensitive
+			if strings.ToLower(tok) == "postdetails" {
+				q.debugmode = (ctx.Query.From.Id == this.MySettings.Owner)
+			} else if strings.HasPrefix(strings.ToLower(tok), "override:") {
+				tok = tok[len("override:"):] // blindly chop prefix off, since it's case insensitive
+				toks := strings.SplitN(tok, ":", 2)
+				for len(toks) < 2 { toks = append(toks, "") }
+				if strings.ToLower(toks[0]) == "resultsperpage" {
+					if n, e := strconv.Atoi(toks[1]); e == nil && ctx.Query.From.Id == this.MySettings.Owner { q.resultsperpage = n }
+				}
+			}
+		} else if strings.TrimSpace(tok) == "" {
+		} else {
+			new_query = append(new_query, tok)
+		}
+	}
+	ctx.Query.Query = strings.Join(new_query, " ")
 
 	var debugstr string
-	if debugmode { debugstr = ", DEBUG" }
+	if q.debugmode { debugstr = ", DEBUG" }
 	ctx.Bot.Log.Printf("[behavior] Received inline query (from %d %s%s): %s", ctx.Query.From.Id, ctx.Query.From.UsernameString(), debugstr, ctx.Query.Query)
 
 	user, apikey, _, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Query.From.Id)
@@ -429,18 +457,18 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 
 	offset, err := proxify.Offset(ctx.Query.Offset)
 	if err == nil {
-		search_results, err := api.TagSearch(user, apikey, ctx.Query.Query, offset + 1, this.MySettings.ResultsPerPage)
+		search_results, err := api.TagSearch(user, apikey, ctx.Query.Query, offset + 1, q.resultsperpage)
 		errorlog.ErrorLog(ctx.Bot.ErrorLog, "api", "api.TagSearch", err)
-		iqa = this.ApiResultsToInlineResponse(ctx.Query.Query, search_results, offset, err, debugmode)
+		iqa = this.ApiResultsToInlineResponse(ctx.Query.Query, search_results, offset, err, q)
 	} else {
 		errorlog.ErrorLog(ctx.Bot.ErrorLog, "proxify", "proxify.Offset", errors.New(fmt.Sprintf("Bad Offset: %s (%s)", ctx.Query.Offset, err.Error())))
-		iqa = this.ApiResultsToInlineResponse(ctx.Query.Query, nil, 0, err, debugmode)
+		iqa = this.ApiResultsToInlineResponse(ctx.Query.Query, nil, 0, err, q)
 	}
 
 	ctx.AnswerAsync(iqa, nil)
 }
 
-func (this *Behavior) ApiResultsToInlineResponse(query string, search_results apitypes.TPostInfoArray, current_offset int, err error, debugmode bool) data.OInlineQueryAnswer {
+func (this *Behavior) ApiResultsToInlineResponse(query string, search_results apitypes.TPostInfoArray, current_offset int, err error, q QuerySettings) data.OInlineQueryAnswer {
 	iqa := data.OInlineQueryAnswer{CacheTime: 30}
 	if err != nil {
 		if placeholder := this.GetErrorPlaceholder(); placeholder != nil {
@@ -450,12 +478,12 @@ func (this *Behavior) ApiResultsToInlineResponse(query string, search_results ap
 		if placeholder := this.GetNoResultsPlaceholder(query); placeholder != nil {
 			iqa.Results = append(iqa.Results, placeholder)
 		}
-	} else if len(search_results) == this.MySettings.ResultsPerPage {
+	} else if len(search_results) == q.resultsperpage {
 		iqa.NextOffset = strconv.FormatInt(int64(current_offset + 1), 10)
 	}
 
 	for _, r := range search_results {
-		new_result := proxify.ConvertApiResultToTelegramInline(r, proxify.ContainsSafeRatingTag(query), query, debugmode, this.MySettings.CaptionSettings)
+		new_result := proxify.ConvertApiResultToTelegramInline(r, proxify.ContainsSafeRatingTag(query), query, q.debugmode, this.MySettings.CaptionSettings)
 
 		if (new_result != nil) {
 			iqa.Results = append(iqa.Results, new_result)
