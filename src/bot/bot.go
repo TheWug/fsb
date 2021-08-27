@@ -604,12 +604,24 @@ post. <code>/upload          -</code> upload the file and finish!
 edit.
 edit. Edit Command
 edit. Editing a post on ` + api.ApiName + ` requires gathering some information. This command pulls everything together, then does an update. You must connect to your ` + api.ApiName + ` account to use this.
-edit. <code>/edit (reply to message with ` + api.ApiName + ` post URL)</code>
-edit. <code>/edit [file ID]</code>
-edit. <code>/edit [` + api.ApiName + ` post URL]</code>
+edit. <code>/edit [OPTIONS] (reply to message with ` + api.ApiName + ` post URL)</code>
+edit. <code>/edit [FILE ID] [OPTIONS] </code>
+edit. <code>/edit [` + api.ApiName + ` URL] [OPTIONS]</code>
 edit.
-edit. The following subcommand exists:
-edit. <code>/cancel -</code> cancel this edit.
+edit. OPTIONS can be any of the following:
+edit. <code>--tags [T]    -</code> space delimited list of tags
+edit. <code>--sources     -</code> newline delimited list of sources
+edit. <code>--rating      -</code> one of safe, questionable, explicit
+edit. <code>--description -</code> post description (<a href="https://` + api.Endpoint + `/help/dtext">dtext help</a>)
+edit. <code>--parent      -</code> parent post id, or "none"
+edit. <code>--reason      -</code> edit reason, shown in edit history
+edit. <code>--file        -</code> replace post from file
+edit. <code>--url         -</code> replace post from url
+edit. <code>--commit      -</code> save changes immediately
+edit.
+edit. Replacing posts is not yet supported. although the options are present.
+edit.
+edit. To cancel an edit in process, you can use <code>/cancel</code>, or the discard button.
 edit.
 edit. Use the buttons on the edit wizard to configure the edit you wish to make. The default for every option is "leave it the way it was".
 edit. Notes: tags support three prefixes. <code>+</code> (implied if no prefix is present) adds a tag, <code>-</code> removes it, and <code>=</code> resets to "no change". Sources also operate as a diff, supporting the + and - prefixes.
