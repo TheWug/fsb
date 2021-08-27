@@ -43,12 +43,24 @@ func Init(s settings) error {
 	return nil
 }
 
-func SanitizeRating(input string) (string) {
+// filters rating tags into valid rating letters.
+// "clean" is not a valid rating, but for convenience, it is treated as identical to "safe".
+func SanitizeRating(input string) (string, error) {
 	input = strings.Replace(strings.ToLower(input), "rating:", "", -1)
-	if input == "explicit" || input == "e" { return "e" }
-	if input == "questionable" || input == "q" { return "q" }
-	if input == "safe" || input == "s" { return "s" }
-	return ""
+	if input == "explicit" || input == "e" { return "e", nil }
+	if input == "questionable" || input == "q" { return "q", nil }
+	if input == "clean" || input == "c" || input == "safe" || input == "s" { return "s", nil }
+	return "", errors.New("Invalid rating")
+}
+
+// filters ratings into valid rating letters, and the zero value to revert a change.
+func SanitizeRatingForEdit(input string) (string, error) {
+	input = strings.Replace(strings.ToLower(input), "rating:", "", -1)
+	if input == "explicit" || input == "e" { return "e", nil }
+	if input == "questionable" || input == "q" { return "q", nil }
+	if input == "clean" || input == "c" || input == "safe" || input == "s" { return "s", nil }
+	if input == "original" || input == "o" { return "", nil }
+	return "", errors.New("Invalid rating")
 }
 
 func APILog(url, user string, length int, response *http.Response, err error) {

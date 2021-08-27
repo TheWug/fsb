@@ -1269,10 +1269,11 @@ func (this *PostState) HandleCmd(cmd *gogram.CommandData,
 			this.postmode = postnext
 		}
 	} else if this.postmode == postrating {
-		this.postrating = api.SanitizeRating(cmd.Argstr)
+		var err error
+		this.postrating, err = api.SanitizeRating(cmd.Argstr)
 		if cmd.Argstr == "" {
 			this.postmode = postnext
-		} else if this.postrating == "" {
+		} else if err != nil {
 			response.Text = "Sorry, that isn't a valid rating.\n\nPlease enter the post's rating! Safe, Questionable, or Explicit?"
 		} else {
 			response.Text = fmt.Sprintf("Set rating to %s.\n\n", this.postrating)
