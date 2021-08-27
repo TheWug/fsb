@@ -65,10 +65,10 @@ func ShowHelp(topic string) (string) {
 	// against the first token in the line, as a sort of poor man's help topic selector.
 	// the 
 	help :=
-`.public.example.wizard.post.advanced.faq.login.contact. Hello! I'm the <b>` + api.ApiName + ` Telegram Bot</b>!
-.public.example.wizard.post.advanced.faq.login.contact.
-.public.example.wizard.post.advanced.faq.login.contact.  Content on ` + api.ApiName + ` may be unsuitable for kids.
-.public.example.wizard.post.advanced.faq.login.contact.  <b>You must be 18 or older to use this bot.</b>
+`.public.example.wizard.post.edit.advanced.faq.login.contact. Hello! I'm the <b>` + api.ApiName + ` Telegram Bot</b>!
+.public.example.wizard.post.edit.advanced.faq.login.contact. 
+.public.example.wizard.post.edit.advanced.faq.login.contact.  Content on ` + api.ApiName + ` may be unsuitable for kids.
+.public.example.wizard.post.edit.advanced.faq.login.contact.  <b>You must be 18 or older to use this bot.</b>
 .public. 
 .public. This bot's commands and help messages should be used via PM.
 .advanced. 
@@ -76,8 +76,10 @@ func ShowHelp(topic string) (string) {
 .advanced. I work like @gif! Simply type my name, followed by search terms.
 .advanced. <code>@fsb frosted_butts</code>
 .advanced. All tags which are supported on the site work here!
+.advanced. 
+.advanced. Posts via me will have upvote, downvote, and favorite buttons. Connect your ` + api.ApiName + ` account to be able to vote on and favorite posts, without ever leaving telegram.
 login.advanced.janitor. 
-login.advanced.janitor. <b>Using Your Account</b>
+login.advanced.janitor. <b>Using Your ` + api.ApiName + ` Account</b>
 login.advanced.janitor. Some of my features require you to connect your ` + api.ApiName + ` account.
 login.advanced.janitor. <code>/login [user] [apikey] -</code> connect to your ` + api.ApiName + ` account.
 login.advanced.janitor. <code>/logout                -</code> disconnect your account.
@@ -85,7 +87,14 @@ login.advanced.janitor. <code>/logout                -</code> disconnect your ac
 .advanced. <b>Posting</b>
 .advanced. Upload or edit posts. You must connect your ` + api.ApiName + ` account.
 .advanced. <code>/post        ... -</code> posts a new file.
+.advanced. <code>/edit        ... -</code> edits an existing post.
 .advanced. <code>/settagrules ... -</code> updates your tag rules.
+.advanced. 
+.advanced. <b>Voting</b>
+.advanced. Upvote, downvote, and favorite. You must connect your ` + api.ApiName + ` account.  Reply to any message containing an ` + api.ApiName + ` URL, or specify a URL or post ID in the command.
+.advanced. <code>/upvote      ... -</code> vote a post up.
+.advanced. <code>/downvote    ... -</code> vote a post down.
+.advanced. <code>/favorite    ... -</code> favorite a post.
 janitor. 
 janitor. <b>Janitor Commands</b>
 janitor. For a full description of any command, use <code>/help [command]</code>.
@@ -161,71 +170,90 @@ resyncdeleted. <s>This command is disabled.</s> You should not need to use it. I
 janitor.resynclist. <code>/resynclist</code>
 resynclist. Use this command captioned on an uploaded file, containing whitespace delimited post ids (and comments beginning with #). The bot will perform a local DB sync on each post listed in the file.
 post. 
-post. Post Command
+post. <b>Post Command</b>
 post. Posting a file to ` + api.ApiName + ` requires gathering some information. This command pulls everything together, and then does an upload. You must connect to your ` + api.ApiName + ` account to use this.
-post. <code>/post</code>
-post. <code>/post (reply to file)</code>
-post. <code>/post (file caption)</code> 
-post. <code>/post [url]</code>
-post. 
-post. The following subcommands exist:
-post. <code>/cancel          -</code> cancel this post.
-post. <code>/file, /f        -</code> set the post file.
-post. <code>/tag, /t         -</code> set the post tags.
-post. <code>/wizard, /w      -</code> use the tagging wizard.
-post. <code>/rating, /r      -</code> set the post rating.
-post. <code>/source, /s      -</code> set the source.
-post. <code>/description, /d -</code> set the description.
-post. <code>/parent, /p      -</code> set the parent post.
-post. <code>/reset           -</code> reset everything and start over.
-post. <code>/preview         -</code> show all of the collected info.
-post. <code>/upload          -</code> upload the file and finish!
-edit.
-edit. Edit Command
+post. <code>/post [OPTIONS]</code>
+post. <code>/post (reply to file) [OPTIONS]</code>
+post. <code>/post (file caption) [OPTIONS]</code> 
+post. To upload a file for the post, reply to it, or use the command in the caption as you upload it.
+edit. 
+edit. <b>Edit Command</b>
 edit. Editing a post on ` + api.ApiName + ` requires gathering some information. This command pulls everything together, then does an update. You must connect to your ` + api.ApiName + ` account to use this.
 edit. <code>/edit [OPTIONS] (reply to message with ` + api.ApiName + ` post URL)</code>
-edit. <code>/edit [FILE ID] [OPTIONS] </code>
-edit. <code>/edit [` + api.ApiName + ` URL] [OPTIONS]</code>
+edit. <code>/edit ID-OR-MD5 [OPTIONS] </code>
+edit. <code>/edit SITE-URL  [OPTIONS]</code>
 edit.
-edit. OPTIONS can be any of the following:
-edit. <code>--tags [T]    -</code> space delimited list of tags
-edit. <code>--sources     -</code> newline delimited list of sources
-edit. <code>--rating      -</code> one of safe, questionable, explicit
-edit. <code>--description -</code> post description (<a href="https://` + api.Endpoint + `/help/dtext">dtext help</a>)
-edit. <code>--parent      -</code> parent post id, or "none"
-edit. <code>--reason      -</code> edit reason, shown in edit history
-edit. <code>--file        -</code> replace post from file
-edit. <code>--url         -</code> replace post from url
-edit. <code>--commit      -</code> save changes immediately
-edit.
-edit. Replacing posts is not yet supported. although the options are present.
-edit.
-edit. To cancel an edit in process, you can use <code>/cancel</code>, or the discard button.
-edit.
-edit. Use the buttons on the edit wizard to configure the edit you wish to make. The default for every option is "leave it the way it was".
-edit. Notes: tags support three prefixes. <code>+</code> (implied if no prefix is present) adds a tag, <code>-</code> removes it, and <code>=</code> resets to "no change". Sources also operate as a diff, supporting the + and - prefixes.
+edit. You must, somehow, specify the post you want to edit. The command will fail if you don't.
+post.edit.
+post.edit. OPTIONS can be any of the following:
+post.edit. <code>--tags        T -</code> space delimited list of tags
+post.edit. <code>--sources     S -</code> newline delimited list of sources
+post.edit. <code>--rating      R -</code> one of safe, questionable, explicit
+post.edit. <code>--description D -</code> post description (<a href="https://` + api.Endpoint + `/help/dtext">dtext help</a>)
+post.edit. <code>--parent      P -</code> parent post id, or "none"
+edit. <code>--reason      R -</code> edit reason, shown in edit history
+post. <code>--url         U -</code> replace post from url
+post.edit. <code>--commit        -</code> save changes immediately
+post.edit.
+post. I will respond with a button interface that lets you configure your upload, with the following buttons:
+edit. I will respond with a button interface that lets you configure your edit, with the following buttons:
+post.edit. <code>Tags   </code> See <code>/help wizard</code> for more info.
+post.edit. <code>Rating </code> Use the buttons to choose the rating.
+post.edit. <code>Parent </code> Send a post ID, MD5 hash, URL, or "none".
+post. <code>File   </code> Upload a file, or send a URL.
+post.edit. <code>Sources</code> Send sources, each on its own line.
+post.edit. <code>Description</code> Send a description, including dtext.
+edit. <code>Reason </code> Send your plain text edit reason.
+post.edit. <code>Reset  </code> Resets the current section to blank.
+post.edit. <code>Reset Everything</code> Resets all sections.
+post. <code>Upload </code> Uploads the new post.
+edit. <code>Save   </code> Saves your edit.
+post.edit. <code>Discard</code> Discards the post.
+post.edit. Certain sections add some of their own buttons.
+post.edit. 
+post.edit. When using this command in a group, you must reply to the command dialog when filling in information. If you don't, your messages will be ignored.
+post.edit. 
+post.edit. The following sub-commands are available:
+post.edit. <code>/cancel -</code> discard your change.
+post.edit. <code>/reply  -</code> reply to another message with this to have it processed.
+post.edit. You do not need to reply to the command dialog when using them.
 .wizard. 
-.wizard. <b>The tag wizard</b>
-.wizard. The tag wizard is probably my most powerful feature. With this, you can specify your own suggestions for tagging posts, and the wizard will guide you through them, one at a time.
+.wizard. <b>The tagging wizard</b>
+.wizard. The tagging wizard is probably my most powerful feature. With this, you can specify your own suggestions for tagging posts, and the wizard will guide you through them, one at a time.
 . To read more about the tag wizard, use <code>/help wizard</code>.
-wizard. The syntax for tag rules is as follows:
+wizard. 
+wizard. The syntax for a tag rule is as follows:
 wizard. <code>[prereq ...] [control ...] . [option ...]</code>
 wizard. <code>option  -</code> tags to display. can be toggled on and off.
-wizard. <code>prereq  -</code> tags which must be present to show the options.
+wizard. <code>prereq  -</code> tags which must be present to show this rule.
 wizard. <code>control -</code> special tags which affect behavior.
+wizard. 
 wizard. The following control options exist:
-wizard. <code>sort:{no|alpha}:{asc|desc}   -</code> Automatically sort options (default = alpha, asc)
-wizard. <code>prompt:"....."               -</code> A helpful message describing the options.
-dev. <code>auto:{no|add|remove|replace} -</code> Automatically apply all options here.
-wizard. Also, you can prepend the following bits to an option, with the following effects:
-wizard. <code>meta:   -</code> display-only. useful for categorizing, doesn't generate a tag.
-wizard. <code>rating: -</code> sets the post rating. if there's more than one, the worst is used.
-wizard. <code>x:      -</code> automatically set this option
-wizard. <code>o:      -</code> automatically clear this option
-wizard. <code>h:      -</code> hide this option from the list
+wizard. <code>sort:{no|alpha}:{asc|desc} -</code>
+wizard. Automatically sort options (default = alpha, asc)
+wizard. <code>prompt:"Message ..."       -</code>
+wizard. A helpful message describing this rule.
+wizard-dev. <code>auto:{no|add|remove|replace} -</code> Automatically apply all options here.
+wizard. 
+wizard. You can prepend the following to an option, with the following effects:
+wizard. <code>meta:   -</code> display-only tag. useful for categorizing.
+wizard. <code>rating: -</code> sets the post rating.
+wizard. <code>x:      -</code> automatically set this option.
+wizard. <code>o:      -</code> automatically clear this option.
+wizard. <code>h:      -</code> hide this option from the list.
 wizard. You can use more than one, like <code>xh:meta:foobar</code>.
-wizard. Your tag rules can be up to 100KB.
-wizard. To see a tag rule example, use <code>/help example</code>.
+wizard.tagrules. 
+wizard.tagrules. <b>Set Tag Rules command</b>
+wizard.tagrules. Your tag rules control the tagging wizard. They are extremely customizable and allow anyone to set up their own semi-guided process for tagging posts, replacing minutes of tedious typing out tags from memory with quick tapping of suggestions.
+wizard.tagrules. <code>/settagrules (reply to file) [SCOPE]</code>
+wizard.tagrules. <code>/settagrules [SCOPE]</code>
+wizard.tagrules. 
+wizard.tagrules. This command expects to be given a plain text file containing up to 100kB of tag rules. You should either use it as a caption on a file upload, or reply to an existing file with it.
+wizard.tagrules. <code>SCOPE</code> is either "upload" or "edit". You can set different rules for each.
+wizard.tagrules. 
+wizard.tagrules. Currently, ONLY UPLOADS support using the tagging wizard, so the "edit" scope has no effect.
+wizard.tagrules. 
+wizard.tagrules. To see a tag rule example, use <code>/help example</code>.
 example. 
 example. <b>Tag Rule Example</b>
 example. <pre>prompt:"Overview:" . meta:SFW meta:NSFW meta:Kinky_stuff
