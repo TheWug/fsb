@@ -138,7 +138,8 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 				bot.ErrorLog.Println("Error in GetAutoFixHistoryForPosts:", err.Error())
 				continue
 			}
-			auto_user, auto_api_key := this.MySettings.DefaultSearchCredentials()
+			var default_creds storage.UserCreds
+			default_creds.User, default_creds.ApiKey = this.MySettings.DefaultSearchCredentials()
 
 			for id, edit := range edits {
 				// remove any recent autofix changes from the autofix list, bit by bit.
@@ -156,7 +157,7 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 				edit.SelectAutofix()
 				auto_diff := edit.GetChangeToApply()
 				if !auto_diff.IsZero() {
-					post, err := api.UpdatePost(auto_user, auto_api_key, id, auto_diff, nil, nil, nil, nil, sptr("Automatic tag cleanup: typos and concatenations (via KnottyBot)"))
+					post, err := api.UpdatePost(default_creds.User, default_creds.ApiKey, id, auto_diff, nil, nil, nil, nil, sptr("Automatic tag cleanup: typos and concatenations (via KnottyBot)"))
 					if err != nil {
 						bot.ErrorLog.Println("Error updating post:", err.Error())
 					} else {
@@ -444,16 +445,16 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 	if q.debugmode { debugstr = ", DEBUG" }
 	ctx.Bot.Log.Printf("[behavior] Received inline query (from %d %s%s): %s", ctx.Query.From.Id, ctx.Query.From.UsernameString(), debugstr, ctx.Query.Query)
 
-	user, apikey, _, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Query.From.Id)
+	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Query.From.Id)
 	if err == storage.ErrNoLogin {
-		user, apikey = this.MySettings.DefaultSearchCredentials()
+		creds.User, creds.ApiKey = this.MySettings.DefaultSearchCredentials()
 	}
 
 	var iqa data.OInlineQueryAnswer
 
 	offset, err := proxify.Offset(ctx.Query.Offset)
 	if err == nil {
-		search_results, err := api.ListPosts(user, apikey, apitypes.ListPostOptions{SearchQuery: ctx.Query.Query, Page: apitypes.Page(offset + 1), Limit: q.resultsperpage})
+		search_results, err := api.ListPosts(creds.User, creds.ApiKey, apitypes.ListPostOptions{SearchQuery: ctx.Query.Query, Page: apitypes.Page(offset + 1), Limit: q.resultsperpage})
 		errorlog.ErrorLog(ctx.Bot.ErrorLog, "api", "api.TagSearch", err)
 		iqa = this.ApiResultsToInlineResponse(ctx.Query.Query, search_results, offset, err, q)
 	} else {

@@ -301,8 +301,8 @@ func ResyncListCommand(ctx *gogram.MessageCtx) {
 }
 
 func ResyncList(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
-	user, api_key, janitor, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
-	if err != nil || !janitor { return err }
+	creds, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
+	if err != nil || !creds.Janitor { return err }
 
 	doc := ctx.Msg.Document
 	if doc == nil {
@@ -331,7 +331,7 @@ func ResyncList(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, s
 		defer close(sfx)
 	}
 
-	return ResyncListInternal(user, api_key, settings, file_data, msg, sfx)
+	return ResyncListInternal(creds.User, creds.ApiKey, settings, file_data, msg, sfx)
 }
 
 
@@ -438,8 +438,8 @@ func SyncTagsCommand(ctx *gogram.MessageCtx) {
 }
 
 func SyncTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
-	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
-	if err != nil || !janitor { return err }
+	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+	if err != nil || !creds.Janitor { return err }
 
 	if msg == nil || sfx == nil {
 		msg, sfx = ProgressMessage(ctx, "", "")
@@ -447,7 +447,7 @@ func SyncTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx
 		defer close(sfx)
 	}
 
-	return SyncTagsInternal(user, api_key, settings, msg, sfx)
+	return SyncTagsInternal(creds.User, creds.ApiKey, settings, msg, sfx)
 }
 
 
@@ -551,9 +551,9 @@ func RecountTagsCommand(ctx *gogram.MessageCtx) {
 }
 
 func RecountTags(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string, real_counts, alias_counts bool) (error) {
-	_, _, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
 	if err != nil { return err }
-	if !janitor { return errors.New("You need to be a janitor to use this command.") }
+	if !creds.Janitor { return errors.New("You need to be a janitor to use this command.") }
 
 	if msg == nil || sfx == nil {
 		msg, sfx = ProgressMessage(ctx, "", "")
@@ -686,8 +686,8 @@ func SyncPostsCommand(ctx *gogram.MessageCtx) {
 }
 
 func SyncPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, aliases_too, recount_too bool, msg, sfx chan string) (error) {
-	user, api_key, janitor, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
-	if err != nil || !janitor { return err }
+	creds, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
+	if err != nil || !creds.Janitor { return err }
 
 	if msg == nil || sfx == nil {
 		msg, sfx = ProgressMessage(ctx, "", "")
@@ -695,7 +695,7 @@ func SyncPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, aliases
 		defer close(sfx)
 	}
 
-	return SyncPostsInternal(user, api_key, settings, aliases_too, recount_too, msg, sfx, nil)
+	return SyncPostsInternal(creds.User, creds.ApiKey, settings, aliases_too, recount_too, msg, sfx, nil)
 }
 
 func SyncOnlyPostsInternal(user, api_key string, settings storage.UpdaterSettings, msg, sfx chan string, post_updates chan []types.TPostInfo) (error) {
@@ -822,8 +822,8 @@ func SyncAliasesCommand(ctx *gogram.MessageCtx) {
 }
 
 func SyncAliases(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
-	user, api_key, janitor, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
-	if err != nil || !janitor { return err }
+	creds, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
+	if err != nil || !creds.Janitor { return err }
 
 	if msg == nil || sfx == nil {
 		msg, sfx = ProgressMessage(ctx, "", "")
@@ -831,7 +831,7 @@ func SyncAliases(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, 
 		defer close(sfx)
 	}
 
-	return SyncAliasesInternal(user, api_key, settings, msg, sfx)
+	return SyncAliasesInternal(creds.User, creds.ApiKey, settings, msg, sfx)
 }
 
 func SyncAliasesInternal(user, api_key string, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
@@ -1076,8 +1076,8 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 
 	defer ctrl.Transaction.Finalize(true)
 
-	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{Transaction: ctrl.Transaction}, ctx.Msg.From.Id)
-	if (err != nil || !janitor) && fix {
+	creds, err := storage.GetUserCreds(storage.UpdaterSettings{Transaction: ctrl.Transaction}, ctx.Msg.From.Id)
+	if (err != nil || !creds.Janitor) && fix {
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to " + api.ApiName + " to use this command (see <code>/help login</code>)", ParseMode: data.ParseHTML}}, nil)
 		return
 	}
@@ -1287,7 +1287,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 			if diff.IsZero() { continue }
 
 			reason := fmt.Sprintf("Bulk retag: %s (%s)", diff.APIString(), reason)
-			newp, err := api.UpdatePost(user, api_key, id, diff, nil, nil, nil, nil, &reason)
+			newp, err := api.UpdatePost(creds.User, creds.ApiKey, id, diff, nil, nil, nil, nil, &reason)
 
 			if err == api.PostIsDeleted {
 				log.Printf("Post was deleted which we didn't know about? DB consistency? (%d)\n", id)
@@ -1364,8 +1364,8 @@ func RefetchDeletedPostsCommand(ctx *gogram.MessageCtx) {
 }
 
 func RefetchDeletedPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
-	user, api_key, janitor, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
-	if err != nil || !janitor { return err }
+	creds, err := storage.GetUserCreds(settings, ctx.Msg.From.Id)
+	if err != nil || !creds.Janitor { return err }
 
 	if msg == nil || sfx == nil {
 		msg, sfx = ProgressMessage(ctx, "", "")
@@ -1373,7 +1373,7 @@ func RefetchDeletedPosts(ctx *gogram.MessageCtx, settings storage.UpdaterSetting
 		defer close(sfx)
 	}
 
-	return RefetchDeletedPostsInternal(user, api_key, settings, msg, sfx)
+	return RefetchDeletedPostsInternal(creds.User, creds.ApiKey, settings, msg, sfx)
 }
 
 func RefetchDeletedPostsInternal(user, api_key string, settings storage.UpdaterSettings, msg, sfx chan string) (error) {
@@ -1455,8 +1455,8 @@ func Blits(ctx *gogram.MessageCtx) {
 
 	defer ctrl.Transaction.Finalize(true)
 
-	_, _, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{Transaction: txbox}, ctx.Msg.From.Id)
-	if err != nil || !janitor { return }
+	creds, err := storage.GetUserCreds(storage.UpdaterSettings{Transaction: txbox}, ctx.Msg.From.Id)
+	if err != nil || !creds.Janitor { return }
 
 	mode := MODE_READY
 	include, exclude := make(map[string]bool), make(map[string]bool)
@@ -1587,8 +1587,8 @@ func Concatenations(ctx *gogram.MessageCtx) {
 
 	defer ctrl.Transaction.Finalize(true)
 
-	user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{Transaction: txbox}, ctx.Msg.From.Id)
-	if err != nil || !janitor { return }
+	creds, err := storage.GetUserCreds(storage.UpdaterSettings{Transaction: txbox}, ctx.Msg.From.Id)
+	if err != nil || !creds.Janitor { return }
 
 	var cats []Triplet
 	header := "Here are some random concatenated tags:"
@@ -1726,7 +1726,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 			diff.Add(cats[i].subtag1.Name)
 			diff.Add(cats[i].subtag2.Name)
 			diff.Remove(cats[i].tag.Name)
-			newp, err := api.UpdatePost(user, api_key, p.Id, diff, nil, nil, nil, nil, &reason)
+			newp, err := api.UpdatePost(creds.User, creds.ApiKey, p.Id, diff, nil, nil, nil, nil, &reason)
 			err = nil
 			if err != nil {
 				sfx <- fmt.Sprintf(" (error: %s)", err.Error())

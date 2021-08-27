@@ -341,13 +341,13 @@ func (this *AutofixState) HandleCallback(ctx *gogram.CallbackCtx) {
 		}
 		defer settings.Transaction.Finalize(true)
 
-		user, api_key, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Cb.From.Id)
+		creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Cb.From.Id)
 		if err == storage.ErrNoLogin {
 			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F512 You need to login to do that!\n(use /login, in PM)", ShowAlert: true}, nil)
 			return
 		}
 
-		if !janitor {
+		if !creds.Janitor {
 			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F512 Sorry, this feature is currently limited to janitors.", ShowAlert: true}, nil)
 			return
 		}
@@ -383,7 +383,7 @@ func (this *AutofixState) HandleCallback(ctx *gogram.CallbackCtx) {
 				this.Behavior.DismissPromptPost(ctx.Bot, post_info, diff, settings)
 			} else {
 				reason := "Manual tag cleanup: typos and concatenations (via KnottyBot)"
-				post, err := api.UpdatePost(user, api_key, post_info.PostId, diff, nil, nil, nil, nil, &reason)
+				post, err := api.UpdatePost(creds.User, creds.ApiKey, post_info.PostId, diff, nil, nil, nil, nil, &reason)
 				if err != nil {
 					ctx.AnswerAsync(data.OCallback{Notification: "\u26A0 An error occurred when trying to update the post! Try again later."}, nil)
 					return
@@ -512,7 +512,7 @@ func (this *VoteState) MarkAndTestRecentlyFaved(tg_user data.UserID, post_id int
 func (this *VoteState) HandleCmd(from *data.TUser, cmd *gogram.CommandData, reply_message *data.TMessage, bot *gogram.TelegramBot) (data.OMessage, bool) {
 	var response data.OMessage
 
-	user, api_key, _, err := storage.GetUserCreds(storage.UpdaterSettings{}, from.Id)
+	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, from.Id)
 	if err == storage.ErrNoLogin {
 		response.Text = "\U0001F512 You need to login to do that!\n(use /login, in PM)"
 		return response, true
@@ -537,7 +537,7 @@ func (this *VoteState) HandleCmd(from *data.TUser, cmd *gogram.CommandData, repl
 
 	if cmd.Command == "/upvote" {
 		if this.MarkAndTestRecentlyVoted(from.Id, apitypes.Upvote, id) {
-			err = api.UnvotePost(user, api_key, id)
+			err = api.UnvotePost(creds.User, creds.ApiKey, id)
 			if err != nil {
 				response.Text = "An error occurred when removing your vote! (Is " + api.ApiName + " down?)"
 				bot.ErrorLog.Printf("Error when unvoting post %d: %s\n", id, err.Error())
@@ -545,7 +545,7 @@ func (this *VoteState) HandleCmd(from *data.TUser, cmd *gogram.CommandData, repl
 				response.Text = "\U0001F5D1 You have deleted your vote."
 			}
 		} else {
-			_, err := api.VotePost(user, api_key, id, apitypes.Upvote, true)
+			_, err := api.VotePost(creds.User, creds.ApiKey, id, apitypes.Upvote, true)
 			if err != nil {
 				response.Text = "An error occurred when voting! (Is " + api.ApiName + " down?)"
 				bot.ErrorLog.Printf("Error when voting post %d: %s\n", id, err.Error())
@@ -555,7 +555,7 @@ func (this *VoteState) HandleCmd(from *data.TUser, cmd *gogram.CommandData, repl
 		}
 	} else if cmd.Command == "/downvote" {
 		if this.MarkAndTestRecentlyVoted(from.Id, apitypes.Downvote, id) {
-			err = api.UnvotePost(user, api_key, id)
+			err = api.UnvotePost(creds.User, creds.ApiKey, id)
 			if err != nil {
 				response.Text = "An error occurred when removing your vote! (Is " + api.ApiName + " down?)"
 				bot.ErrorLog.Printf("Error when unvoting post %d: %s\n", id, err.Error())
@@ -563,7 +563,7 @@ func (this *VoteState) HandleCmd(from *data.TUser, cmd *gogram.CommandData, repl
 				response.Text = "\U0001F5D1 You have deleted your vote."
 			}
 		} else {
-			_, err := api.VotePost(user, api_key, id, apitypes.Downvote, true)
+			_, err := api.VotePost(creds.User, creds.ApiKey, id, apitypes.Downvote, true)
 			if err != nil {
 				response.Text = "An error occurred when voting! (Is " + api.ApiName + " down?)"
 				bot.ErrorLog.Printf("Error when voting post %d: %s\n", id, err.Error())
@@ -573,7 +573,7 @@ func (this *VoteState) HandleCmd(from *data.TUser, cmd *gogram.CommandData, repl
 		}
 	} else if cmd.Command == "/favorite" {
 		if this.MarkAndTestRecentlyFaved(from.Id, id) {
-			err = api.UnfavoritePost(user, api_key, id)
+			err = api.UnfavoritePost(creds.User, creds.ApiKey, id)
 			if err != nil {
 				response.Text = "An error occurred when unfavoriting the post! (Is " + api.ApiName + " down?)"
 				bot.ErrorLog.Printf("Error when unfaving post %d: %s\n", id, err.Error())
@@ -581,7 +581,7 @@ func (this *VoteState) HandleCmd(from *data.TUser, cmd *gogram.CommandData, repl
 				response.Text = "\U0001F5D1 You have unfavorited this post."
 			}
 		} else {
-			_, err = api.FavoritePost(user, api_key, id)
+			_, err = api.FavoritePost(creds.User, creds.ApiKey, id)
 			if err != nil {
 				response.Text = "An error occurred when favoriting the post! (Is " + api.ApiName + " down?)"
 				bot.ErrorLog.Printf("Error when faving post %d: %s\n", id, err.Error())
@@ -753,7 +753,7 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 
 	if ctx.Msg.From == nil { return }
 
-	user, api_key, _, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
 	if err != nil {
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to use this command!"}}, nil)
 		if err != storage.ErrNoLogin {
@@ -785,15 +785,15 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 
 	savestate := func(prompt *gogram.MessageCtx) {
 		ctx.SetState(EditStateFactoryWithData(nil, this.StateBasePersistent, esp{
-			User: user,
-			ApiKey: api_key,
+			User: creds.User,
+			ApiKey: creds.ApiKey,
 			MsgId: prompt.Msg.Id,
 			ChatId: prompt.Msg.Chat.Id,
 		}))
 	}
 
 	if savenow {
-		_, err := e.CommitEdit(user, api_key, ctx, storage.UpdaterSettings{})
+		_, err := e.CommitEdit(creds.User, creds.ApiKey, ctx, storage.UpdaterSettings{})
 		if err == nil {
 			e.State = dialogs.SAVED
 			e.Finalize(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, nil))
@@ -827,7 +827,7 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 		ctx.SetState(nil)
 		return
 	} else if ctx.Cmd.Command == "/logout" {
-		storage.WriteUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id, "", "")
+		storage.WriteUserCreds(storage.UpdaterSettings{}, storage.UserCreds{TelegramId: ctx.Msg.From.Id})
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You are now logged out."}}, nil)
 		ctx.SetState(nil)
 		return
@@ -848,7 +848,11 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 				success, err := api.TestLogin(this.user, this.apikey)
 				if success && err == nil {
 					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("You are now logged in as <code>%s</code>.\n\nTo protect the security of your account, I have deleted the message containing your API key.", this.user), ParseMode: data.ParseHTML}}, nil)
-					storage.WriteUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id, this.user, this.apikey)
+					storage.WriteUserCreds(storage.UpdaterSettings{}, storage.UserCreds{
+						TelegramId: ctx.Msg.From.Id,
+						User: this.user,
+						ApiKey: this.apikey,
+					})
 					ctx.SetState(nil)
 				} else if err != nil {
 					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("An error occurred when testing if you were logged in! (%s)", html.EscapeString(err.Error())), ParseMode: data.ParseHTML}}, nil)
@@ -1088,7 +1092,7 @@ func (this *PostState) Post(ctx *gogram.MessageCtx) {
 
 	if ctx.Msg.From == nil { return }
 
-	user, api_key, _, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
 	if err != nil {
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to use this command!"}}, nil)
 		if err != storage.ErrNoLogin {
@@ -1112,8 +1116,8 @@ func (this *PostState) Post(ctx *gogram.MessageCtx) {
 	savestate := func(prompt *gogram.MessageCtx) {
 		p.TagWizard.SetNewRulesFromString(tagrules)
 		ctx.SetState(PostStateFactoryWithData(nil, this.StateBasePersistent, psp{
-			User: user,
-			ApiKey: api_key,
+			User: creds.User,
+			ApiKey: creds.ApiKey,
 			MsgId: prompt.Msg.Id,
 			ChatId: prompt.Msg.Chat.Id,
 		}))
@@ -1124,7 +1128,7 @@ func (this *PostState) Post(ctx *gogram.MessageCtx) {
 			p.Status = "Your post isn't ready for upload yet, please fix it and then try to upload it again."
 			savestate(p.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, nil)))
 		} else {
-			upload_result, err := p.CommitPost(user, api_key, ctx, storage.UpdaterSettings{})
+			upload_result, err := p.CommitPost(creds.User, creds.ApiKey, ctx, storage.UpdaterSettings{})
 			if err == nil && upload_result != nil && upload_result.Success {
 				p.State = dialogs.SAVED
 				p.Finalize(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, upload_result))
@@ -1193,8 +1197,8 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	user, apikey, janitor, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
-	if !janitor {
+	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+	if !creds.Janitor {
 		// commands from non-authorized users are silently ignored
 		return
 	}

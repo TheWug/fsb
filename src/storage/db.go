@@ -33,32 +33,45 @@ func DBInit(dburl string) (error) {
 	return nil
 }
 
-func WriteUserCreds(settings UpdaterSettings, id tgtypes.UserID, username, key string) (error) {
+type UserCreds struct {
+	TelegramId tgtypes.UserID
+	User, ApiKey string
+	Janitor bool
+}
+
+func WriteUserCreds(settings UpdaterSettings, creds UserCreds) (error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return settings.Transaction.err }
 
-	_, err := tx.Exec("INSERT INTO remote_user_credentials (telegram_id, api_user, api_apikey) VALUES ($1, $2, $3) " +
-			"ON CONFLICT (telegram_id) DO UPDATE SET api_user = EXCLUDED.api_user, api_apikey = EXCLUDED.api_apikey", id, username, key)
+	query := `
+INSERT INTO remote_user_credentials (telegram_id, api_user, api_key)
+VALUES ($1, $2, $3)
+ON CONFLICT (telegram_id) DO UPDATE
+SET	api_user = EXCLUDED.api_user,
+	api_key = EXCLUDED.api_key
+`
+	_, err := tx.Exec(query, creds.TelegramId, creds.User, creds.ApiKey)
 	if (err != nil) { return err }
 
 	settings.Transaction.commit = mine
 	return nil
 }
 
-func GetUserCreds(settings UpdaterSettings, id tgtypes.UserID) (string, string, bool, error) {
+func GetUserCreds(settings UpdaterSettings, id tgtypes.UserID) (UserCreds, error) {
+	creds := UserCreds{TelegramId: id}
+
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
-	if settings.Transaction.err != nil { return "", "", false, settings.Transaction.err }
+	if settings.Transaction.err != nil { return creds, settings.Transaction.err }
 
-	row := tx.QueryRow("SELECT api_user, api_apikey, privilege_janitorial FROM remote_user_credentials WHERE telegram_id = $1", id)
-	var user, key string
-	var privilege bool
-	err := row.Scan(&user, &key, &privilege)
-	if err == sql.ErrNoRows || len(user) == 0 || len(key) == 0 { err = ErrNoLogin }
+	row := tx.QueryRow("SELECT api_user, api_key, privilege_janitorial FROM remote_user_credentials WHERE telegram_id = $1", id)
+
+	err := row.Scan(&creds.User, &creds.ApiKey, &creds.Janitor)
+	if err == sql.ErrNoRows || len(creds.User) == 0 || len(creds.ApiKey) == 0 { err = ErrNoLogin }
 
 	settings.Transaction.commit = mine
-	return user, key, privilege, err
+	return creds, err
 }
 
 func WriteUserTagRules(settings UpdaterSettings, id tgtypes.UserID, name, rules string) (error) {
