@@ -4,6 +4,11 @@ import (
 	"database/sql"
 )
 
+type UpdaterSettings struct {
+	Full bool
+	Transaction TransactionBox
+}
+
 type TransactionBox struct {
 	tx    *sql.Tx
 	err    error

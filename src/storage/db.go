@@ -20,18 +20,6 @@ var Db_pool *sql.DB
 
 var ErrNoLogin error = errors.New("No stored credentials for user")
 
-type committer struct {
-	commit bool
-}
-
-func handle_transaction(c *committer, tx *sql.Tx) {
-	if c.commit {
-		tx.Commit()
-	} else {
-		tx.Rollback()
-	}
-}
-
 // initialize the DAL. Closing it might be important at some point, but who cares right now.
 func DBInit(dburl string) (error) {
 	var err error
@@ -205,12 +193,10 @@ func ClearPosts(settings UpdaterSettings) (error) {
 	return err
 }
 
-func WriteTagEntries(list []interface{}) (error) {
-	tx, err := Db_pool.Begin()
-	if err != nil { return err }
-
-	var c committer
-	defer handle_transaction(&c, tx)
+func WriteTagEntries(list []interface{}, settings UpdaterSettings) (error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
 
 	stmt, err := tx.Prepare(pq.CopyIn("tag_index", "tag_id", "tag_name", "tag_count", "tag_type", "tag_type_locked"))
 	
@@ -223,10 +209,9 @@ func WriteTagEntries(list []interface{}) (error) {
 	if err != nil { return err }
 
 	err = stmt.Close()
-	if err != nil { return err }
 
-	c.commit = true
-	return nil
+	settings.Transaction.commit = mine && (err != nil)
+	return err
 }
 
 func GetTagsWithCountLess(count int) (apitypes.TTagInfoArray, error) { return getTagsWithCount(count, "<") }
@@ -334,11 +319,6 @@ func AliasUpdater(input chan apitypes.TAliasData, settings UpdaterSettings) (err
 
 	settings.Transaction.commit = mine
 	return nil
-}
-
-type UpdaterSettings struct {
-	Full bool
-	Transaction TransactionBox
 }
 
 func PostUpdater(input chan apitypes.TPostInfo, settings UpdaterSettings) (error) {
@@ -703,19 +683,16 @@ func ImportPostTagsFromNameToID(settings UpdaterSettings, sfx chan string) (erro
 	return nil
 }
 
-func ResetPostTags() (error) {
-	tx, err := Db_pool.Begin()
-	if err != nil { return err }
-
-	var c committer
-	defer handle_transaction(&c, tx)
+func ResetPostTags(settings UpdaterSettings) (error) {
+	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
+	defer settings.Transaction.Finalize(mine)
+	if settings.Transaction.err != nil { return settings.Transaction.err }
 
 	query := "TRUNCATE post_tags, post_tags_by_name"
-	_, err = tx.Exec(query)
-	if err != nil { return err }
+	_, err := tx.Exec(query)
 
-	c.commit = true
-	return nil
+	settings.Transaction.commit = mine && (err != nil)
+	return err
 }
 
 func CountTags(settings UpdaterSettings, sfx chan string) (error) {
