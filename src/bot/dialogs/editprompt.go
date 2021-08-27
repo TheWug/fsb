@@ -3,6 +3,7 @@ package dialogs
 import (
 	"storage"
 
+	"api"
 	apitypes "api/types"
 
 	"github.com/thewug/gogram"
@@ -92,7 +93,10 @@ type EditPrompt struct {
 
 	// stuff to generate the post info
 	TagChanges apitypes.TagDiff `json:"tag_changes"`
-	SourceChanges []string `json:"source_changes"`
+	SourceChanges apitypes.TagDiff `json:"source_changes"` // not actually tags, but you can treat them the same.
+	OrigSources map[string]int `json:"sources_live"`
+	SeenSources map[string]int `json:"source_seen"`
+	SeenSourcesReverse []string `json:"source_seen_rev"`
 	Parent int `json:"parent"`
 	Rating string `json:"rating"`
 	Description string `json:"description"`
@@ -136,6 +140,14 @@ func (this *EditPrompt) ApplyReset(state string) {
 		this.File = PostFile{}
 	default:
 	}
+}
+
+func (this *EditPrompt) SeeSource(source string) {
+	if _, ok := this.SeenSources[source]; ok { return } // already seen
+	if this.SeenSources == nil { this.SeenSources = make(map[string]int) }
+	index := len(this.SeenSources)
+	this.SeenSources[source] = index
+	this.SeenSourcesReverse = append(this.SeenSourcesReverse, source)
 }
 
 func (this *EditPrompt) JSON() (string, error) {
@@ -193,7 +205,7 @@ func (this *EditPrompt) ResetState() {
 func (this *EditPrompt) IsNoop() bool {
 	return len(this.Rating) == 0 &&
                this.TagChanges.IsZero() &&
-               len(this.SourceChanges) == 0 &&
+               this.SourceChanges.IsZero() &&
                len(this.Description) == 0 &&
                this.Parent == 0
 }
@@ -221,9 +233,9 @@ func (this *EditPrompt) PostStatus(b *bytes.Buffer) {
 		b.WriteString("</code>\n")
 		no_changes = false
 	}
-	if len(this.SourceChanges) != 0 {
+	if !this.SourceChanges.IsZero() {
 		b.WriteString("Sources:\n<pre>  ")
-		b.WriteString(html.EscapeString(strings.Join(this.SourceChanges, "\n  ")))
+		b.WriteString(html.EscapeString(this.SourceChanges.APIString()))
 		b.WriteString("</pre>\n")
 		no_changes = false
 	}

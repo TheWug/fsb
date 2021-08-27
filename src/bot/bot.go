@@ -1070,7 +1070,7 @@ func (this *EditState) HandleCallback(ctx *gogram.CallbackCtx) {
 			if p.Description != "" { description = &p.Description }
 			if p.Reason != "" { reason = &p.Reason }
 
-			update, err := api.UpdatePost(this.data.User, this.data.ApiKey, p.PostId, p.TagChanges, rating, parent, p.SourceChanges, description, reason)
+			update, err := api.UpdatePost(this.data.User, this.data.ApiKey, p.PostId, p.TagChanges, rating, parent, p.SourceChanges.APIArray(), description, reason)
 			if err != nil {
 				ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "An error occurred when editing the post! Try again later."}}, nil)
 				ctx.Bot.ErrorLog.Println("Error updating post: ", err.Error())
@@ -1122,7 +1122,9 @@ func (this *EditState) Freeform(ctx *gogram.MessageCtx) {
 		p.TagChanges.ApplyString(ctx.Msg.PlainText())
 		p.Prefix = "Got it. Continue sending more tag changes, and pick a button from below when you're done."
 	} else if p.State == dialogs.WAIT_SOURCE {
-		p.SourceChanges = append(p.SourceChanges, strings.Split(ctx.Msg.PlainText(), "\n")...)
+		for _, source := range strings.Split(ctx.Msg.PlainText(), "\n") {
+			p.SourceStringPrefixed(source)
+		}
 		p.Prefix = "Got it. Continue sending more source changes, and pick a button from below when you're done."
 	} else if p.State == dialogs.WAIT_RATING {
 		rating, err := api.SanitizeRatingForEdit(ctx.Msg.PlainText())
@@ -1230,7 +1232,7 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 			if mode == posttags {
 				e.TagChanges.ApplyString(token)
 			} else if mode == postsource {
-				e.SourceChanges = append(e.SourceChanges, strings.Split(token, "\n")...)
+				e.SourceChanges.ApplyArray(strings.Split(token, "\n"))
 			} else if mode == postrating {
 				rating, err := api.SanitizeRatingForEdit(token)
 				if err != nil {
@@ -1304,7 +1306,16 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 	}
 
 	e.PostId = post
+	e.OrigSources = make(map[string]int)
 	e.ResetState()
+
+	post_data, err := storage.PostByID(post, storage.UpdaterSettings{})
+	if post_data != nil {
+		for _, s := range post_data.Sources {
+			e.SeeSource(s)
+			e.OrigSources[s] = 1
+		}
+	}
 
 	prompt := e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx)
 	ctx.SetState(EditStateFactoryWithData(nil, this.StateBasePersistent, esp{
