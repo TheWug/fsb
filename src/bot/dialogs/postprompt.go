@@ -162,7 +162,7 @@ func (this *PostPrompt) PostStatus(b *bytes.Buffer) {
 	}
 	if len(this.Rating) != 0 {
 		b.WriteString("Rating: <code>")
-		b.WriteString(api.RatingNameString(this.Rating))
+		b.WriteString(api.RatingNameString(this.TestRating()))
 		b.WriteString("</code>\n")
 		no_changes = false
 	}
@@ -196,8 +196,16 @@ func (this *PostPrompt) PostStatus(b *bytes.Buffer) {
 	}
 }
 
+func (this *PostPrompt) TestRating() string {
+	if this.Rating == "" {
+		return this.TagWizard.Rating()
+	}
+
+	return this.Rating
+}
+
 func (this *PostPrompt) IsComplete() error {
-	if len(this.Rating) == 0 {
+	if len(this.TestRating()) == 0 {
 		return errors.New("You must specify a rating!")
 	} else if this.TagWizard.Len() < 6 {
 		return errors.New("You must specify at least six tags!")
@@ -233,7 +241,7 @@ func (this *PostPrompt) CommitPost(user, api_key string, ctx *gogram.MessageCtx,
 		}
 	}
 
-	status, err := api.UploadFile(post_filedata, post_url, this.TagWizard.Tags(), this.Rating, this.Sources.StringWithDelimiter("\n"), this.Description, parent, user, api_key)
+	status, err := api.UploadFile(post_filedata, post_url, this.TagWizard.Tags(), this.TestRating(), this.Sources.StringWithDelimiter("\n"), this.Description, parent, user, api_key)
 	if err != nil {
 		ctx.Bot.ErrorLog.Println("Error updating post: ", err.Error())
 		return nil, errors.New("An error occurred when editing the post! Double check your info, or try again later.")
