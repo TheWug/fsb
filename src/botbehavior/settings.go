@@ -95,6 +95,9 @@ func (this *Settings) InitializeAll(bot *gogram.TelegramBot) (error) {
 	return e
 }
 
-func (this *Settings) DefaultSearchCredentials() (string, string) {
-	return this.SearchUser, this.SearchAPIKey
+func (this *Settings) DefaultSearchCredentials() (storage.UserCreds) {
+	return storage.UserCreds{
+		User: this.SearchUser,
+		ApiKey: this.SearchAPIKey,
+	}
 }

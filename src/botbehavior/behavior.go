@@ -138,8 +138,7 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 				bot.ErrorLog.Println("Error in GetAutoFixHistoryForPosts:", err.Error())
 				continue
 			}
-			var default_creds storage.UserCreds
-			default_creds.User, default_creds.ApiKey = this.MySettings.DefaultSearchCredentials()
+			default_creds := this.MySettings.DefaultSearchCredentials()
 
 			for id, edit := range edits {
 				// remove any recent autofix changes from the autofix list, bit by bit.
@@ -447,7 +446,7 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 
 	creds, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Query.From.Id)
 	if err == storage.ErrNoLogin {
-		creds.User, creds.ApiKey = this.MySettings.DefaultSearchCredentials()
+		creds = this.MySettings.DefaultSearchCredentials()
 	}
 
 	var iqa data.OInlineQueryAnswer
