@@ -1,10 +1,12 @@
 package botbehavior
 
 import (
+	bottypes "bot/types"
 	"api"
 	"api/tags"
 	"api/tagindex"
 	apitypes "api/types"
+	"apiextra"
 	"fsb/errorlog"
 	"fsb/proxify"
 	"storage"
@@ -449,11 +451,22 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 		creds = this.MySettings.DefaultSearchCredentials()
 	}
 
+	settings, _ := storage.GetUserSettings(storage.UpdaterSettings{}, ctx.Query.From.Id)
+
+	allowed_ratings := apiextra.Ratings{Safe: true, Questionable: true, Explicit: true}
+	if settings.RatingMode == bottypes.FILTER_EXPLICIT {
+		allowed_ratings = apiextra.Ratings{Safe: true, Questionable: true, Explicit: false}
+	} else if settings.RatingMode == bottypes.FILTER_QUESTIONABLE {
+		allowed_ratings = apiextra.Ratings{Safe: true, Questionable: false, Explicit: false}
+	}
+
+	force_rating := apiextra.RatingsFromString(ctx.Query.Query).And(allowed_ratings).RatingTag()
+
 	var iqa data.OInlineQueryAnswer
 
 	offset, err := proxify.Offset(ctx.Query.Offset)
 	if err == nil {
-		search_results, err := api.ListPosts(creds.User, creds.ApiKey, apitypes.ListPostOptions{SearchQuery: ctx.Query.Query, Page: apitypes.Page(offset + 1), Limit: q.resultsperpage})
+		search_results, err := api.ListPosts(creds.User, creds.ApiKey, apitypes.ListPostOptions{SearchQuery: ctx.Query.Query + " " + force_rating, Page: apitypes.Page(offset + 1), Limit: q.resultsperpage})
 		errorlog.ErrorLog(ctx.Bot.ErrorLog, "api", "api.TagSearch", err)
 		iqa = this.ApiResultsToInlineResponse(ctx.Query.Query, search_results, offset, err, q)
 	} else {
