@@ -1,8 +1,6 @@
 package tags
 
 import (
-	"api/types"
-
 	"bytes"
 	"strings"
 )
@@ -118,7 +116,7 @@ func (this *TagSet) Rating() (string) {
 }
 
 // apply a tag diff to the tag set.
-func (this *TagSet) ApplyDiff(diff types.TagDiff) {
+func (this *TagSet) ApplyDiff(diff TagDiff) {
 	for tag, _ := range diff.Add {
 		this.SetTag(tag)
 	}

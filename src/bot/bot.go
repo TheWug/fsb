@@ -781,7 +781,7 @@ func (this *AutofixState) HandleCallback(ctx *gogram.CallbackCtx) {
 				}
 			}
 		} else if ctx.Cmd.Command == "/af-dismiss" {
-			err = this.Behavior.DismissPromptPost(ctx.Bot, post_info, apitypes.TagDiff{}, settings)
+			err = this.Behavior.DismissPromptPost(ctx.Bot, post_info, tags.TagDiff{}, settings)
 			if err != nil {
 				if err != nil { ctx.Bot.ErrorLog.Println("Failed to dismiss prompt post:", err.Error()) }
 				return
@@ -1855,6 +1855,6 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 		rating := "safe"
 
 		reason := "API Update Test (should be NOOP)"
-		api.UpdatePost(user, apikey, post, apitypes.TagDiff{}, &rating, &parent_post, sources, &description, &reason)
+		api.UpdatePost(user, apikey, post, tags.TagDiff{}, &rating, &parent_post, sources, &description, &reason)
 	}
 }

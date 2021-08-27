@@ -4,7 +4,6 @@ import (
 	"storage"
 
 	"api/tags"
-	apitypes "api/types"
 
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"
@@ -92,8 +91,8 @@ type EditPrompt struct {
 	State string `json:"state"`
 
 	// stuff to generate the post info
-	TagChanges apitypes.TagDiff `json:"tag_changes"`
-	SourceChanges apitypes.TagDiff `json:"source_changes"` // not actually tags, but you can treat them the same.
+	TagChanges tags.TagDiff `json:"tag_changes"`
+	SourceChanges tags.TagDiff `json:"source_changes"` // not actually tags, but you can treat them the same.
 	OrigSources map[string]int `json:"sources_live"`
 	SeenSources map[string]int `json:"source_seen"`
 	SeenSourcesReverse []string `json:"source_seen_rev"`
@@ -384,9 +383,9 @@ func (this *EditPrompt) GenerateMarkup() interface{} {
 	} else if this.State == WAIT_SOURCE {
 		for i, source := range this.SeenSourcesReverse {
 			var selected bool
-			if this.SourceChanges.TagStatus(source) == apitypes.AddsTag {
+			if this.SourceChanges.TagStatus(source) == tags.AddsTag {
 				selected = true
-			} else if this.SourceChanges.TagStatus(source) == apitypes.RemovesTag {
+			} else if this.SourceChanges.TagStatus(source) == tags.RemovesTag {
 				selected = false
 			} else if _, ok := this.OrigSources[source]; ok {
 				selected = true

@@ -2,6 +2,7 @@ package tagindex
 
 import (
 	"api"
+	"api/tags"
 	"api/types"
 
 	"storage"
@@ -1116,11 +1117,11 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 	}
 	defer progress.Close()
 
-	tags, err := storage.EnumerateAllTags(ctrl)
+	alltags, err := storage.EnumerateAllTags(ctrl)
 	blits, err := storage.EnumerateAllBlits(ctrl)
 	typos, err := storage.GetTagTypos(start_tag, ctrl)
 
-	for _, t2 := range tags {
+	for _, t2 := range alltags {
 		if t1.Name == t2.Name { continue } // skip tag = tag
 
 		is_blit2, reg_blit2 := blits[t2.Name]
@@ -1260,7 +1261,7 @@ func FindTagTypos(ctx *gogram.MessageCtx) {
 		progress.AppendNotice("Fixing tags on ??? posts...")
 
 		updated := 1
-		diffs := make(map[int]types.TagDiff)
+		diffs := make(map[int]tags.TagDiff)
 
 		for _, v := range results {
 			array, err := storage.PostsWithTag(v.Tag, ctrl)
@@ -1721,7 +1722,7 @@ func Concatenations(ctx *gogram.MessageCtx) {
 
 		reason := fmt.Sprintf("Bulk retag: %s --> %s, %s (fixed concatenated tags)", cats[i].tag.Name, cats[i].subtag1.Name, cats[i].subtag2.Name)
 		for _, p := range posts {
-			var diff types.TagDiff
+			var diff tags.TagDiff
 			diff.AddTag(cats[i].subtag1.Name)
 			diff.AddTag(cats[i].subtag2.Name)
 			diff.RemoveTag(cats[i].tag.Name)

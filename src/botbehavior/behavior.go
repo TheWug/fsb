@@ -2,6 +2,7 @@ package botbehavior
 
 import (
 	"api"
+	"api/tags"
 	"api/tagindex"
 	apitypes "api/types"
 	"fsb/errorlog"
@@ -143,7 +144,7 @@ func (this *Behavior) StartMaintenanceAsync(bot *gogram.TelegramBot) (chan bool)
 				// remove any recent autofix changes from the autofix list, bit by bit.
 				// also filter out any edits which become no-ops
 				autofix := autofixes[id]
-				var new_autofix []apitypes.TagDiff
+				var new_autofix []tags.TagDiff
 				for i, _ := range edit.AutoFix {
 					for _, already_done := range autofix {
 						edit.AutoFix[i] = edit.AutoFix[i].Difference(already_done)
@@ -362,7 +363,7 @@ func (this *Behavior) PromptPost(bot *gogram.TelegramBot, post_info *storage.Pro
 	return post_info
 }
 
-func (this *Behavior) DismissPromptPost(bot *gogram.TelegramBot, post_info *storage.PromptPostInfo, diff apitypes.TagDiff, settings storage.UpdaterSettings) error {
+func (this *Behavior) DismissPromptPost(bot *gogram.TelegramBot, post_info *storage.PromptPostInfo, diff tags.TagDiff, settings storage.UpdaterSettings) error {
 	if post_info == nil { return nil }
 
 	bot.Remote.DeleteMessageAsync(data.ODelete{SourceChatId: post_info.ChatId, SourceMessageId: post_info.MsgId}, nil)
@@ -399,7 +400,7 @@ func (this *Behavior) ClearPromptPostsOlderThan(bot *gogram.TelegramBot, time_ag
 	if err != nil { return err }
 
 	for _, post_info := range post_infos {
-		this.DismissPromptPost(bot, &post_info, apitypes.TagDiff{}, settings)
+		this.DismissPromptPost(bot, &post_info, tags.TagDiff{}, settings)
 	}
 
 	settings.Transaction.MarkForCommit()

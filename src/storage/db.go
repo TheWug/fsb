@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"api/tags"
 	apitypes "api/types"
 
 	"github.com/lib/pq"
@@ -945,8 +946,8 @@ func GetTagTypos(tag string, ctrl EnumerateControl) (map[string]TypoData, error)
 }
 
 type PostSuggestedEdit struct {
-	Prompt        apitypes.TagDiffArray `json:"prompt"`
-	AutoFix       apitypes.TagDiffArray `json:"autofix"`
+	Prompt        tags.TagDiffArray      `json:"prompt"`
+	AutoFix       tags.TagDiffArray      `json:"autofix"`
 	SelectedEdits map[string]bool        `json:"selected_edits"`
 	AppliedEdits  map[string]bool        `json:"applied_edits"`
 }
@@ -1033,15 +1034,15 @@ func (this *PostSuggestedEdit) Scan(value interface{}) error {
 	return json.Unmarshal(b, &this)
 }
 
-func (this PostSuggestedEdit) GetChangeToApply() apitypes.TagDiff {
-	var apply apitypes.TagDiff
+func (this PostSuggestedEdit) GetChangeToApply() tags.TagDiff {
+	var apply tags.TagDiff
 	for selected, _ := range this.SelectedEdits {
 		if !this.AppliedEdits[selected] {
 			apply.ApplyString(selected)
 		}
 	}
 
-	var revert apitypes.TagDiff
+	var revert tags.TagDiff
 	for applied, _ := range this.AppliedEdits {
 		if !this.SelectedEdits[applied] {
 			revert.ApplyString(applied)
@@ -1097,7 +1098,7 @@ func (this PostSuggestedEdit) Append(other PostSuggestedEdit) PostSuggestedEdit 
 	return new_pse
 }
 
-func (this PostSuggestedEdit) Flatten() apitypes.TagDiff {
+func (this PostSuggestedEdit) Flatten() tags.TagDiff {
 	return this.Prompt.Flatten().Union(this.AutoFix.Flatten())
 }
 
@@ -1107,7 +1108,7 @@ func GetSuggestedPostEdits(posts []int, settings UpdaterSettings) (map[int]PostS
 	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
 
 	results := make(map[int]PostSuggestedEdit)
-	populate := func(id int, mode CorrectionMode) *apitypes.TagDiff {
+	populate := func(id int, mode CorrectionMode) *tags.TagDiff {
 		value := results[id]
 
 		array := &value.Prompt
@@ -1118,7 +1119,7 @@ func GetSuggestedPostEdits(posts []int, settings UpdaterSettings) (map[int]PostS
 			panic("bad CorrectionMode? should be either Prompt or Autofix")
 		}
 
-		*array = append(*array, apitypes.TagDiff{})
+		*array = append(*array, tags.TagDiff{})
 		results[id] = value
 		return &(*array)[len(*array) - 1]
 	}
@@ -1179,7 +1180,7 @@ type PromptPostInfo struct {
 	Edit      *PostSuggestedEdit
 }
 
-func GetAutoFixHistoryForPosts(posts []int, settings UpdaterSettings) (map[int][]apitypes.TagDiff, error) {
+func GetAutoFixHistoryForPosts(posts []int, settings UpdaterSettings) (map[int][]tags.TagDiff, error) {
 	mine, tx := settings.Transaction.PopulateIfEmpty(Db_pool)
 	defer settings.Transaction.Finalize(mine)
 	if settings.Transaction.err != nil { return nil, settings.Transaction.err }
@@ -1189,7 +1190,7 @@ func GetAutoFixHistoryForPosts(posts []int, settings UpdaterSettings) (map[int][
 	if err != nil { return nil, err }
 	defer rows.Close()
 
-	results := make(map[int][]apitypes.TagDiff)
+	results := make(map[int][]tags.TagDiff)
 
 	for rows.Next()	{
 		var id int
@@ -1198,7 +1199,7 @@ func GetAutoFixHistoryForPosts(posts []int, settings UpdaterSettings) (map[int][
 		err = rows.Scan(&id, &diff_string)
 		if err != nil { return nil, err }
 
-		results[id] = append(results[id], apitypes.TagDiffFromString(diff_string))
+		results[id] = append(results[id], tags.TagDiffFromString(diff_string))
 	}
 	
 	settings.Transaction.commit = mine

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"api/tags"
 	"api/types"
 
 	"github.com/thewug/reqtify"
@@ -59,7 +60,7 @@ var PostIsDeleted error = errors.New("This post has been deleted.")
 
 func UpdatePost(user, apitoken string,
 		id int,
-		tagdiff types.TagDiff,				// empty to leave tags unchanged.
+		tagdiff tags.TagDiff,				// empty to leave tags unchanged.
 		rating *string,					// nil to leave rating unchanged.
 		parent *int,					// nil to leave parent unchanged, -1 to UNSET parent
 		sourcediff []string,				// nil to leave source unchanged
