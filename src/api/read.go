@@ -39,27 +39,6 @@ func TestLogin(user, apitoken string) (bool, error) {
 	return (u != nil && u.Email != ""), nil
 }
 
-func ListTagHistory(user, apitoken string, limit int, before, after *int) (types.THistoryArray, error) { // moved to post_versions, requires rework
-	url := "/post_tag_history/index.json"
-
-	var hist types.THistoryArray
-
-	req := api.New(url).
-			BasicAuthentication(user, apitoken).
-			URLArg("limit", strconv.Itoa(limit)).
-			JSONInto(&hist)
-	if before != nil { req.URLArg("before", strconv.Itoa(*before)) }
-	if after != nil { req.URLArg("after", strconv.Itoa(*after)) }
-	r, e := req.Do()
-
-	APILog(url, user, len(hist), r, e)
-
-	if e != nil {
-		return nil, e
-	}
-	return hist, nil
-}
-
 func ListTags(user, apitoken string, options types.ListTagsOptions) (types.TTagInfoArray, error) {
 	url := "/tags.json"
 
