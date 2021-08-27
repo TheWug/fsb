@@ -68,10 +68,10 @@ func main() {
 
 	help := bot.HelpState{StateBase: gogram.StateBase{StateMachine: machine}}
 	login := bot.LoginState{StateBase: gogram.StateBase{StateMachine: machine}}
-	post := bot.PostState{StateBase: gogram.StateBase{StateMachine: machine}}
 	janitor := bot.JanitorState{StateBase: gogram.StateBase{StateMachine: machine}}
 	votes := bot.VoteState{StateBase: gogram.StateBase{StateMachine: machine}}
 	autofix := bot.AutofixState{StateBase: gogram.StateBase{StateMachine: machine}, Behavior: &behavior}
+	post := bot.PostState{StateBasePersistent: persist.Register(p, machine, "post", bot.PostStateFactory)}
 	edit := bot.EditState{StateBasePersistent: persist.Register(p, machine, "edit", bot.EditStateFactory)}
 
 	machine.AddCommand("/help", &help)

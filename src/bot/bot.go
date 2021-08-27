@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"io"
 	"io/ioutil"
 	"sort"
 	"strconv"
@@ -979,7 +978,6 @@ type esp struct {
 
 	MsgId data.MsgID `json:"msgid"`
 	ChatId data.ChatID `json:"chatid"`
-	PostId int `json:"postid"`
 }
 
 type EditState struct {
@@ -1026,65 +1024,24 @@ func (this *EditState) HandleCallback(ctx *gogram.CallbackCtx) {
 		return
 	}
 
-	switch ctx.Cmd.Command {
-	case "/reset":
-		if len(ctx.Cmd.Args) != 1 { return }
-		p.ApplyReset(ctx.Cmd.Args[0])
-	case "/tags":
-		p.Prefix = "Enter a list of tag changes, seperated by spaces. You can clear tags by prefixing them with a minus (-) and reset them by prefixing with an equals (=)."
-		p.State = dialogs.WAIT_TAGS
-	case "/sources":
-		if len(ctx.Cmd.Args) == 2 {
-			index, err := strconv.Atoi(ctx.Cmd.Args[0])
-			pick := ctx.Cmd.Args[1] == "true"
-			if err != nil { return }
-			p.SourceButton(index, pick)
-		}
-		p.Prefix = "Post some source changes, seperated by newlines. You can remove sources by prefixing them with a minus (-)."
-		p.State = dialogs.WAIT_SOURCE
-	case "/rating":
-		if len(ctx.Cmd.Args) == 1 {
-			rating, err := api.SanitizeRatingForEdit(ctx.Cmd.Args[0])
+	p.HandleCallback(ctx, settings)
 
-			if err == nil {
-				p.Rating = rating
-			}
+	if p.State == dialogs.SAVED {
+		_, err := p.CommitEdit(this.data.User, this.data.ApiKey, gogram.NewMessageCtx(ctx.Cb.Message, false, ctx.Bot), settings)
+		if err == nil {
+			p.Finalize(settings, ctx.Bot, nil, dialogs.NewEditFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F7E2 Edit submitted."}, nil)
+			ctx.SetState(nil)
+		} else {
+			ctx.AnswerAsync(data.OCallback{Notification: fmt.Sprintf("\U0001F534 %s", err.Error())}, nil)
+			p.Prompt(settings, ctx.Bot, nil, dialogs.NewEditFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, err))
+			p.State = dialogs.WAIT_MODE
 		}
-		p.Prefix = "Post the new rating."
-		p.State = dialogs.WAIT_RATING
-	case "/description":
-		p.Prefix = `Post the new description. You can use <a href="https://` + api.Endpoint + `/help/dtext">dtext</a>.`
-		p.State = dialogs.WAIT_DESC
-	case "/parent":
-		if len(ctx.Cmd.Args) == 1 && ctx.Cmd.Args[0] == "none" {
-			p.Parent = -1
-		}
-		p.Prefix = `Post the new parent.`
-		p.State = dialogs.WAIT_PARENT
-	case "/reason":
-		p.Prefix = "Why are you editing this post? Post an edit reason, 250 characters max."
-		p.State = dialogs.WAIT_REASON
-	case "/file":
-		p.Prefix = `Upload a file.`
-		p.State = dialogs.WAIT_FILE
-	case "/save":
-		ctx.AnswerAsync(data.OCallback{Notification: "\U0001F7E2 Edit submitted."}, nil)
-		p.CommitEdit(this.data.User, this.data.ApiKey, gogram.NewMessageCtx(ctx.Cb.Message, false, ctx.Bot), settings)
-		ctx.SetState(nil)
-		settings.Transaction.MarkForCommit()
-		return
-	case "/discard":
-		p.Prefix = ""
-		p.State = dialogs.DISCARDED
-		p.Finalize(settings, ctx.Bot, nil)
-		ctx.AnswerAsync(data.OCallback{Notification: "\U0001F534 Edit discarded."}, nil) // finalize dialog post and discard edit
-		ctx.SetState(nil)
-		settings.Transaction.MarkForCommit()
-		return
-	default:
+	} else if p.State == dialogs.DISCARDED {
+		p.Finalize(settings, ctx.Bot, nil, dialogs.NewEditFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+	} else {
+		p.Prompt(settings, ctx.Bot, nil, dialogs.NewEditFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
 	}
-
-	p.Prompt(settings, ctx.Bot, nil)
 	settings.Transaction.MarkForCommit()
 }
 
@@ -1103,43 +1060,9 @@ func (this *EditState) Freeform(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	if p.State == dialogs.WAIT_TAGS {
-		p.TagChanges.ApplyString(ctx.Msg.PlainText())
-		p.Prefix = "Got it. Continue sending more tag changes, and pick a button from below when you're done."
-	} else if p.State == dialogs.WAIT_SOURCE {
-		for _, source := range strings.Split(ctx.Msg.PlainText(), "\n") {
-			p.SourceStringPrefixed(source)
-		}
-		p.Prefix = "Got it. Continue sending more source changes, and pick a button from below when you're done."
-	} else if p.State == dialogs.WAIT_RATING {
-		rating, err := api.SanitizeRatingForEdit(ctx.Msg.PlainText())
+	p.HandleFreeform(ctx)
 
-		if err != nil {
-			p.Prefix = "Please enter a <i>valid</i> rating. (Pick from <code>explicit</code>, <code>questionable</code>, <code>safe</code>, or <code>original</code>.)"
-		} else {
-			p.Rating = rating
-			p.ResetState()
-		}
-	} else if p.State == dialogs.WAIT_DESC {
-		p.Description = ctx.Msg.PlainText() // TODO: convert telegram markup to dtext
-		p.ResetState()
-	} else if p.State == dialogs.WAIT_PARENT {
-		parent := apiextra.GetParentPostFromText(ctx.Msg.PlainText())
-
-		if err != nil {
-			p.Prefix = "Please enter a <i>valid</i> parent post. (You can either send a link to a post, a bare numeric ID, 'none' for no parent, or 'original' to not attempt to update the parent at all.)"
-		} else {
-			p.Parent = parent
-			p.ResetState()
-		}
-	} else if p.State == dialogs.WAIT_REASON {
-		p.Reason = ctx.Msg.PlainText()
-		p.ResetState()
-	} else {
-		return
-	}
-
-	p.Prompt(settings, ctx.Bot, nil)
+	p.Prompt(settings, ctx.Bot, nil, dialogs.NewEditFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
 	ctx.DeleteAsync(nil)
 	settings.Transaction.MarkForCommit()
 }
@@ -1158,16 +1081,13 @@ func (this *EditState) Cancel(ctx *gogram.MessageCtx) {
 	if p != nil {
 		p.State = dialogs.DISCARDED
 		p.Prefix = ""
-		p.Finalize(settings, ctx.Bot, nil)
+		p.Finalize(settings, ctx.Bot, nil, dialogs.NewEditFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
 	}
 	ctx.SetState(nil)
 	settings.Transaction.MarkForCommit()
 }
 
 func (this *EditState) Edit(ctx *gogram.MessageCtx) {
-	var post int
-	var mode int
-	var savenow bool
 	var e dialogs.EditPrompt
 
 	if ctx.Msg.From == nil { return }
@@ -1181,83 +1101,20 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	for _, token := range ctx.Cmd.Args {
-		if mode != root {
-			if mode == posttags {
-				e.TagChanges.ApplyString(token)
-			} else if mode == postsource {
-				e.SourceChanges.ApplyArray(strings.Split(token, "\n"))
-			} else if mode == postrating {
-				rating, err := api.SanitizeRatingForEdit(token)
-				if err != nil {
-					ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Please try again with a valid rating."}}, nil)
-					return
-				} else {
-					e.Rating = rating
-				}
-			} else if mode == postdescription {
-				e.Description = token // at some point i should make it convert telegram markup to dtext but i can't do that right now
-			} else if mode == postparent {
-				new_parent := apiextra.GetParentPostFromText(token)
-				if new_parent != apiextra.NONEXISTENT_PARENT {
-					e.Parent = new_parent
-				} else {
-					ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Please try again wth a valid parent post."}}, nil)
-					return
-				}
-			} else if mode == postfileurl {
-				e.File.SetUrl(token)
-			} else if mode == editreason {
-				e.Reason = token
-			}
-			mode = root
-		}
-		if token == "" {
-		} else if token == "--tags" {
-			mode = posttags
-		} else if token == "--sources" {
-			mode = postsource
-		} else if token == "--rating" {
-			mode = postrating
-		} else if token == "--description" {
-			mode = postdescription
-		} else if token == "--parent" {
-			mode = postparent
-		} else if token == "--reason" {
-			mode = editreason
-		} else if token == "--file" {
-			mode = postfile
-		} else if token == "--url" {
-			mode = postfileurl
-		} else if token == "--commit" {
-			savenow = true
-		} else {
-			temp, err := strconv.Atoi(token)
-			if err == nil { post = temp }
-		}
-
-		if mode == postfile {
-			doc := ctx.Msg.Document
-			if doc == nil && ctx.Msg.ReplyToMessage != nil {
-				doc = ctx.Msg.ReplyToMessage.Document
-			}
-
-			if doc != nil && doc.FileName != nil{
-				e.File.SetTelegramFile(doc.Id, *doc.FileName)
-			}
-			mode = root
-		}
+	savenow, err := e.ParseArgs(ctx)
+	if err != nil {
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: err.Error()}}, nil)
+		return
 	}
 
-	if post <= 0 {
+	if e.PostId <= 0 {
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Sorry, I can't figure out which post you're talking about!\n\nYou can reply to a message with a post URL, or you can pass an ID or a link directly."}}, nil)
 		return
 	}
 
-	e.PostId = post
 	e.OrigSources = make(map[string]int)
 
-	post_data, err := storage.PostByID(post, storage.UpdaterSettings{})
+	post_data, err := storage.PostByID(e.PostId, storage.UpdaterSettings{})
 	if post_data != nil {
 		for _, s := range post_data.Sources {
 			e.SeeSource(s)
@@ -1269,13 +1126,12 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 		e.CommitEdit(user, api_key, ctx, storage.UpdaterSettings{})
 	} else {
 		e.ResetState()
-		prompt := e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx)
+		prompt := e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewEditFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
 		ctx.SetState(EditStateFactoryWithData(nil, this.StateBasePersistent, esp{
 			User: user,
 			ApiKey: api_key,
 			MsgId: prompt.Msg.Id,
 			ChatId: prompt.Msg.Chat.Id,
-			PostId: post,
 		}))
 	}
 }
@@ -1430,30 +1286,31 @@ func (this *TagRuleState) Handle(ctx *gogram.MessageCtx) {
 	}
 }
 
+type psp struct {
+	User string `json:"user"`
+	ApiKey string `json:"apikey"`
+
+	MsgId data.MsgID `json:"msgid"`
+	ChatId data.ChatID `json:"chatid"`
+}
+
 type PostState struct {
-	gogram.StateBase
+	persist.StateBasePersistent
 
-	postmode	int
-	postfile	PostFile
-	postrating	string
-	posttagwiz	bool
-	postwizard	TagWizard
-	postsource      string
-	postdescription string
-	postparent     *int
-	postready	bool
-	postdone	bool
-	postreviewed	bool
+	data psp
 }
 
-func (this *PostState) Reset() {
-	this.postwizard.Reset()
+func PostStateFactory(jstr []byte, sbp persist.StateBasePersistent) gogram.State {
+	return PostStateFactoryWithData(jstr, sbp, psp{})
 }
 
-func (this *PostState) SetTagRulesByName(my_id data.UserID, name string) {
-	if name == "" { name = "main" }
-	rules, _ := storage.GetUserTagRules(storage.UpdaterSettings{}, my_id, name)
-	this.postwizard.SetNewRulesFromString(rules)
+func PostStateFactoryWithData(jstr []byte, sbp persist.StateBasePersistent, data psp) gogram.State {
+	var p PostState
+	p.StateBasePersistent = sbp
+	p.StateBasePersistent.Persist = &p.data
+	p.data = data
+	json.Unmarshal(jstr, p.StateBasePersistent.Persist)
+	return &p
 }
 
 func (this *PostState) WriteUserTagRules(my_id data.UserID, tagrules, name string) {
@@ -1461,281 +1318,137 @@ func (this *PostState) WriteUserTagRules(my_id data.UserID, tagrules, name strin
 }
 
 func (this *PostState) HandleCallback(ctx *gogram.CallbackCtx) {
-	newstate, response := this.HandleCmd(&ctx.Cmd, &ctx.Cb.From, ctx.GetState(), nil, ctx.MsgCtx.Msg, ctx.Bot)
-	ctx.SetState(newstate)
-	if response.Text != "" {
-		ctx.Respond(response)
+	txbox, err := storage.NewTxBox()
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("Error occurred opening transaction: ", err.Error())
+		return
 	}
+	settings := storage.UpdaterSettings{Transaction: txbox}
+	defer settings.Transaction.Finalize(true)
+
+	p, err := dialogs.LoadEditPrompt(settings, this.data.MsgId, this.data.ChatId)
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("Error loading edit prompt: ", err.Error())
+		return
+	}
+
+	p.HandleCallback(ctx, settings)
+
+	if p.State == dialogs.SAVED {
+		upload_result, err := p.CommitPost(this.data.User, this.data.ApiKey, gogram.NewMessageCtx(ctx.Cb.Message, false, ctx.Bot), settings)
+		if err == nil && upload_result != nil && upload_result.Success {
+			p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, upload_result))
+			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F7E2 Edit submitted."}, nil)
+			ctx.SetState(nil)
+		} else if err != nil {
+			ctx.AnswerAsync(data.OCallback{Notification: fmt.Sprintf("\U0001F534 %s", err.Error())}, nil)
+			p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+			p.State = dialogs.WAIT_MODE
+		} else if upload_result != nil && !upload_result.Success {
+			if upload_result.Reason == nil { upload_result.Reason = new(string) }
+			ctx.AnswerAsync(data.OCallback{Notification: fmt.Sprintf("\U0001F534 Error: %s", *upload_result.Reason)}, nil)
+			p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, upload_result))
+			p.State = dialogs.WAIT_MODE
+		}
+	} else if p.State == dialogs.DISCARDED {
+		p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+	} else {
+		p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+	}
+	settings.Transaction.MarkForCommit()
 }
 
 func (this *PostState) Handle(ctx *gogram.MessageCtx) {
-	if ctx.Msg.From == nil { return }
-	newstate, response := this.HandleCmd(&ctx.Cmd, ctx.Msg.From, ctx.GetState(), ctx.Msg, nil, ctx.Bot)
-	ctx.SetState(newstate)
-	if response.Text != "" {
-		ctx.Respond(response)
+	if ctx.Cmd.Command == "/post" && ctx.GetState() == nil {
+		this.Post(ctx)
+	} else if ctx.Cmd.Command == "/cancel" {
+		this.Cancel(ctx)
+	} else {
+		this.Freeform(ctx)
 	}
 }
 
-func (this *PostState) HandleCmd(cmd *gogram.CommandData,
-                                 from *data.TUser,
-                                 current_state gogram.State,
-                                 inbound_message *data.TMessage,
-                                 context_message *data.TMessage,
-                                 bot *gogram.TelegramBot) (gogram.State, data.OMessage) {
+func (this *PostState) Post(ctx *gogram.MessageCtx) {
+	var e dialogs.EditPrompt
 
-	endstate := current_state
-	var response data.OMessage
-	response.ParseMode = data.ParseHTML
+	if ctx.Msg.From == nil { return }
 
-	if cmd.Command == "/cancel" {
-		response.Text = "Command cancelled."
-		endstate = nil
-		return endstate, response
+	user, api_key, _, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
+	if err != nil {
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "You need to be logged in to use this command!"}}, nil)
+		if err != storage.ErrNoLogin {
+			ctx.Bot.ErrorLog.Println("Error while checking credentials: ", err.Error())
+		}
+		return
 	}
 
-	if current_state == nil {
-		this = &PostState{}
-		m := inbound_message
-		if m == nil {
-			m = &data.TMessage{Chat: data.TChat{Id: data.ChatID(from.Id)}}
-		}
-		this.postwizard = *NewTagWizard(gogram.NewMessageCtx(m, false, bot))
-		rules, err := storage.GetUserTagRules(storage.UpdaterSettings{}, from.Id, "main")
-		if err != nil { bot.ErrorLog.Println(err.Error()) }
-		if err == nil { this.postwizard.SetNewRulesFromString(rules) }
-		endstate = this
+	postnow, err := e.ParseArgs(ctx)
+	if err != nil {
+		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: err.Error()}}, nil)
+		return
 	}
 
-	if cmd.Command == "/post" || cmd.Command == "/file" || cmd.Command == "/f" {
-		this.postfile.mode = none
-		this.posttagwiz = false
-		this.postmode = postfile
-	} else if cmd.Command == "/tag" || cmd.Command == "/t" {
-		this.posttagwiz = false
-		this.postmode = posttags
-	} else if cmd.Command == "/wizard" || cmd.Command == "/w" {
-		this.posttagwiz = true
-		this.postmode = postwizard
-		this.SetTagRulesByName(from.Id, cmd.Argstr)
-	} else if cmd.Command == "/rating" || cmd.Command == "/r" {
-		this.posttagwiz = false
-		this.postrating = ""
-		this.postmode = postrating
-	} else if cmd.Command == "/source" || cmd.Command == "/src" || cmd.Command == "/s" {
-		this.posttagwiz = false
-		this.postsource = ""
-		this.postmode = postsource
-	} else if cmd.Command == "/description" || cmd.Command == "/desc" || cmd.Command == "/d" {
-		this.posttagwiz = false
-		this.postdescription = ""
-		this.postmode = postdescription
-	} else if cmd.Command == "/parent" || cmd.Command == "/p" {
-		this.posttagwiz = false
-		this.postparent = nil
-		this.postmode = postparent
-	} else if cmd.Command == "/upload" {
-		this.postmode = postupload
-	} else if cmd.Command == "/help" {
-		response.Text = ShowHelp("post")
-		return endstate, response
-	} else if cmd.Command == "/z" && this.postmode == postwizard {
-		this.postwizard.ToggleTagsFromString(cmd.Argstr)
-		this.postwizard.UpdateMenu()
-	} else if cmd.Command == "/next" && this.postmode == postwizard {
-		this.postwizard.NextMenu()
-	} else if cmd.Command == "/finish" && this.postmode == postwizard {
-		this.postwizard.FinishMenu()
-		this.postmode = postnext
-		response.Text = "Done tagging.\n\n"
-	} else if cmd.Command == "/again" && this.postmode == postwizard {
-		this.postwizard.DoOver()
+	if postnow {
+		e.CommitPost(user, api_key, ctx, storage.UpdaterSettings{})
+	} else {
+		e.ResetState()
+		prompt := e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+		ctx.SetState(PostStateFactoryWithData(nil, this.StateBasePersistent, psp{
+			User: user,
+			ApiKey: api_key,
+			MsgId: prompt.Msg.Id,
+			ChatId: prompt.Msg.Chat.Id,
+		}))
+	}
+}
+
+func (this *PostState) Cancel(ctx *gogram.MessageCtx) {
+	txbox, err := storage.NewTxBox()
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("Error occurred opening transaction: ", err.Error())
+		return
+	}
+	settings := storage.UpdaterSettings{Transaction: txbox}
+	defer settings.Transaction.Finalize(true)
+
+	p, err := dialogs.LoadEditPrompt(settings, this.data.MsgId, this.data.ChatId)
+	if err != nil { ctx.Bot.ErrorLog.Println(err.Error()) }
+	if p != nil {
+		p.State = dialogs.DISCARDED
+		p.Prefix = ""
+		p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+	}
+	ctx.SetState(nil)
+	settings.Transaction.MarkForCommit()
+}
+
+func (this *PostState) Freeform(ctx *gogram.MessageCtx) {
+	txbox, err := storage.NewTxBox()
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("Error occurred opening transaction: ", err.Error())
+		return
+	}
+	settings := storage.UpdaterSettings{Transaction: txbox}
+	defer settings.Transaction.Finalize(true)
+
+	p, err := dialogs.LoadEditPrompt(settings, this.data.MsgId, this.data.ChatId)
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("Error occurred loading edit prompt: ", err.Error())
+		return
 	}
 
-	if this.postmode == postfile {
-		if inbound_message != nil && inbound_message.Photo != nil { // inline photo
-			response.Text = "That photo was compressed by telegram, and its quality may be severely degraded.  Send it as a file instead if you're sure.\n\n"
-		} else if inbound_message != nil && inbound_message.Document != nil { // inline file
-			response.Text = "Preparing to post file sent in this message.\n\n"
-			this.postfile.mode = file_id
-			this.postfile.file_id = inbound_message.Document.Id
-			this.postmode = postnext
-		} else if inbound_message != nil && inbound_message.ReplyToMessage != nil && inbound_message.ReplyToMessage.Document != nil { // reply to file
-			response.ReplyToId = &inbound_message.ReplyToMessage.Id
-			response.Text = "Preparing to post file sent in this message.\n\n"
-			this.postfile.mode = file_id
-			this.postfile.file_id = inbound_message.ReplyToMessage.Document.Id
-			this.postmode = postnext
-		} else if strings.HasPrefix(cmd.Argstr, "http://") || strings.HasPrefix(cmd.Argstr, "https://") { // inline url
-			response.Text = fmt.Sprintf("Preparing to post from <a href=\"%s\">this URL</a>.\n\n", cmd.Argstr)
-			this.postfile.mode = url
-			this.postfile.url = cmd.Argstr
-			this.postmode = postnext
-		} else if inbound_message != nil && inbound_message.ReplyToMessage != nil && inbound_message.ReplyToMessage.Photo != nil { // reply to photo
-			response.ReplyToId = &inbound_message.ReplyToMessage.Id
-			response.Text = "That photo was compressed by telegram, and its quality may be severely degraded.  Send it as a file instead if you're sure.\n\n"
-		} else if inbound_message != nil && inbound_message.ReplyToMessage != nil || cmd.Argstr != "" { // reply to unknown, or unknown
-			response.Text = "Sorry, I don't know what to do with that.\n\nPlease send me a file. Either send (or forward) one directly, reply to one you sent earlier, or send a URL."
-		} else {
-			this.postmode = postnext
-		}
-	} else if this.postmode == postwizard {
-		if cmd.Command == "" {
-			this.postwizard.MergeTagsFromString(cmd.Argstr)
-			this.postwizard.UpdateMenu()
-		}
-		if cmd.Command == "/next" {
-			this.postwizard.NextMenu()
-		}
-	} else if this.postmode == posttags {
-		if cmd.Argstr == "" {
-			response.Text = "Please send some new tags."
-		} else {
-			if this.postwizard.Len() != 0 {
-				response.Text = fmt.Sprintf("Replaced previous tags.\n(%s)", this.postwizard.TagString())
-			} else {
-				response.Text = "Applied tags."
-			}
-			this.postwizard.Reset()
-			this.postwizard.MergeTagsFromString(cmd.Argstr)
-			this.postmode = postnext
-		}
-	} else if this.postmode == postrating {
-		var err error
-		this.postrating, err = api.SanitizeRating(cmd.Argstr)
-		if cmd.Argstr == "" {
-			this.postmode = postnext
-		} else if err != nil {
-			response.Text = "Sorry, that isn't a valid rating.\n\nPlease enter the post's rating! Safe, Questionable, or Explicit?"
-		} else {
-			response.Text = fmt.Sprintf("Set rating to %s.\n\n", this.postrating)
-			this.postmode = postnext
-		}
-	} else if this.postmode == postsource {
-		this.postsource = cmd.Argstr
-		if this.postsource == "." { this.postsource = "" }
-		this.postmode = postnext
-		if cmd.Argstr == "" {
-		} else if cmd.Argstr == "." {
-			response.Text = "Cleared sources.\n\n"
-		} else {
-			response.Text = "Set sources.\n\n"
-		}
-	} else if this.postmode == postdescription {
-		this.postdescription = cmd.Argstr
-		if this.postdescription == "." { this.postdescription = "" }
-		this.postmode = postnext
-		if cmd.Argstr == "" {
-		} else if cmd.Argstr == "." {
-			response.Text = "Cleared description.\n\n"
-		} else {
-			response.Text = "Set description.\n\n"
-		}
-	} else if this.postmode == postparent {
-		this.postmode = postnext
-		if cmd.Argstr != "" {
-			new_parent := apiextra.GetParentPostFromText(cmd.Argstr)
+	current_state := p.State
+	p.HandleFreeform(ctx)
 
-			if new_parent != apiextra.NONEXISTENT_PARENT && new_parent != apiextra.UNCHANGED_PARENT {
-				this.postparent = &new_parent
-				response.Text = "Set parent post.\n\n"
-			} else {
-				this.postparent = nil
-				response.Text = "Cleared parent post.\n\n"
-			}
-		}
-	} else if this.postmode == postupload {
-		if this.postfile.mode == none || this.postwizard.Len() < 6 || this.postrating == "" {
-			this.postmode = postnext
-		} else {
-			var post_url string
-			var post_filedata io.ReadCloser
-			if this.postfile.mode == url {
-				post_url = this.postfile.url
-			} else {
-				file, err := bot.Remote.GetFile(data.OGetFile{Id: this.postfile.file_id})
-				if err != nil || file == nil || file.FilePath == nil {
-					response.Text = "Error while fetching file, try sending it again?"
-					this.postmode = postnext
-					return endstate, response
-				}
-				post_filedata, err = bot.Remote.DownloadFile(data.OFile{FilePath: *file.FilePath})
-				if err != nil || post_filedata == nil {
-					response.Text = "Error while downloading file, try sending it again?"
-					this.postmode = postnext
-					return endstate, response
-				}
-			}
-			user, apikey, _, err := storage.GetUserCreds(storage.UpdaterSettings{}, from.Id)
-			result, err := api.UploadFile(post_filedata, post_url, this.postwizard.TagString(), this.postrating, this.postsource, this.postdescription, this.postparent, user, apikey)
-			if err != nil || !result.Success {
-				if result.StatusCode == 403 {
-					response.Text = "It looks like your api key isn't valid, you need to login again."
-					this.Reset()
-					endstate = nil
-				} else if result.Location != nil && result.StatusCode == 423 {
-					response.Text = fmt.Sprintf("It looks like that file has already been posted. <a href=\"%s\">Check it out here.</a>", *result.Location)
-					this.Reset()
-					endstate = nil
-				} else {
-					response.Text = fmt.Sprintf("I'm having issues posting that file. (%s)", *result.Reason)
-				}
-			} else {
-				response.Text = fmt.Sprintf("Upload complete! <a href=\"%s\">Check it out.</a>", *result.Location)
-				this.Reset()
-				endstate = nil
-			}
+	p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
 
-			if endstate == nil { return endstate, response }
-		}
+	if current_state == dialogs.WAIT_FILE && ctx.Msg.Document != nil && ctx.Msg.ForwardDate == nil {
+		// keep the post around if it's a new, non-forwarded file upload
+	} else {
+		// otherwise, toss it.
+		ctx.DeleteAsync(nil)
 	}
-
-	if this.postmode == postnext {
-		if this.postrating == "" {
-			newrating := this.postwizard.Rating()
-			if newrating != "" {
-				this.postrating = newrating
-				response.Text = fmt.Sprintf("%sThe tags imply the rating of this post is %s.\n\n", response.Text, this.postrating)
-			}
-		}
-
-		if this.postfile.mode == none {
-			response.Text = fmt.Sprintf("%s%s", response.Text,  "Please send me a file. Either send (or forward) one directly, reply to one you sent earlier, or send a URL.")
-			this.postmode = postfile
-		} else if this.postwizard.Len() == 0 {
-			this.posttagwiz = true
-			this.postmode = postwizard
-		} else if this.postrating == "" {
-			response.Text = "Please enter the post's rating! Safe, Questionable, or Explicit?"
-			this.postmode = postrating
-		} else {
-			if this.postready == false {
-				response.Text = fmt.Sprintf("%s%s", response.Text, "Your post now has enough information to submit!\n\n")
-				this.postready = true
-			}
-
-			if this.postsource == "" {
-				response.Text = fmt.Sprintf("%s%s", response.Text, "Please enter the post source links.")
-				this.postmode = postsource
-			} else if this.postdescription == "" {
-				response.Text = fmt.Sprintf("%s%s", response.Text, "Please enter the description.\n<a href=\"https://" + api.Endpoint + "/help/show/dtext\">Remember, you can use DText.</a>")
-				this.postmode = postdescription
-			} else if this.postparent == nil {
-				response.Text = fmt.Sprintf("%s%s", response.Text, "Please enter the parent post.")
-				this.postmode = postparent
-			} else if !this.postdone {
-				response.Text = fmt.Sprintf("%sThat's it! You've entered all of the info.", response.Text)
-				this.postdone = true
-			}
-		}
-	}
-
-	if this.posttagwiz && this.postmode == postwizard {
-		this.postwizard.SendWizard(int64(from.Id))
-		this.posttagwiz = false
-	}
-
-	return endstate, response
+	settings.Transaction.MarkForCommit()
 }
 
 type JanitorState struct {

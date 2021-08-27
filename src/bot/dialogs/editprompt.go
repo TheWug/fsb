@@ -5,6 +5,8 @@ import (
 
 	"api"
 	"api/tags"
+	"api/types"
+	"apiextra"
 
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"
@@ -12,8 +14,13 @@ import (
 
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
+	"io"
+	"net/url"
+	"path"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -61,20 +68,33 @@ type PostFile struct {
 	FileId data.FileID `json:"pf_tfid"`
 	FileName string `json:"pf_tfname"`
 	Url string `json:"pf_furl"`
+	SizeBytes int64 `json:"pf_size"`
 }
 
-func (this *PostFile) SetTelegramFile(id data.FileID, name string) {
+func (this *PostFile) SetTelegramFile(id data.FileID, name string, size int64) {
 	this.Mode = PF_FROM_TELEGRAM
 	this.FileId = id
 	this.FileName = name
 	this.Url = ""
+	this.SizeBytes = size
 }
 
-func (this *PostFile) SetUrl(url string) {
-	this.Mode = PF_FROM_TELEGRAM
+func filenameFromURL(u string) string {
+	uo, err := url.Parse(u)
+
+	if err != nil || uo == nil {
+		return "[unknown]"
+	}
+
+	return path.Base(uo.Path)
+}
+
+func (this *PostFile) SetUrl(url string, size int64) {
+	this.Mode = PF_FROM_URL
 	this.Url = url
 	this.FileId = ""
-	this.FileName = ""
+	this.FileName = filenameFromURL(url)
+	this.SizeBytes = size
 }
 
 func (this *PostFile) Clear() {
@@ -93,7 +113,7 @@ type EditPrompt struct {
 
 	// stuff to generate the post info
 	TagChanges tags.TagDiff `json:"tag_changes"`
-	SourceChanges tags.TagDiff `json:"source_changes"` // not actually tags, but you can treat them the same.
+	SourceChanges tags.StringDiff `json:"source_changes"` // not actually tags, but you can treat them the same.
 	OrigSources map[string]int `json:"sources_live"`
 	SeenSources map[string]int `json:"source_seen"`
 	SeenSourcesReverse []string `json:"source_seen_rev"`
@@ -102,6 +122,11 @@ type EditPrompt struct {
 	Description string `json:"description"`
 	File PostFile `json:"file"`
 	Reason string `json:"reason"`
+}
+
+type EditPromptFormatter interface {
+	GenerateMessage(*EditPrompt) string
+	GenerateMarkup(*EditPrompt) interface{}
 }
 
 func (this *EditPrompt) ApplyReset(state string) {
@@ -137,7 +162,7 @@ func (this *EditPrompt) ApplyReset(state string) {
 	case WAIT_REASON:
 		this.Reason = ""
 	case WAIT_FILE:
-		this.File = PostFile{}
+		this.File.Clear()
 	default:
 	}
 }
@@ -195,11 +220,11 @@ func (this *EditPrompt) ID() data.DialogID {
 	return EditPromptID()
 }
 
-func (this *EditPrompt) Prompt(settings storage.UpdaterSettings, bot *gogram.TelegramBot, ctx *gogram.MessageCtx) (*gogram.MessageCtx) {
+func (this *EditPrompt) Prompt(settings storage.UpdaterSettings, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt EditPromptFormatter) (*gogram.MessageCtx) {
 	var send data.SendData
-	send.Text = this.GenerateMessage(*bot.Remote.GetMe().CanReadAllGroupMessages)
+	send.Text = frmt.GenerateMessage(this)
 	send.ParseMode = data.ParseHTML
-	send.ReplyMarkup = this.GenerateMarkup()
+	send.ReplyMarkup = frmt.GenerateMarkup(this)
 	if this.TelegramDialogPost.IsUnset() {
 		// no existing message, send a new one
 		if ctx != nil {
@@ -220,9 +245,9 @@ func (this *EditPrompt) Prompt(settings storage.UpdaterSettings, bot *gogram.Tel
 	}
 }
 
-func (this *EditPrompt) Finalize(settings storage.UpdaterSettings, bot *gogram.TelegramBot, ctx *gogram.MessageCtx) (*gogram.MessageCtx) {
+func (this *EditPrompt) Finalize(settings storage.UpdaterSettings, bot *gogram.TelegramBot, ctx *gogram.MessageCtx, frmt EditPromptFormatter) (*gogram.MessageCtx) {
 	var send data.SendData
-	send.Text = this.GenerateMessage(*bot.Remote.GetMe().CanReadAllGroupMessages)
+	send.Text = frmt.GenerateMessage(this)
 	send.ParseMode = data.ParseHTML
 	send.ReplyMarkup = nil
 	
@@ -230,12 +255,12 @@ func (this *EditPrompt) Finalize(settings storage.UpdaterSettings, bot *gogram.T
 	var err error
 	if this.TelegramDialogPost.IsUnset() {
 		prompt, err = ctx.Reply(data.OMessage{SendData: send, DisableWebPagePreview: true})
-		if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
 	} else {
 		prompt, err = this.Ctx(bot).EditText(data.OMessageEdit{SendData: send, DisableWebPagePreview: true})
-		if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
 		this.Delete(settings)
 	}
+
+	if err != nil { bot.ErrorLog.Println("Error sending prompt: ", err.Error()) }
 
 	return prompt
 }
@@ -253,20 +278,54 @@ func (this *EditPrompt) IsNoop() bool {
                this.Parent == 0
 }
 
+func (this *EditPrompt) IsComplete() error {
+	if len(this.Rating) == 0 {
+		return errors.New("You must specify a rating!")
+	} else if len(this.TagChanges.AddList) < 6 {
+		return errors.New("You must specify at least six tags!")
+	} else if len(this.TagChanges.RemoveList) != 0 {
+		return errors.New("You can't remove tags, this is a brand new post!")
+	} else if this.File.Mode == PF_UNSET {
+		return errors.New("You must specify a file!")
+	}
+
+	return nil
+}
+
+// i stole this
+func byteCountIEC(b int64) string {
+    const unit = 1024
+    if b < unit {
+        return fmt.Sprintf("%d B", b)
+    }
+    div, exp := int64(unit), 0
+    for n := b / unit; n >= unit; n /= unit {
+        div *= unit
+        exp++
+    }
+    return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE??????????????????"[exp])
+}
+
 func (this *EditPrompt) PostStatus(b *bytes.Buffer) {
 	no_changes := true
 	if this.File.Mode == PF_FROM_TELEGRAM {
 		b.WriteString("File: <i>")
 		b.WriteString(html.EscapeString(this.File.FileName))
-		b.WriteString("</i>\n")
+		b.WriteString("</i> (")
+		b.WriteString(byteCountIEC(this.File.SizeBytes))
+		b.WriteString(")\n")
 	} else if this.File.Mode == PF_FROM_URL {
 		b.WriteString("File: <a href=\"")
 		b.WriteString(this.File.Url)
-		b.WriteString("\">Fetch from here</a>\n")
+		b.WriteString("\">")
+		b.WriteString(html.EscapeString(this.File.FileName))
+		b.WriteString("</a> (")
+		b.WriteString(byteCountIEC(this.File.SizeBytes))
+		b.WriteString(")\n")
 	}
 	if len(this.Rating) != 0 {
 		b.WriteString("Rating: <code>")
-		b.WriteString(this.Rating)
+		b.WriteString(api.RatingNameString(this.Rating))
 		b.WriteString("</code>\n")
 		no_changes = false
 	}
@@ -278,7 +337,7 @@ func (this *EditPrompt) PostStatus(b *bytes.Buffer) {
 	}
 	if !this.SourceChanges.IsZero() {
 		b.WriteString("Sources:\n<pre>  ")
-		b.WriteString(html.EscapeString(this.SourceChanges.StringWithDelimiter("\n")))
+		b.WriteString(html.EscapeString(this.SourceChanges.StringWithDelimiter("\n  ")))
 		b.WriteString("</pre>\n")
 		no_changes = false
 	}
@@ -315,7 +374,7 @@ func (this *EditPrompt) Warnings(b *bytes.Buffer) {
 	for osource, _ := range this.OrigSources {
 		tagset.SetTag(osource)
 	}
-	tagset.ApplyDiff(this.SourceChanges)
+	tagset.ApplyDiff(tags.TagDiff{StringDiff: this.SourceChanges})
 	if tagset.Len() > 10 {
 		b.WriteString("Too many sources, each post can only have 10! Remove some before committing.\n")
 		any = true
@@ -334,109 +393,294 @@ func (this *EditPrompt) Warnings(b *bytes.Buffer) {
 	}
 }
 
-func (this *EditPrompt) GenerateMessage(privacy_disabled bool) string {
-	var b bytes.Buffer
-	b.WriteString(this.Prefix)
-	if b.Len() != 0 { b.WriteString("\n\n") }
+func (this *EditPrompt) CommitEdit(user, api_key string, ctx *gogram.MessageCtx, settings storage.UpdaterSettings) (*types.TPostInfo, error) {
+	if this.IsNoop() {
+		return nil, errors.New("This edit is a no-op.")
+	}
+	var rating *string
+	var parent *int
+	var description *string
+	var reason *string
 
-	this.Warnings(&b)
+	if this.Rating != "" { rating = &this.Rating }
+	if this.Parent != 0 { parent = &this.Parent }
+	if this.Description != "" { description = &this.Description }
+	if this.Reason != "" { reason = &this.Reason }
 
-	if this.State == SAVED {
-		if (this.IsNoop()) {
-			b.WriteString(fmt.Sprintf("Nothing done for <a href=\"https://" + api.Endpoint + "/posts/%d\">Post #%d</a>\n", this.PostId, this.PostId))
-		} else {
-			b.WriteString(fmt.Sprintf("Changes made to <a href=\"https://" + api.Endpoint + "/posts/%d\">Post #%d</a>\n", this.PostId, this.PostId))
-			this.PostStatus(&b)
+	update, err := api.UpdatePost(user, api_key, this.PostId, this.TagChanges, rating, parent, this.SourceChanges.Array(), description, reason)
+	if err != nil {
+		return nil, err
+	}
+
+	if update != nil {
+		err_extra := storage.UpdatePost(*update, settings)
+		// don't overwrite original error since we're now past the point of no return
+		if err_extra != nil {
+			ctx.Bot.ErrorLog.Println("Error updating internal post: ", err_extra.Error())
 		}
-	} else if this.State == DISCARDED {
-		b.WriteString(fmt.Sprintf("Changes discarded for <a href=\"https://" + api.Endpoint + "/posts/%d\">Post #%d</a>\n", this.PostId, this.PostId))
+	}
+
+	return update, err
+}
+
+func (this *EditPrompt) CommitPost(user, api_key string, ctx *gogram.MessageCtx, settings storage.UpdaterSettings) (*api.UploadCallResult, error) {
+	err := this.IsComplete()
+	if err != nil {
+		return nil, err
+	}
+
+	var post_url string
+	var post_filedata io.ReadCloser
+	var parent *int
+	var tagset tags.TagSet
+
+	if this.Parent != 0 { parent = &this.Parent }
+	tagset.ApplyDiff(this.TagChanges)
+
+	fmt.Println(this.File.Mode)
+
+	if this.File.Mode == PF_FROM_URL {
+		post_url = this.File.Url
 	} else {
 		b.WriteString(fmt.Sprintf("Now editing <a href=\"https://" + api.Endpoint + "/posts/%d\">Post #%d</a>\n", this.PostId, this.PostId))
 		this.PostStatus(&b)
+		file, err := ctx.Bot.Remote.GetFile(data.OGetFile{Id: this.File.FileId})
+		if err != nil || file == nil || file.FilePath == nil {
+			return nil, errors.New("Error while fetching file, try sending it again?")
+		}
+		post_filedata, err = ctx.Bot.Remote.DownloadFile(data.OFile{FilePath: *file.FilePath})
+		if err != nil || post_filedata == nil {
+			return nil, errors.New("Error while downloading file, try sending it again?")
+		}
 	}
-	if !privacy_disabled && !(this.State == SAVED || this.State == DISCARDED) {
-		b.WriteString("\nBe sure to <b>reply</b> to my messages! (<a href=\"https://core.telegram.org/bots#privacy-mode\">why?</a>)")
+
+	fmt.Println(post_url, post_filedata != nil)
+	status, err := api.UploadFile(post_filedata, post_url, tagset.String(), this.Rating, this.SourceChanges.StringWithDelimiter("\n"), this.Description, parent, user, api_key)
+	if err != nil {
+		ctx.Bot.ErrorLog.Println("Error updating post: ", err.Error())
+		return nil, errors.New("An error occurred when editing the post! Double check your info, or try again later.")
 	}
-	return b.String()
+
+	return status, nil
 }
 
-func sptr(x string) (*string) {return &x }
+const (
+	root = iota
+	login
+	logout
+	settagrules
+	post
+		postfile
+		postfileurl
+		postpublic
+		posttags
+		postwizard
+		postrating
+		postsource
+		postdescription
+		postparent
+		postupload
+		postnext
+	editreason
+)
 
-func (this *EditPrompt) GenerateMarkup() interface{} {
-	// no buttons for a prompt which has already been finalized
-	if this.State == DISCARDED || this.State == SAVED { return nil }
-
-	var kb data.TInlineKeyboard
-	kb.Buttons = make([][]data.TInlineKeyboardButton, 4)
-	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "Tags", Data: sptr("/tags")})
-	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "Rating", Data: sptr("/rating")})
-	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "Parent", Data: sptr("/parent")})
-//	kb.Buttons[0] = append(kb.Buttons[0], data.TInlineKeyboardButton{Text: "File", Data: sptr("/file")})
-	kb.Buttons[1] = append(kb.Buttons[1], data.TInlineKeyboardButton{Text: "Sources", Data: sptr("/sources")})
-	kb.Buttons[1] = append(kb.Buttons[1], data.TInlineKeyboardButton{Text: "Description", Data: sptr("/description")})
-	kb.Buttons[1] = append(kb.Buttons[1], data.TInlineKeyboardButton{Text: "Edit Reason", Data: sptr("/reason")})
-	if this.State != WAIT_MODE {
-		kb.Buttons[2] = append(kb.Buttons[2], data.TInlineKeyboardButton{Text: fmt.Sprintf("\u21A9\uFE0F Reset %s", GetNameOfState(this.State)), Data: sptr(fmt.Sprintf("/reset %s", this.State))})
+func (this *EditPrompt) ParseArgs(ctx *gogram.MessageCtx) (bool, error) {
+	doc := ctx.Msg.Document
+	if doc == nil && ctx.Msg.ReplyToMessage != nil {
+		doc = ctx.Msg.ReplyToMessage.Document
 	}
-	kb.Buttons[2] = append(kb.Buttons[2], data.TInlineKeyboardButton{Text: fmt.Sprintf("\u2622\uFE0F Reset %s", GetNameOfState(WAIT_ALL)), Data: sptr(fmt.Sprintf("/reset %s", WAIT_ALL))})
-	kb.Buttons[3] = append(kb.Buttons[3], data.TInlineKeyboardButton{Text: "\U0001F7E2 Save", Data: sptr("/save")})
-	kb.Buttons[3] = append(kb.Buttons[3], data.TInlineKeyboardButton{Text: "\U0001F534 Discard", Data: sptr("/discard")})
 
-	var extra_buttons [][]data.TInlineKeyboardButton
-	if this.State == WAIT_RATING {
-		extra_buttons = append(extra_buttons, nil)
-		extra_buttons[0] = append(extra_buttons[0], data.TInlineKeyboardButton{Text: "\U0001F7E9 Safe", Data: sptr("/rating s")})
-		extra_buttons[0] = append(extra_buttons[0], data.TInlineKeyboardButton{Text: "\U0001F7E8 Questionable", Data: sptr("/rating q")})
-		extra_buttons[0] = append(extra_buttons[0], data.TInlineKeyboardButton{Text: "\U0001F7E5 Explicit", Data: sptr("/rating e")})
-	} else if this.State == WAIT_SOURCE {
-		for i, source := range this.SeenSourcesReverse {
-			var selected bool
-			if this.SourceChanges.TagStatus(source) == tags.AddsTag {
-				selected = true
-			} else if this.SourceChanges.TagStatus(source) == tags.RemovesTag {
-				selected = false
-			} else if _, ok := this.OrigSources[source]; ok {
-				selected = true
+	if doc != nil {
+		name := doc.FileName
+		if name == nil { name = new(string) }
+		size := new(int64)
+		if doc.FileSize != nil { *size = int64(*doc.FileSize) }
+		this.File.SetTelegramFile(doc.Id, *name, *size)
+	}
+
+	// if we replied to a message, search it for a post id
+	if ctx.Msg.ReplyToMessage != nil {
+		this.PostId = apiextra.GetPostIDFromMessage(ctx.Msg.ReplyToMessage)
+	}
+
+	var err error
+	var mode int
+	var commitnow bool
+
+	for _, token := range ctx.Cmd.Args {
+		if mode != root {
+			if mode == posttags {
+				this.TagChanges.ApplyString(token)
+			} else if mode == postsource {
+				this.SourceChanges.ApplyArray(strings.Split(token, "\n"))
+			} else if mode == postrating {
+				this.Rating, err = api.SanitizeRatingForEdit(token)
+				if err != nil {
+					return false, errors.New("Please try again with a valid rating.")
+				}
+			} else if mode == postdescription {
+				this.Description = token // at some point i should make it convert telegram markup to dtext but i can't do that right now
+			} else if mode == postparent {
+				this.Parent = apiextra.GetParentPostFromText(token)
+
+				if this.Parent == apiextra.NONEXISTENT_PARENT {
+					return false, errors.New("Please try again wth a valid parent post.")
+				}
+			} else if mode == postfileurl {
+				this.File.SetUrl(token, 0)
+			} else if mode == editreason {
+				this.Reason = token
 			}
-
-			prefixes := map[bool]string{true:"\U0001F7E9 ", false:"\U0001F7E5 "}
-			extra_buttons = append(extra_buttons, append([]data.TInlineKeyboardButton(nil), data.TInlineKeyboardButton{Text: prefixes[selected] + source, Data: sptr(fmt.Sprintf("/sources %d %t", i, !selected))}))
+			mode = root
 		}
-	} else if this.State == WAIT_PARENT {
-		extra_buttons = append(extra_buttons, append([]data.TInlineKeyboardButton(nil), data.TInlineKeyboardButton{Text: "Delete parent", Data: sptr("/parent none")}))
-	}
-	kb.Buttons = append(extra_buttons, kb.Buttons...)
-	return kb
-}
-
-func (this *EditPrompt) CommitEdit(user, api_key string, ctx *gogram.MessageCtx, settings storage.UpdaterSettings) {
-	this.Prefix = ""
-	this.State = SAVED
-	this.Finalize(settings, ctx.Bot, ctx)
-	if !this.IsNoop() {
-		var rating *string
-		var parent *int
-		var description *string
-		var reason *string
-
-		if this.Rating != "" { rating = &this.Rating }
-		if this.Parent != 0 { parent = &this.Parent }
-		if this.Description != "" { description = &this.Description }
-		if this.Reason != "" { reason = &this.Reason }
-
-		update, err := api.UpdatePost(user, api_key, this.PostId, this.TagChanges, rating, parent, this.SourceChanges.Array(), description, reason)
-		if err != nil {
-			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "An error occurred when editing the post! Try again later."}}, nil)
-			ctx.Bot.ErrorLog.Println("Error updating post: ", err.Error())
-			return
-		}
-
-		if update != nil {
-			err = storage.UpdatePost(*update, settings)
+		if token == "" {
+		} else if token == "--tags" {
+			mode = posttags
+		} else if token == "--sources" {
+			mode = postsource
+		} else if token == "--rating" {
+			mode = postrating
+		} else if token == "--description" {
+			mode = postdescription
+		} else if token == "--parent" {
+			mode = postparent
+		} else if token == "--reason" {
+			mode = editreason
+		} else if token == "--url" {
+			mode = postfileurl
+		} else if token == "--commit" {
+			commitnow = true
+		} else {
+			this.PostId = apiextra.GetPostIDFromText(token)
 			if err != nil {
-				ctx.Bot.ErrorLog.Println("Error updating internal post: ", err.Error())
+				return false, errors.New("Nonsense post ID, please specify a number.")
 			}
 		}
+	}
+
+	return commitnow, nil
+}
+
+func (this *EditPrompt) HandleCallback(ctx *gogram.CallbackCtx, settings storage.UpdaterSettings) {
+	// TODO: this code mishandles settings, it should create its own subtransaction if settings is blank, but it won't.
+	switch ctx.Cmd.Command {
+	case "/reset":
+		if len(ctx.Cmd.Args) != 1 { return }
+		this.ApplyReset(ctx.Cmd.Args[0])
+	case "/tags":
+		this.Prefix = "Enter a list of tag changes, seperated by spaces. You can clear tags by prefixing them with a minus (-) and reset them by prefixing with an equals (=)."
+		this.State = WAIT_TAGS
+	case "/sources":
+		if len(ctx.Cmd.Args) == 2 {
+			index, err := strconv.Atoi(ctx.Cmd.Args[0])
+			pick := ctx.Cmd.Args[1] == "true"
+			if err != nil { return }
+			this.SourceButton(index, pick)
+		}
+		this.Prefix = "Post some source changes, seperated by newlines. You can remove sources by prefixing them with a minus (-)."
+		this.State = WAIT_SOURCE
+	case "/rating":
+		if len(ctx.Cmd.Args) == 1 {
+			rating, err := api.SanitizeRatingForEdit(ctx.Cmd.Args[0])
+
+			if err == nil {
+				this.Rating = rating
+			}
+		}
+		this.Prefix = "Post the new rating."
+		this.State = WAIT_RATING
+	case "/description":
+		this.Prefix = `Post the new description. You can use <a href="https://" + api.Endpoint + "/help/dtext">dtext</a>.`
+		this.State = WAIT_DESC
+	case "/parent":
+		if len(ctx.Cmd.Args) == 1 {
+			parent := apiextra.GetParentPostFromText(ctx.Cmd.Args[0])
+			if parent != apiextra.NONEXISTENT_PARENT {
+				this.Parent = parent
+			}
+		}
+		this.Prefix = `Post the new parent.`
+		this.State = WAIT_PARENT
+	case "/reason":
+		this.Prefix = "Why are you editing this post? Post an edit reason, 250 characters max."
+		this.State = WAIT_REASON
+	case "/file":
+		this.Prefix = `Upload a file.`
+		this.State = WAIT_FILE
+	case "/save":
+		this.Prefix = ""
+		this.State = SAVED
+	case "/discard":
+		ctx.AnswerAsync(data.OCallback{Notification: "\U0001F534 Edit discarded."}, nil) // finalize dialog post and discard edit
+		this.Prefix = ""
+		this.State = DISCARDED
+		ctx.SetState(nil)
+	default:
+	}
+}
+
+func (this *EditPrompt) HandleFreeform(ctx *gogram.MessageCtx) {
+	if this.State == WAIT_TAGS {
+		this.TagChanges.ApplyString(ctx.Msg.PlainText())
+		this.Prefix = "Got it. Continue sending more tag changes, and pick a button from below when you're done."
+	} else if this.State == WAIT_SOURCE {
+		for _, source := range strings.Split(ctx.Msg.PlainText(), "\n") {
+			this.SourceStringPrefixed(source)
+		}
+		this.Prefix = "Got it. Continue sending more source changes, and pick a button from below when you're done."
+	} else if this.State == WAIT_RATING {
+		rating, err := api.SanitizeRatingForEdit(ctx.Msg.PlainText())
+
+		if err != nil {
+			this.Prefix = "Please enter a <i>valid</i> rating. (Pick from <code>explicit</code>, <code>questionable</code>, <code>safe</code>, or <code>original</code>.)"
+		} else {
+			this.Rating = rating
+			this.ResetState()
+		}
+	} else if this.State == WAIT_DESC {
+		this.Description = ctx.Msg.PlainText() // TODO: convert telegram markup to dtext
+		this.ResetState()
+	} else if this.State == WAIT_PARENT {
+		parent := apiextra.GetParentPostFromText(ctx.Msg.PlainText())
+
+		if parent == apiextra.NONEXISTENT_PARENT {
+			this.Prefix = "Please enter a <i>valid</i> parent post. (You can either send a link to an " + api.ApiName + " post, a bare numeric ID, 'none' for no parent, or 'original' to not attempt to update the parent at all.)"
+		} else {
+			this.Parent = parent
+			this.ResetState()
+		}
+	} else if this.State == WAIT_REASON {
+		this.Reason = ctx.Msg.PlainText()
+		this.ResetState()
+	} else if this.State == WAIT_FILE {
+		done := false
+		_, err := url.Parse(ctx.Msg.PlainText())
+		if err == nil { // it IS a URL
+			this.File.SetUrl(ctx.Msg.PlainText(), 0)
+			done = true
+		}
+
+		doc := ctx.Msg.Document
+		if doc == nil && ctx.Msg.ReplyToMessage != nil {
+			doc = ctx.Msg.ReplyToMessage.Document
+		}
+
+		if doc != nil {
+			name := doc.FileName
+			if name == nil { name = new(string) }
+			size := new(int64)
+			if doc.FileSize != nil { *size = int64(*doc.FileSize) }
+			this.File.SetTelegramFile(doc.Id, *name, *size)
+			done = true
+		}
+
+		if done {
+			this.ResetState()
+		} else {
+			this.Prefix = "Please send a new file. You can upload a new one, reply to or forward an existing one, or send a URL to upload from. (Only certain whitelisted domains can be used for URL uploads, see <a href=\"https://" + api.Endpoint + "/upload_whitelists\">" + api.ApiName + "'s upload whitelist</a>.)"
+		}
+	} else {
+		return
 	}
 }
 
