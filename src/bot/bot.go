@@ -1628,8 +1628,8 @@ func (this *PostState) HandleCmd(cmd *gogram.CommandData,
 			num, err := strconv.Atoi(cmd.Argstr)
 			if err != nil {
 				submatches := apiurlmatch.FindStringSubmatch(cmd.Argstr)
-				if len(submatches) != 0 {
-					num, err = strconv.Atoi(cmd.Argstr)
+				if len(submatches) == 5 {
+					num, err = strconv.Atoi(submatches[4])
 				}
 			}
 			if err == nil {
