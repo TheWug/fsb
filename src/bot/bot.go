@@ -75,7 +75,9 @@ type settings interface {
 
 func Init(s settings) error {
 	var err error
-	apiurlmatch, err = regexp.Compile(fmt.Sprintf(`https?://%s/post/show/(\d+)`, s))
+	apiurlmatch, err = regexp.Compile(fmt.Sprintf(`https?://(www\.)?(%s|%s)/(posts|post/show)/(\d+)`,
+	                                              regexp.QuoteMeta(s.GetApiEndpoint()),
+	                                              regexp.QuoteMeta(s.GetApiFilteredEndpoint())))
 	return err
 }
 
