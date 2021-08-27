@@ -17,12 +17,10 @@ import (
 
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"html"
 	"io"
 	"io/ioutil"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -73,20 +71,7 @@ const (
 	auto_replace
 )
 
-var apiurlmatch *regexp.Regexp
 var wizard_rule_done WizardRule = WizardRule{prompt: "You've finished the tag wizard."}
-
-type settings interface {
-	GetApiEndpoint() string
-}
-
-func Init(s settings) error {
-	var err error
-	apiurlmatch, err = regexp.Compile(fmt.Sprintf(`https?://(www\.)?(%s|%s)/(posts|post/show)/(\d+)`,
-	                                              regexp.QuoteMeta(s.GetApiEndpoint()),
-	                                              regexp.QuoteMeta(s.GetApiFilteredEndpoint())))
-	return err
-}
 
 type WizardRule struct {
 	prereqs     []string
@@ -914,10 +899,10 @@ func (this *VoteState) HandleCmd(from *data.TUser, cmd *gogram.CommandData, repl
 			text := reply_message.Text
 			if text == nil { text = reply_message.Caption }
 			if text != nil {
-				potential_id := apiextra.GetPostIDFromURLInText(*text)
-				if potential_id != nil {
+				potential_id := apiextra.GetPostIDFromText(*text)
+				if potential_id != apiextra.NONEXISTENT_POST {
 					// if we are a reply to a message, AND that message has text or a caption, AND that text contains a post URL, yoink it.
-					id = *potential_id
+					id = potential_id
 				}
 			}
 		}
@@ -1139,21 +1124,7 @@ func (this *EditState) Freeform(ctx *gogram.MessageCtx) {
 		p.Description = ctx.Msg.PlainText() // TODO: convert telegram markup to dtext
 		p.ResetState()
 	} else if p.State == dialogs.WAIT_PARENT {
-		parent := scrapePostIdFromMessage(ctx.Msg)
-
-		if parent == 0 {
-			parent, err = strconv.Atoi(ctx.Msg.PlainText())
-		}
-
-		if parent <= 0 {
-			err = errors.New("negative parent post")
-		} else if strings.ToLower(ctx.Msg.PlainText()) == "none" {
-			parent = -1
-			err = nil
-		} else if strings.ToLower(ctx.Msg.PlainText()) == "original" {
-			parent = 0
-			err = nil
-		}
+		parent := apiextra.GetParentPostFromText(ctx.Msg.PlainText())
 
 		if err != nil {
 			p.Prefix = "Please enter a <i>valid</i> parent post. (You can either send a link to a post, a bare numeric ID, 'none' for no parent, or 'original' to not attempt to update the parent at all.)"
@@ -1193,20 +1164,6 @@ func (this *EditState) Cancel(ctx *gogram.MessageCtx) {
 	settings.Transaction.MarkForCommit()
 }
 
-func scrapePostIdFromMessage(msg *data.TMessage) (int) {
-	id, err := api.ApiURLToPostID(msg.PlainText())
-	if err == nil { return id }
-
-	for _, entity := range msg.GetEntities() {
-		if entity.Url != nil {
-			id, err := api.ApiURLToPostID(*entity.Url)
-			if err == nil { return id }
-		}
-	}
-
-	return 0
-}
-
 func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 	var post int
 	var mode int
@@ -1214,10 +1171,6 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 	var e dialogs.EditPrompt
 
 	if ctx.Msg.From == nil { return }
-
-	if ctx.Msg.ReplyToMessage != nil {
-		post = scrapePostIdFromMessage(ctx.Msg.ReplyToMessage)
-	}
 
 	user, api_key, _, err := storage.GetUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id)
 	if err != nil {
@@ -1245,17 +1198,10 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 			} else if mode == postdescription {
 				e.Description = token // at some point i should make it convert telegram markup to dtext but i can't do that right now
 			} else if mode == postparent {
-				submatches := apiurlmatch.FindStringSubmatch(token)
-				var err error
-				if len(submatches) == 5 {
-					e.Parent, err = strconv.Atoi(submatches[4])
-				}
-
-				if len(submatches) != 5 || err != nil {
-					e.Parent, err = strconv.Atoi(token)
-				}
-
-				if err != nil {
+				new_parent := apiextra.GetParentPostFromText(token)
+				if new_parent != apiextra.NONEXISTENT_PARENT {
+					e.Parent = new_parent
+				} else {
 					ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Please try again wth a valid parent post."}}, nil)
 					return
 				}
@@ -1688,15 +1634,10 @@ func (this *PostState) HandleCmd(cmd *gogram.CommandData,
 	} else if this.postmode == postparent {
 		this.postmode = postnext
 		if cmd.Argstr != "" {
-			num, err := strconv.Atoi(cmd.Argstr)
-			if err != nil {
-				submatches := apiurlmatch.FindStringSubmatch(cmd.Argstr)
-				if len(submatches) == 5 {
-					num, err = strconv.Atoi(submatches[4])
-				}
-			}
-			if err == nil {
-				this.postparent = &num
+			new_parent := apiextra.GetParentPostFromText(cmd.Argstr)
+
+			if new_parent != apiextra.NONEXISTENT_PARENT && new_parent != apiextra.UNCHANGED_PARENT {
+				this.postparent = &new_parent
 				response.Text = "Set parent post.\n\n"
 			} else {
 				this.postparent = nil

@@ -762,6 +762,22 @@ func PostByID(id int, ctrl UpdaterSettings) (*apitypes.TPostInfo, error) {
 	return &item, nil	
 }
 
+func PostByMD5(md5 string, ctrl UpdaterSettings) (*apitypes.TPostInfo, error) {
+	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
+	defer ctrl.Transaction.Finalize(mine)
+	if ctrl.Transaction.err != nil { return nil, ctrl.Transaction.err }
+
+	var item apitypes.TPostInfo
+	var sources string
+	query := "SELECT post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted, ARRAY(SELECT tag_name FROM tag_index INNER JOIN post_tags USING (tag_id) WHERE post_id = post_index.post_id) AS post_tags FROM post_index WHERE post_hash = $1;"
+	err := tx.QueryRow(query, md5).Scan(&item.Id, &item.Change, &item.Rating, &item.Description, &sources, &item.Md5, &item.Deleted, pq.Array(&item.General))
+	if err != sql.ErrNoRows && err != nil  { return nil, err }
+	item.Sources = strings.Split(sources, "\n")
+
+	ctrl.Transaction.commit = mine
+	return &item, nil
+}
+
 func LocalTagSearch(tag apitypes.TTagData, ctrl EnumerateControl) (apitypes.TPostInfoArray, error) {
 	mine, tx := ctrl.Transaction.PopulateIfEmpty(Db_pool)
 	defer ctrl.Transaction.Finalize(mine)

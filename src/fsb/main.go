@@ -56,12 +56,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	bot.Init(settings)
-	if e != nil {
-		fmt.Println(e.Error())
-		os.Exit(1)
-	}
-
 	e = proxify.Init(settings)
 	if e != nil {
 		fmt.Println(e.Error())

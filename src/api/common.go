@@ -7,8 +7,6 @@ import (
         "fmt"
 	"log"
 	"net/http"
-	"regexp"
-	"strconv"
 	"strings"
         "time"
 )
@@ -41,16 +39,8 @@ func Init(s settings) error {
 	}
 
 	api = reqtify.New(fmt.Sprintf("https://%s", Endpoint), time.NewTicker(750 * time.Millisecond), nil, nil, userAgent)
-
-	apiurlmatch, err = regexp.Compile(fmt.Sprintf(`https?://(www\.)?(%s|%s)/(posts|post/show)/(\d+)`,
-	            regexp.QuoteMeta(s.GetApiEndpoint()),
-	            regexp.QuoteMeta(s.GetApiFilteredEndpoint())))
-
-	return err
+	return nil
 }
-
-var apiurlmatch *regexp.Regexp
-var ErrMalformedURL error = errors.New("Not a valid site URL")
 
 // filters rating tags into valid rating letters.
 // "clean" is not a valid rating, but for convenience, it is treated as identical to "safe".
@@ -72,10 +62,11 @@ func SanitizeRatingForEdit(input string) (string, error) {
 	return "", errors.New("Invalid rating")
 }
 
-func ApiURLToPostID(url string) (int, error) {
-	submatches := apiurlmatch.FindStringSubmatch(url)
-	if submatches == nil { return 0, ErrMalformedURL }
-	return strconv.Atoi(submatches[len(submatches) - 1]) // return last subgroup
+func RatingNameString(input string) string {
+	if input == "s" { return "Safe" }
+	if input == "q" { return "Questionable" }
+	if input == "e" { return "Explicit" }
+	return "Unknown"
 }
 
 func APILog(url, user string, length int, response *http.Response, err error) {
