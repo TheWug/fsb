@@ -1326,23 +1326,23 @@ func (this *PostState) HandleCallback(ctx *gogram.CallbackCtx) {
 	if p.State == dialogs.SAVED {
 		upload_result, err := p.CommitPost(this.data.User, this.data.ApiKey, gogram.NewMessageCtx(ctx.Cb.Message, false, ctx.Bot), settings)
 		if err == nil && upload_result != nil && upload_result.Success {
-			p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, upload_result))
+			p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostProxyFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, upload_result))
 			ctx.AnswerAsync(data.OCallback{Notification: "\U0001F7E2 Edit submitted."}, nil)
 			ctx.SetState(nil)
 		} else if err != nil {
 			ctx.AnswerAsync(data.OCallback{Notification: fmt.Sprintf("\U0001F534 %s", err.Error())}, nil)
-			p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+			p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostProxyFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
 			p.State = dialogs.WAIT_MODE
 		} else if upload_result != nil && !upload_result.Success {
 			if upload_result.Reason == nil { upload_result.Reason = new(string) }
 			ctx.AnswerAsync(data.OCallback{Notification: fmt.Sprintf("\U0001F534 Error: %s", *upload_result.Reason)}, nil)
-			p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, upload_result))
+			p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostProxyFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, upload_result))
 			p.State = dialogs.WAIT_MODE
 		}
 	} else if p.State == dialogs.DISCARDED {
-		p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+		p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostProxyFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
 	} else {
-		p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+		p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostProxyFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
 	}
 	settings.Transaction.MarkForCommit()
 }
@@ -1381,7 +1381,7 @@ func (this *PostState) Post(ctx *gogram.MessageCtx) {
 		e.CommitPost(user, api_key, ctx, storage.UpdaterSettings{})
 	} else {
 		e.ResetState()
-		prompt := e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+		prompt := e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostProxyFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
 		ctx.SetState(PostStateFactoryWithData(nil, this.StateBasePersistent, psp{
 			User: user,
 			ApiKey: api_key,
@@ -1405,7 +1405,7 @@ func (this *PostState) Cancel(ctx *gogram.MessageCtx) {
 	if p != nil {
 		p.State = dialogs.DISCARDED
 		p.Prefix = ""
-		p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+		p.Finalize(settings, ctx.Bot, nil, dialogs.NewPostProxyFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
 	}
 	ctx.SetState(nil)
 	settings.Transaction.MarkForCommit()
@@ -1429,7 +1429,7 @@ func (this *PostState) Freeform(ctx *gogram.MessageCtx) {
 	current_state := p.State
 	p.HandleFreeform(ctx)
 
-	p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
+	p.Prompt(settings, ctx.Bot, nil, dialogs.NewPostProxyFormatter(!*ctx.Bot.Remote.GetMe().CanReadAllGroupMessages, nil))
 
 	if current_state == dialogs.WAIT_FILE && ctx.Msg.Document != nil && ctx.Msg.ForwardDate == nil {
 		// keep the post around if it's a new, non-forwarded file upload

@@ -21,7 +21,7 @@ type EditFormatter struct {
 	Error error
 }
 
-type PostFormatter struct {
+type PostProxyFormatter struct {
 	EditFormatterBase
 
 	Result *api.UploadCallResult
@@ -60,8 +60,8 @@ func NewEditFormatter(privacy_mode bool, err error) EditFormatter {
 	return EditFormatter{EditFormatterBase{privacy_mode}, err}
 }
 
-func NewPostFormatter(privacy_mode bool, result *api.UploadCallResult) PostFormatter {
-	return PostFormatter{EditFormatterBase{privacy_mode}, result}
+func NewPostProxyFormatter(privacy_mode bool, result *api.UploadCallResult) PostProxyFormatter {
+	return PostProxyFormatter{EditFormatterBase{privacy_mode}, result}
 }
 
 func (this EditFormatter) GenerateMessage(prompt *EditPrompt) string {
@@ -143,7 +143,7 @@ func (this EditFormatter) GenerateMarkup(prompt *EditPrompt) interface{} {
 	return kb
 }
 
-func (this PostFormatter) GenerateMessage(prompt *EditPrompt) string {
+func (this PostProxyFormatter) GenerateMessage(prompt *EditPrompt) string {
 	var b bytes.Buffer
 	b.WriteString(prompt.Prefix)
 	if b.Len() != 0 { b.WriteString("\n\n") }
@@ -196,7 +196,7 @@ func (this PostFormatter) GenerateMessage(prompt *EditPrompt) string {
 	return b.String()
 }
 
-func (this PostFormatter) GenerateMarkup(prompt *EditPrompt) interface{} {
+func (this PostProxyFormatter) GenerateMarkup(prompt *EditPrompt) interface{} {
 	sptr := func(x string) (*string) {return &x }
 	// no buttons for a prompt which has already been finalized
 	if prompt.State == DISCARDED || prompt.State == SAVED { return nil }
