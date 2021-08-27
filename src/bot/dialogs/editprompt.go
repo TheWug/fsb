@@ -17,7 +17,6 @@ import (
 	"errors"
 	"fmt"
 	"html"
-	"io"
 	"net/url"
 	"path"
 	"strconv"
@@ -418,47 +417,6 @@ func (this *EditPrompt) CommitEdit(user, api_key string, ctx *gogram.MessageCtx,
 	}
 
 	return update, err
-}
-
-func (this *EditPrompt) CommitPost(user, api_key string, ctx *gogram.MessageCtx, settings storage.UpdaterSettings) (*api.UploadCallResult, error) {
-	err := this.IsComplete()
-	if err != nil {
-		return nil, err
-	}
-
-	var post_url string
-	var post_filedata io.ReadCloser
-	var parent *int
-	var tagset tags.TagSet
-
-	if this.Parent != 0 { parent = &this.Parent }
-	tagset.ApplyDiff(this.TagChanges)
-
-	fmt.Println(this.File.Mode)
-
-	if this.File.Mode == PF_FROM_URL {
-		post_url = this.File.Url
-	} else {
-		b.WriteString(fmt.Sprintf("Now editing <a href=\"https://" + api.Endpoint + "/posts/%d\">Post #%d</a>\n", this.PostId, this.PostId))
-		this.PostStatus(&b)
-		file, err := ctx.Bot.Remote.GetFile(data.OGetFile{Id: this.File.FileId})
-		if err != nil || file == nil || file.FilePath == nil {
-			return nil, errors.New("Error while fetching file, try sending it again?")
-		}
-		post_filedata, err = ctx.Bot.Remote.DownloadFile(data.OFile{FilePath: *file.FilePath})
-		if err != nil || post_filedata == nil {
-			return nil, errors.New("Error while downloading file, try sending it again?")
-		}
-	}
-
-	fmt.Println(post_url, post_filedata != nil)
-	status, err := api.UploadFile(post_filedata, post_url, tagset.String(), this.Rating, this.SourceChanges.StringWithDelimiter("\n"), this.Description, parent, user, api_key)
-	if err != nil {
-		ctx.Bot.ErrorLog.Println("Error updating post: ", err.Error())
-		return nil, errors.New("An error occurred when editing the post! Double check your info, or try again later.")
-	}
-
-	return status, nil
 }
 
 const (
