@@ -301,6 +301,9 @@ func (this *EditPrompt) PostStatus(b *bytes.Buffer) {
 func (this *EditPrompt) Warnings(b *bytes.Buffer) {
 	any := false
 
+	any = true
+	b.WriteString("<b>WARNING! editing is experimental right now.</b>\nDouble check your edits after committing to make sure you're not accidentally scrambling posts.\n")
+
 	tagset := api.NewTagSet()
 	for osource, _ := range this.OrigSources {
 		tagset.SetTag(osource)
