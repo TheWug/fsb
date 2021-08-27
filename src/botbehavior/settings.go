@@ -1,13 +1,13 @@
 package botbehavior
 
 import (
-	"github.com/thewug/gogram"
-	"github.com/thewug/gogram/data"
-	"os"
-	"log"
 	"storage"
 
-	"encoding/json"
+	"github.com/thewug/gogram"
+	"github.com/thewug/gogram/data"
+
+	"log"
+	"os"
 )
 
 const MAX_RESULTS_PER_PAGE = 50

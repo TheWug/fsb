@@ -1,23 +1,24 @@
 package botbehavior
 
 import (
+	"api"
+	"api/tagindex"
+	apitypes "api/types"
+	"fsb/errorlog"
+	"fsb/proxify"
+	"storage"
+
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"
 
-	"fmt"
-	"fsb/proxify"
-	"fsb/errorlog"
-	"api"
-	apitypes "api/types"
-	"strings"
 	"bytes"
+	"errors"
+	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"sync"
-	"storage"
-	"errors"
 	"time"
-	"api/tagindex"
 )
 
 func ShowHelp() {

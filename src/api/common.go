@@ -2,11 +2,13 @@ package api
 
 import (
         "github.com/thewug/reqtify"
-        "time"
 
-	"strings"
-	"net/http"
 	"errors"
+        "fmt"
+	"log"
+	"net/http"
+	"strings"
+        "time"
 )
 
 // common state for the entire api package.

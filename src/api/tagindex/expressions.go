@@ -3,11 +3,11 @@ package tagindex
 import (
     "bytes"
     "bufio"
-    "io/ioutil"
-    "io"
-    "unicode"
-    "strings"
     "fmt"
+    "io"
+    "io/ioutil"
+    "strings"
+    "unicode"
 )
 
 type TagExpression interface {

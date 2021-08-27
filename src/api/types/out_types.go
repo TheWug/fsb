@@ -1,10 +1,10 @@
 package types
 
 import (
-	"strings"
 	"bytes"
 	"fmt"
 	"sort"
+	"strings"
 )
 
 type TagCategory int

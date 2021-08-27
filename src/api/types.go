@@ -1,9 +1,10 @@
 package api
 
 import (
-	"strings"
-	"bytes"
 	"api/tags"
+
+	"bytes"
+	"strings"
 )
 
 type TagSet struct {

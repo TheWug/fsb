@@ -1,16 +1,16 @@
 package proxify
 
 import (
+	"api/types"
+
 	"github.com/thewug/gogram/data"
 
-	"api/types"
-	"api"
-	"strings"
-	"strconv"
-	"log"
 	"fmt"
-	"net/url"
 	"html"
+	"log"
+	"net/url"
+	"strconv"
+	"strings"
 )
 
 func ContainsSafeRatingTag(tags string) (bool) {

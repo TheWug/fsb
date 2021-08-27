@@ -2,18 +2,18 @@ package storage
 
 import (
 	apitypes "api/types"
+
+	"github.com/lib/pq"
 	tgtypes "github.com/thewug/gogram/data"
 
 	"database/sql"
 	"database/sql/driver"
-	"log"
-	"fmt"
-	"strings"
-	"errors"
-	"time"
 	"encoding/json"
-
-	"github.com/lib/pq"
+	"errors"
+	"fmt"
+	"log"
+	"strings"
+	"time"
 )
 
 var Db_pool *sql.DB

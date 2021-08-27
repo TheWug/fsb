@@ -3,8 +3,8 @@ package types
 import (
 	"encoding/json"
 	"errors"
-	"strings"
 	"fmt"
+	"strings"
 )
 
 type TTagData struct {

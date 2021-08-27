@@ -1,26 +1,27 @@
 package tagindex
 
 import (
-	"github.com/thewug/gogram"
-	"github.com/thewug/gogram/data"
-
 	"api"
 	"api/types"
+
 	"storage"
 	"wordset"
 
-	"time"
-	"fmt"
-	"log"
-	"unicode/utf8"
+	"github.com/thewug/gogram"
+	"github.com/thewug/gogram/data"
+
 	"bytes"
+	"errors"
+	"fmt"
 	"html"
-	"sort"
+	"log"
 	"math/rand"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
-	"errors"
-	"strconv"
+	"time"
+	"unicode/utf8"
 )
 
 func DownloadMessage(id, max_id int, name string) (string) {

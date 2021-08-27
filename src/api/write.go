@@ -2,12 +2,14 @@ package api
 
 import (
 	"api/types"
-	"strconv"
-	"errors"
-	"io/ioutil"
+
 	"github.com/thewug/reqtify"
-	"io"
+
+	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"strconv"
 )
 
 var MissingArguments error = errors.New("Missing file or upload_url")

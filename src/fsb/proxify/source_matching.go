@@ -1,11 +1,11 @@
 package proxify
 
 import (
-	"errors"
-	"strings"
 	"encoding/json"
-	"net/url"
+	"errors"
 	"html"
+	"net/url"
+	"strings"
 )
 
 var allDisplayDeciders []sourceDisplayDecider

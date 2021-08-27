@@ -1,29 +1,29 @@
 package bot
 
 import (
-	"github.com/thewug/gogram"
-	"github.com/thewug/gogram/data"
-
-	"storage"
+	"botbehavior"
 	"api"
 	"api/tagindex"
 	apitypes "api/types"
 	"apiextra"
-
-	"fmt"
-	"time"
-	"strings"
-	"bytes"
-	"regexp"
-	"strconv"
-	"sort"
-	"html"
-	"io/ioutil"
-	"io"
-	"sync"
-	"botbehavior"
+	"storage"
 
 	"github.com/kballard/go-shellquote"
+	"github.com/thewug/gogram"
+	"github.com/thewug/gogram/data"
+
+	"bytes"
+	"fmt"
+	"html"
+	"io"
+	"io/ioutil"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 )
 
 const (

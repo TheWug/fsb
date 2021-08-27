@@ -1,13 +1,13 @@
 package main
 
 import (
+	"bot"
+	"botbehavior"
+
+	"github.com/thewug/gogram"
+
 	"fmt"
 	"os"
-	"botbehavior"
-	"bot"
-	"github.com/thewug/gogram"
-	"apiextra"
-	"fsb/proxify"
 )
 
 // This bot runs by polling telegram for updates, and then making synchronous calls to api. Because of the latency
