@@ -623,7 +623,7 @@ example. meta:Kinky_stuff . pet_play food_fetish vore</pre>
 .faq. <b>Important Info and FAQ</b>
 .faq. <code>*</code> Before posting to ` + api.ApiName + `, please make sure you read the site's rules.
 .faq. <code>*</code> Your account standing is your own responsibility.
-.faq. <code>*</code> Your ` + api.ApiName + ` API key is NOT your password. Go <a href="https://` + api.Endpoint + `/user/api_key">HERE</a> to find it.
+.faq. <code>*</code> Your ` + api.ApiName + ` API key is NOT your password. To find it, go to your <a href="https://` + api.Endpoint + `/users/home">Account Settings</a> and click "Manage API Access".
 .faq. <code>*</code> To report a bug, see <code>/help contact.</code>
 contact. 
 contact. <b>Contacting the author</b>
