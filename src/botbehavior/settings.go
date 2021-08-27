@@ -1,16 +1,22 @@
 package botbehavior
 
 import (
+	"fsb/proxify"
 	"storage"
 
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"
+
+	"encoding/json"
 
 	"log"
 	"os"
 )
 
 const MAX_RESULTS_PER_PAGE = 50
+const MAX_ARTISTS = 10
+const MAX_CHARS = 10
+const MAX_SOURCES = 10
 
 type Settings struct {
 	gogram.InitSettings
@@ -35,6 +41,8 @@ type Settings struct {
 	ErrorPhotoID     data.FileID `json:"error_photo_id"`
 
 	SourceMap        json.RawMessage `json:"source_map"`
+
+	proxify.CaptionSettings
 }
 
 func (s Settings) GetSourceMap() json.RawMessage {
@@ -71,9 +79,10 @@ func (this *Settings) RedirectLogs(bot *gogram.TelegramBot) (error) {
 }
 
 func (this *Settings) InitializeAll(bot *gogram.TelegramBot) (error) {
-	if this.ResultsPerPage < 1 || this.ResultsPerPage > MAX_RESULTS_PER_PAGE {
-		this.ResultsPerPage = MAX_RESULTS_PER_PAGE
-	}
+	if this.ResultsPerPage < 1 || this.ResultsPerPage > MAX_RESULTS_PER_PAGE { this.ResultsPerPage = MAX_RESULTS_PER_PAGE }
+	if this.MaxArtists < 1 || this.MaxArtists > MAX_ARTISTS { this.MaxArtists = MAX_ARTISTS }
+	if this.MaxChars < 1 || this.MaxChars > MAX_CHARS { this.MaxChars = MAX_CHARS }
+	if this.MaxSources < 1 || this.MaxSources > MAX_SOURCES { this.MaxSources = MAX_SOURCES }
 
 	e := this.RedirectLogs(bot)
 	if e != nil { return e }

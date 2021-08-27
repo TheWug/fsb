@@ -24,6 +24,12 @@ func ContainsSafeRatingTag(tags string) (bool) {
 	return false
 }
 
+type CaptionSettings struct {
+	MaxArtists int `json:"max_artists"`
+	MaxChars   int `json:"max_chars"`
+	MaxSources int `json:"max_sources"`
+}
+
 // takes an api URL and transforms the domain to filtered api.
 // building a filtered api URL from scratch is more efficient than using this,
 // so this should be used primarily for URLs retrieved from the API,
