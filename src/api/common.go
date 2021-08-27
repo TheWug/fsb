@@ -91,3 +91,15 @@ func APILog(url, user string, length int, response *http.Response, err error) {
 		log.Printf("[api     ] API call: %s [%s] (%s: %s%s)", url, caller, httpstatus, err.Error(), lengthstr)
 	}
 }
+
+func LocationToURLWithRating(location, rating string) string {
+	if rating == "s" {
+		return FilteredEndpoint + location
+	} else {
+		return Endpoint + location
+	}
+}
+
+func LocationToURL(location string) string {
+	return LocationToURLWithRating(location, "e")
+}

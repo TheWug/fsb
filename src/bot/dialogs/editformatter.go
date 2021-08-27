@@ -162,7 +162,7 @@ func (this PostFormatter) GenerateMessage(prompt *EditPrompt) string {
 				b.WriteString("</i>")
 				if this.Result != nil && this.Result.Location != nil {
 					b.WriteString(", <a href=\"")
-					b.WriteString(*this.Result.Location)
+					b.WriteString(api.LocationToURLWithRating(prompt.Rating, *this.Result.Location))
 					b.WriteString("\">click here to open it</a>")
 				}
 				b.WriteString(".\n")
