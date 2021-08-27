@@ -1158,20 +1158,13 @@ func (this *EditState) Cancel(ctx *gogram.MessageCtx) {
 }
 
 func scrapePostIdFromMessage(msg *data.TMessage) (int) {
-	text := msg.PlainText()
-	submatches := apiurlmatch.FindStringSubmatch(text)
-	if len(submatches) == 5 {
-		temp, err := strconv.Atoi(submatches[4])
-		if err == nil { return temp }
-	}
+	id, err := api.ApiURLToPostID(msg.PlainText())
+	if err == nil { return id }
 
 	for _, entity := range msg.GetEntities() {
 		if entity.Url != nil {
-			submatches := apiurlmatch.FindStringSubmatch(*entity.Url)
-			if len(submatches) == 5 {
-				temp, err := strconv.Atoi(submatches[4])
-				if err == nil { return temp }
-			}
+			id, err := api.ApiURLToPostID(*entity.Url)
+			if err == nil { return id }
 		}
 	}
 
