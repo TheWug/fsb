@@ -455,7 +455,7 @@ func (this *Behavior) ApiResultsToInlineResponse(query string, search_results ap
 	}
 
 	for _, r := range search_results {
-		new_result := proxify.ConvertApiResultToTelegramInline(r, proxify.ContainsSafeRatingTag(query), query, debugmode)
+		new_result := proxify.ConvertApiResultToTelegramInline(r, proxify.ContainsSafeRatingTag(query), query, debugmode, this.MySettings.CaptionSettings)
 
 		if (new_result != nil) {
 			iqa.Results = append(iqa.Results, new_result)

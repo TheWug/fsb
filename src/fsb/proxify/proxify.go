@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sort"
 )
 
 func ContainsSafeRatingTag(tags string) (bool) {
@@ -62,14 +63,18 @@ func sourceLine(url, display string) string {
 	return fmt.Sprintf(`<a href="%s">%s</a>`, url, display)
 }
 
-func sourcesList(sources []string) []string {
+func sourcesList(sources []string, settings CaptionSettings) []string {
+	sort.Slice(sources, func(i, j int) bool {
+		return len(sources[i]) < len(sources[j])
+	})
+
 	var output_source_list, all_sources []string
 	var unknown int
 
 	telegram_sticker_source := false
 
 	SourceLoop:
-	for _, source := range(sources) {
+	for i, source := range(sources) {
 		u, err := url.Parse(source)
 		if err != nil {
 			unknown++
@@ -96,7 +101,7 @@ func sourcesList(sources []string) []string {
 			source_entry = sourceLine(source, u.Hostname())
 		}
 
-		if len(source_entry) == 0 {
+		if len(source_entry) == 0 || i >= settings.MaxSources {
 			unknown++
 			continue
 		} else {
@@ -108,7 +113,7 @@ func sourcesList(sources []string) []string {
 	return append(all_sources, "Sources: " + strings.Join(output_source_list, ", "))
 }
 
-func GenerateCaption(result types.TPostInfo, force_safe bool, query string) string {
+func GenerateCaption(result types.TPostInfo, force_safe bool, query string, settings CaptionSettings) string {
 	post_url := fmt.Sprintf("https://%s/posts/%d", domain(force_safe), result.Id)
 	image_url := MaybeSafeify(result.File_url, force_safe)
 
@@ -119,25 +124,25 @@ func GenerateCaption(result types.TPostInfo, force_safe bool, query string) stri
 	// add the artist links
 	if len(result.Artist) == 0 {
 		caption = append(caption, fmt.Sprintf(`Art by %s`, artistLink("unknown_artist", force_safe)))
-	} else if len(result.Artist) <= 10 {
+	} else if len(result.Artist) <= settings.MaxArtists {
 		var artist_links []string
 		for _, artist := range(result.Artist) { artist_links = append(artist_links, artistLink(artist, force_safe)) }
 		caption = append(caption, fmt.Sprintf(`Art by %s`, strings.Join(artist_links, ", ")))
-	} else if len(result.Artist) > 10 {
-		caption = append(caption, "Art by more than 10 artists (see post)")
+	} else if len(result.Artist) > settings.MaxArtists {
+		caption = append(caption, fmt.Sprintf("Art by more than %d artists (see post)", settings.MaxArtists))
 	}
 
 	// add the character links
-	if len(result.Character) > 0 && len(result.Character) <= 10 {
+	if len(result.Character) > 0 && len(result.Character) <= settings.MaxChars {
 		var character_links []string
 		for _, char := range(result.Character) { character_links = append(character_links, characterLink(char, force_safe)) }
 		caption = append(caption, fmt.Sprintf(`Featuring %s`, strings.Join(character_links, ", ")))
-	} else if len(result.Character) > 10 {
-		caption = append(caption, "Featuring more than 10 characters (see post)")
+	} else if len(result.Character) > settings.MaxChars {
+		caption = append(caption, fmt.Sprintf("Featuring more than %d characters (see post)", settings.MaxChars))
 	}
 
 	// add generic source links
-	caption = append(caption, sourcesList(result.Sources)...)
+	caption = append(caption, sourcesList(result.Sources, settings)...)
 
 	// add search query
 	if query == "" {
@@ -151,13 +156,13 @@ func GenerateCaption(result types.TPostInfo, force_safe bool, query string) stri
 
 // https://api/artists/show_or_new?name=dizzyvixen
 
-func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, query string, debugmode bool) (interface{}) {
+func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, query string, debugmode bool, settings CaptionSettings) (interface{}) {
 	salt := "x_"
 
 	width := result.Width
 	height := result.Height
 
-	caption := GenerateCaption(result, force_safe, query)
+	caption := GenerateCaption(result, force_safe, query, settings)
 
 	if result.File_ext == "gif" {
 		foo := data.TInlineQueryResultGif{
