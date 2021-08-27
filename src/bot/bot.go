@@ -1451,12 +1451,12 @@ func (this *JanitorState) Handle(ctx *gogram.MessageCtx) {
 		post := 2893902 // https://api-host/post/show/2893902
 		newtags := "1:1 2021 anthro beastars canid canine canis clothed clothing fur grey_body grey_fur hi_res javigameboy legoshi_(beastars) male mammal simple_background solo teeth wolf"
 		oldtags := "1:1 2021 anthro beastars canid canine canis clothed clothing fur grey_body grey_fur hi_res javigameboy legoshi_(beastars) male mammal simple_background solo teeth wolf"
-		sources := "https://twitter.com/Javigameboy/status/1429921007721062401"
+		sources := []string{"https://twitter.com/Javigameboy/status/1429921007721062401"}
 		description := ""
 		parent_post := -1
 		rating := "safe"
 
 		reason := "API Update Test (should be NOOP)"
-		api.UpdatePost(user, apikey, post, apitypes.TagDiff{}, &rating, &parent_post, &sources, &description, &reason)
+		api.UpdatePost(user, apikey, post, apitypes.TagDiff{}, &rating, &parent_post, sources, &description, &reason)
 	}
 }

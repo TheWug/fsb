@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"strconv"
+	"strings"
 )
 
 var MissingArguments error = errors.New("Missing file or upload_url")
@@ -61,7 +62,7 @@ func UpdatePost(user, apitoken string,
 		tagdiff types.TagDiff,				// empty to leave tags unchanged.
 		rating *string,					// nil to leave rating unchanged.
 		parent *int,					// nil to leave parent unchanged, -1 to UNSET parent
-		source *string,					// nil to leave source unchanged
+		sourcediff []string,				// nil to leave source unchanged
 		description *string,				// nil to leave description unchanged
 		reason *string) (*types.TPostInfo, error) {
 	url := fmt.Sprintf("/posts/%d.json", id)
@@ -81,7 +82,7 @@ func UpdatePost(user, apitoken string,
 	if rating != nil { req.FormArg("post[rating]", *rating) }
 	if parent != nil && *parent == -1 { req.FormArg("post[parent_id]", "") }
 	if parent != nil && *parent != -1 { req.FormArg("post[parent_id]", strconv.Itoa(*parent)) }
-	if source != nil { req.FormArg("post[source]", *source) }
+	if sourcediff != nil { req.FormArg("post[source_diff]", strings.Join(sourcediff, "\n")) }
 	if description != nil { req.FormArg("post[description]", *description) }
 	if reason != nil { req.FormArg("post[edit_reason]", *reason) }
 	r, e := req.Do()
