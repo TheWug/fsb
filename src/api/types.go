@@ -1,6 +1,7 @@
 package api
 
 import (
+	"api/types"
 	"api/tags"
 
 	"bytes"
@@ -98,4 +99,13 @@ func (this *TagSet) Rating() (string) {
 	if q { return "questionable" }
 	if s { return "safe" }
 	return ""
+}
+
+func (this *TagSet) ApplyDiff(diff types.TagDiff) {
+	for tag, _ := range diff.Add {
+		this.SetTag(tag)
+	}
+	for tag, _ := range diff.Remove {
+		this.ClearTag(tag)
+	}
 }
