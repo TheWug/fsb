@@ -1,13 +1,18 @@
 package dialogs
 
 import (
+	"api"
 	"api/tags"
 	"storage"
 
 	"github.com/thewug/gogram/data"
 	"github.com/thewug/gogram/dialog"
 
+	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"html"
 	"strings"
 )
 
@@ -121,4 +126,72 @@ func (this *PostPrompt) SeeSource(source string) {
 	index := len(this.SeenSources)
 	this.SeenSources[source] = index
 	this.SeenSourcesReverse = append(this.SeenSourcesReverse, source)
+}
+
+func (this *PostPrompt) ResetState() {
+	this.State = WAIT_MODE
+	this.Prefix = "What would you like to edit? Pick a button from below."
+}
+
+func (this *PostPrompt) PostStatus(b *bytes.Buffer) {
+	no_changes := true
+	if this.File.Mode == PF_FROM_TELEGRAM {
+		b.WriteString("File: <i>")
+		b.WriteString(html.EscapeString(this.File.FileName))
+		b.WriteString("</i> (")
+		b.WriteString(byteCountIEC(this.File.SizeBytes))
+		b.WriteString(")\n")
+	} else if this.File.Mode == PF_FROM_URL {
+		b.WriteString("File: <a href=\"")
+		b.WriteString(this.File.Url)
+		b.WriteString("\">")
+		b.WriteString(html.EscapeString(this.File.FileName))
+		b.WriteString("</a>\n")
+	}
+	if len(this.Rating) != 0 {
+		b.WriteString("Rating: <code>")
+		b.WriteString(api.RatingNameString(this.Rating))
+		b.WriteString("</code>\n")
+		no_changes = false
+	}
+	if this.Tags.Len() != 0 {
+		b.WriteString("Tags: <code>")
+		b.WriteString(html.EscapeString(this.Tags.String()))
+		b.WriteString("</code>\n")
+		no_changes = false
+	}
+	if this.Sources.Len() != 0 {
+		b.WriteString("Sources:\n<pre>  ")
+		b.WriteString(html.EscapeString(this.Sources.StringWithDelimiter("\n  ")))
+		b.WriteString("</pre>\n")
+		no_changes = false
+	}
+	if len(this.Description) != 0 {
+		b.WriteString("Description:\n<pre>")
+		b.WriteString(html.EscapeString(this.Description))
+		b.WriteString("</pre>\n")
+		no_changes = false
+	}
+	if this.Parent == -1 {
+		b.WriteString("Parent post: <code>none</code>\n")
+		no_changes = false
+	} else if this.Parent != 0 {
+		b.WriteString(fmt.Sprintf("Parent post: <a href=\"https://" + api.Endpoint + "/posts/%d\">Post #%d</a>\n", this.Parent, this.Parent))
+		no_changes = false
+	}
+	if no_changes {
+		b.WriteString("No changes so far.\n")
+	}
+}
+
+func (this *PostPrompt) IsComplete() error {
+	if len(this.Rating) == 0 {
+		return errors.New("You must specify a rating!")
+	} else if this.Tags.Len() < 6 {
+		return errors.New("You must specify at least six tags!")
+	} else if this.File.Mode == PF_UNSET {
+		return errors.New("You must specify a file!")
+	}
+
+	return nil
 }
