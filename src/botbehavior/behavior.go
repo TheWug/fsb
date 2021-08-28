@@ -456,6 +456,25 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 
 	settings, _ := storage.GetUserSettings(storage.UpdaterSettings{}, ctx.Query.From.Id)
 
+	var blacklist string
+	if settings.BlacklistMode == bottypes.BLACKLIST_ON {
+		if now := time.Now(); creds.BlacklistFetched.Add(time.Hour).Before(now) {
+			user, success, err := api.TestLogin(creds.User, creds.ApiKey)
+			if success {
+				creds.Blacklist = user.Blacklist
+				creds.BlacklistFetched = now
+			} else if err != nil {
+				ctx.Bot.ErrorLog.Println("Error testing login: ", err.Error())
+			}
+			err = storage.WriteUserCreds(storage.UpdaterSettings{}, creds)
+			if err != nil {
+				ctx.Bot.ErrorLog.Println("Error writing credentials: ", err.Error())
+			}
+		}
+
+		blacklist = creds.Blacklist
+	}
+
 	allowed_ratings := apiextra.Ratings{Safe: true, Questionable: true, Explicit: true}
 	if settings.RatingMode == bottypes.FILTER_EXPLICIT {
 		allowed_ratings = apiextra.Ratings{Safe: true, Questionable: true, Explicit: false}
@@ -471,17 +490,17 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 	if err == nil {
 		search_results, err := api.ListPosts(creds.User, creds.ApiKey, apitypes.ListPostOptions{SearchQuery: ctx.Query.Query + " " + force_rating, Page: apitypes.Page(offset + 1), Limit: q.resultsperpage})
 		errorlog.ErrorLog(ctx.Bot.ErrorLog, "api", "api.TagSearch", err)
-		iqa = this.ApiResultsToInlineResponse(ctx.Query.Query, search_results, offset, err, q)
+		iqa = this.ApiResultsToInlineResponse(ctx.Query.Query, blacklist, search_results, offset, err, q)
 	} else {
 		errorlog.ErrorLog(ctx.Bot.ErrorLog, "proxify", "proxify.Offset", errors.New(fmt.Sprintf("Bad Offset: %s (%s)", ctx.Query.Offset, err.Error())))
-		iqa = this.ApiResultsToInlineResponse(ctx.Query.Query, nil, 0, err, q)
+		iqa = this.ApiResultsToInlineResponse(ctx.Query.Query, blacklist, nil, 0, err, q)
 	}
 
 	ctx.AnswerAsync(iqa, nil)
 }
 
-func (this *Behavior) ApiResultsToInlineResponse(query string, search_results apitypes.TPostInfoArray, current_offset int, err error, q QuerySettings) data.OInlineQueryAnswer {
-	iqa := data.OInlineQueryAnswer{CacheTime: 30}
+func (this *Behavior) ApiResultsToInlineResponse(query, blacklist string, search_results apitypes.TPostInfoArray, current_offset int, err error, q QuerySettings) data.OInlineQueryAnswer {
+	iqa := data.OInlineQueryAnswer{CacheTime: 30, IsPersonal: true}
 	if err != nil {
 		if placeholder := this.GetErrorPlaceholder(); placeholder != nil {
 			iqa.Results = append(iqa.Results, placeholder)
@@ -495,10 +514,18 @@ func (this *Behavior) ApiResultsToInlineResponse(query string, search_results ap
 	}
 
 	for _, r := range search_results {
+		if r.MatchesBlacklist(blacklist) { continue }
 		new_result := proxify.ConvertApiResultToTelegramInline(r, proxify.ContainsSafeRatingTag(query), query, q.debugmode, this.MySettings.CaptionSettings)
 
 		if (new_result != nil) {
 			iqa.Results = append(iqa.Results, new_result)
+		}
+	}
+
+	if len(iqa.Results) == 0 {
+		iqa.NextOffset = ""
+		if placeholder := this.GetBlacklistedPlaceholder(query); placeholder != nil {
+			iqa.Results = append(iqa.Results, placeholder)
 		}
 	}
 
