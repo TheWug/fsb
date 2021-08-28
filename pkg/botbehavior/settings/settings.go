@@ -78,6 +78,18 @@ func (s Settings) GetApiStaticPrefix() string {
 	return s.ApiStaticPrefix
 }
 
+func (s Settings) GetMediaConvertDirectory() string {
+	return s.MediaConvertDirectory
+}
+
+func (s Settings) GetMediaStoreChannel() data.ChatID {
+	return s.MediaStoreChannel
+}
+
+func (s Settings) GetWebm2Mp4ConvertScript() string {
+	return s.Webm2Mp4ConvertScript
+}
+
 func (this *Settings) RedirectLogs(bot *gogram.TelegramBot) (error) {
 	newLogHandle, err := os.OpenFile(this.Logfile, os.O_RDWR | os.O_CREATE | os.O_APPEND, 0600)
 	if err != nil {
