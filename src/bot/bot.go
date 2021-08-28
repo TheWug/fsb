@@ -293,12 +293,24 @@ func (this *AutofixState) HandleCallback(ctx *gogram.CallbackCtx) {
 				ctx.AnswerAsync(data.OCallback{Notification: "\u2139 No changes to apply."}, nil)
 				this.Behavior.DismissPromptPost(ctx.Bot, post_info, diff, settings)
 			} else {
-				reason := "Manual tag cleanup: typos and concatenations (via KnottyBot)"
-				post, err := api.UpdatePost(creds.User, creds.ApiKey, post_info.PostId, diff, nil, nil, nil, nil, &reason)
-				if err != nil {
-					ctx.AnswerAsync(data.OCallback{Notification: "\u26A0 An error occurred when trying to update the post! Try again later."}, nil)
-					return
-				}
+				post_info.Edit.Deselect(ctx.Cmd.Args[0], index)
+			}
+		}
+		err = storage.SavePromptPost(tx, post_info.PostId, post_info)
+		this.Behavior.PromptPost(ctx.Bot, post_info, post_info.PostId, nil, nil)
+	} else if ctx.Cmd.Command == "/af-commit" {
+		diff := post_info.Edit.GetChangeToApply()
+
+		if diff.IsZero() {
+			ctx.AnswerAsync(data.OCallback{Notification: "\u2139 No changes to apply."}, nil)
+			this.Behavior.DismissPromptPost(tx, ctx.Bot, post_info, diff)
+		} else {
+			reason := "Manual tag cleanup: typos and concatenations (via KnottyBot)"
+			post, err := api.UpdatePost(creds.User, creds.ApiKey, post_info.PostId, diff, nil, nil, nil, nil, &reason)
+			if err != nil {
+				ctx.AnswerAsync(data.OCallback{Notification: "\u26A0 An error occurred when trying to update the post! Try again later."}, nil)
+				return err
+			}
 
 				post_info.Edit.Apply()
 				this.Behavior.DismissPromptPost(ctx.Bot, post_info, diff, settings)
@@ -692,20 +704,24 @@ func (this *EditState) Edit(ctx *gogram.MessageCtx) {
 		}
 	}
 
-	savestate := func(prompt *gogram.MessageCtx) {
-		ctx.SetState(EditStateFactoryWithData(nil, this.StateBasePersistent, esp{
-			User: creds.User,
-			ApiKey: creds.ApiKey,
-			MsgId: prompt.Msg.Id,
-			ChatId: prompt.Msg.Chat.Id,
-		}))
-	}
+		savestate := func(prompt *gogram.MessageCtx) {
+			ctx.SetState(EditStateFactoryWithData(nil, this.StateBasePersistent, esp{
+				User: creds.User,
+				ApiKey: creds.ApiKey,
+				MsgId: prompt.Msg.Id,
+				ChatId: prompt.Msg.Chat.Id,
+			}))
+		}
 
-	if savenow {
-		_, err := e.CommitEdit(creds.User, creds.ApiKey, ctx, storage.UpdaterSettings{})
-		if err == nil {
-			e.State = dialogs.SAVED
-			e.Finalize(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, nil))
+		if savenow {
+			_, err := e.CommitEdit(tx, creds.User, creds.ApiKey, ctx)
+			if err == nil {
+				e.State = dialogs.SAVED
+				e.Finalize(tx, ctx.Bot, ctx, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, nil))
+			} else {
+				e.State = dialogs.SAVED
+				savestate(e.Prompt(tx, ctx.Bot, ctx, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, err)))
+			}
 		} else {
 			e.State = dialogs.SAVED
 			savestate(e.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewEditFormatter(ctx.Msg.Chat.Type != data.Private, err)))
@@ -757,19 +773,18 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 				user, success, err := api.TestLogin(this.user, this.apikey)
 				if success && err == nil {
 					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("You are now logged in as <code>%s</code>.\n\nTo protect the security of your account, I have deleted the message containing your API key.", this.user), ParseMode: data.ParseHTML}}, nil)
-					err = storage.DefaultTransact(func(tx *sql.Tx) error {
-						return storage.WriteUserCreds(tx, storage.UserCreds{
-							TelegramId: ctx.Msg.From.Id,
-							User: this.user,
-							ApiKey: this.apikey,
-							Blacklist: user.Blacklist,
-							BlacklistFetched: time.Now(),
-						})
+					err = storage.WriteUserCreds(tx, storage.UserCreds{
+						TelegramId: ctx.Msg.From.Id,
+						User: this.user,
+						ApiKey: this.apikey,
+						Blacklist: user.Blacklist,
+						BlacklistFetched: time.Now(),
 					})
 					ctx.SetState(nil)
 				} else if err != nil {
 					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("An error occurred when testing if you were logged in! (%s)", err.Error())}}, nil)
 					ctx.SetState(nil)
+					return fmt.Errorf("api.TestLogin: %w", err)
 				} else if !success {
 					ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Login failed! (api key invalid?)\n\nLet's try again. Please send your " + api.Endpoint + " username."}}, nil)
 					this.user = ""
@@ -785,7 +800,7 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 			account, err := api.FetchUser(this.user, "")
 			if err != nil {
 				ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "There was an error looking up that username."}}, nil)
-				ctx.Bot.ErrorLog.Printf("Error looking up user [%s]: %s\n", this.user, err.Error())
+				return fmt.Errorf("api.FetchUser: %w", err)
 			} else if account == nil {
 				ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "That username doesn't seem to exist. Please double check, and send it again."}}, nil)
 				this.user = ""
@@ -798,7 +813,7 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 		creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 		if err == storage.ErrNoLogin {
 			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "You have not connected your " + api.ApiName + " account."}}, nil)
-			return
+			return nil
 		} else if err != nil {
 			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "An error occurred! Try again later."}}, nil)
 			ctx.Bot.ErrorLog.Println("An error occurred looking up user credentials: ", err.Error())
@@ -807,8 +822,7 @@ func (this *LoginState) Handle(ctx *gogram.MessageCtx) {
 		user, success, err := api.TestLogin(creds.User, creds.ApiKey)
 		if err != nil {
 			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "An error occurred while communicating with " + api.ApiName + "! Try again later."}}, nil)
-			ctx.Bot.ErrorLog.Println("An error occurred testing " + api.ApiName + " login: ", err.Error())
-			return
+			return fmt.Errorf("api.TestLogin: %w", err)
 		} else if !success {
 			ctx.RespondAsync(data.OMessage{SendData: data.SendData{Text: "Your API key is invalid or has expired, please update it."}}, nil)
 			return
@@ -1060,20 +1074,35 @@ func (this *PostState) Post(ctx *gogram.MessageCtx) {
 		return
 	}
 
-	savestate := func(prompt *gogram.MessageCtx) {
-		p.TagWizard.SetNewRulesFromString(tagrules)
-		ctx.SetState(PostStateFactoryWithData(nil, this.StateBasePersistent, psp{
-			User: creds.User,
-			ApiKey: creds.ApiKey,
-			MsgId: prompt.Msg.Id,
-			ChatId: prompt.Msg.Chat.Id,
-		}))
-	}
+		savestate := func(prompt *gogram.MessageCtx) {
+			p.TagWizard.SetNewRulesFromString(tagrules)
+			ctx.SetState(PostStateFactoryWithData(nil, this.StateBasePersistent, psp{
+				User: creds.User,
+				ApiKey: creds.ApiKey,
+				MsgId: prompt.Msg.Id,
+				ChatId: prompt.Msg.Chat.Id,
+			}))
+		}
 
-	if postnow {
-		if err := p.IsComplete(); err != nil {
-			p.Status = "Your post isn't ready for upload yet, please fix it and then try to upload it again."
-			savestate(p.Prompt(storage.UpdaterSettings{}, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, nil)))
+		if postnow {
+			if err := p.IsComplete(); err != nil {
+				p.Status = "Your post isn't ready for upload yet, please fix it and then try to upload it again."
+				savestate(p.Prompt(tx, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, nil)))
+			} else {
+				upload_result, err := p.CommitPost(creds.User, creds.ApiKey, ctx)
+				if err == nil && upload_result != nil && upload_result.Success {
+					p.State = dialogs.SAVED
+					p.Finalize(tx, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, upload_result))
+				} else if err != nil {
+					p.State = dialogs.SAVED
+					savestate(p.Prompt(tx, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, nil)))
+					return fmt.Errorf("p.CommitPost: %w", err)
+				} else if upload_result != nil && !upload_result.Success {
+					if upload_result.Reason == nil { upload_result.Reason = new(string) }
+					p.State = dialogs.SAVED
+					savestate(p.Prompt(tx, ctx.Bot, ctx, dialogs.NewPostFormatter(ctx.Msg.Chat.Type != data.Private, upload_result)))
+				}
+			}
 		} else {
 			upload_result, err := p.CommitPost(creds.User, creds.ApiKey, ctx, storage.UpdaterSettings{})
 			if err == nil && upload_result != nil && upload_result.Success {

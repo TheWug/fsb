@@ -93,7 +93,7 @@ func PostsWithTag(tx DBLike, tag apitypes.TTagData, includeDeleted bool) (apityp
 	return out, nil
 }
 
-func PostByID(tx *sql.Tx, id int) (*apitypes.TPostInfo, error) {
+func PostByID(tx DBLike, id int) (*apitypes.TPostInfo, error) {
 	out, err := PostsById(tx, []int{id})
 	if len(out) == 0 {
 		return nil, err
@@ -102,7 +102,7 @@ func PostByID(tx *sql.Tx, id int) (*apitypes.TPostInfo, error) {
 	}
 }
 
-func PostsById(tx *sql.Tx, ids []int) ([]apitypes.TPostInfo, error) {
+func PostsById(tx DBLike, ids []int) ([]apitypes.TPostInfo, error) {
 	var item apitypes.TPostInfo
 	query := "SELECT post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted, ARRAY(SELECT tag_name FROM tag_index INNER JOIN post_tags USING (tag_id) WHERE post_id = post_index.post_id) AS post_tags FROM post_index WHERE post_id = ANY($1::int[])"
 	rows, err := tx.Query(query, pq.Array(ids))

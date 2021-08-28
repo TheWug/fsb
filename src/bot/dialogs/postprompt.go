@@ -30,7 +30,7 @@ func PostPromptID() data.DialogID {
 	return POST_PROMPT_ID
 }
 
-func LoadPostPrompt(tx *sql.Tx, msg_id data.MsgID, chat_id data.ChatID, user_id data.UserID, api_user string) (*PostPrompt, error) {
+func LoadPostPrompt(tx storage.DBLike, msg_id data.MsgID, chat_id data.ChatID, user_id data.UserID, api_user string) (*PostPrompt, error) {
 	found, err := storage.FetchDialogPost(tx, msg_id, chat_id)
 	if err != nil { return nil, err }
 	if found == nil { return nil, nil }

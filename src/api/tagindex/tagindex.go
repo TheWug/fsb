@@ -1304,20 +1304,6 @@ func (ls *ListSettings) Apply(other ListSettings) {
 }
 
 func Blits(ctx *gogram.MessageCtx) {
-	txbox, err := storage.NewTxBox()
-	if err != nil {
-		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("Error opening DB transaction: %s.", err.Error())}}, nil)
-		return
-	}
-
-	ctrl := storage.EnumerateControl{
-		Transaction: txbox,
-		CreatePhantom: true,
-		OrderByCount: true,
-	}
-
-	defer ctrl.Transaction.Finalize(true)
-
 	creds, err := storage.GetUserCreds(nil, ctx.Msg.From.Id)
 	if err != nil || !creds.Janitor { return }
 
@@ -1352,7 +1338,7 @@ func Blits(ctx *gogram.MessageCtx) {
 	}
 
 	if mode == MODE_LIST {
-		yesblits, noblits, wildblits, err := storage.GetBlits(list_settings.yes, list_settings.no, list_settings.wild, ctrl)
+		yesblits, noblits, wildblits, err := storage.GetBlits(list_settings.yes, list_settings.no, list_settings.wild)
 		if err != nil {
 			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Whoops! " + html.EscapeString(err.Error()), ParseMode: data.ParseHTML}}, nil)
 			return
@@ -1409,8 +1395,6 @@ func Blits(ctx *gogram.MessageCtx) {
 	} else {
 		ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("The following blits failed to update properly (perhaps they correspond to tags which do not exist?)\n%s", strings.Join(bad_tags, " ")), ParseMode: data.ParseHTML}}, nil)
 	}
-
-	ctrl.Transaction.MarkForCommit()
 }
 
 func GetAllWildCats(tagMap map[string]*types.TTagData, blitMap map[string]*storage.BlitData, ratio int, with_empty, with_typed bool) []Triplet { // also needs blits
