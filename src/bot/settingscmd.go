@@ -10,6 +10,7 @@ import (
 
 	"bytes"
 	"fmt"
+	"html"
 	"strconv"
 )
 
@@ -115,7 +116,7 @@ func (this *SettingsState) Handle(ctx *gogram.MessageCtx) {
 		ctx.ReplyAsync(data.OMessage{SendData: SettingsMessage("", settings, creds.User, creds.Janitor)}, nil)
 	} else if ctx.Cmd.Command == "/delete_my_data_and_forget_me" {
 		if ctx.Cmd.Argstr == "Yes I'm sure!" {
-			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("I'll always remember you, %s!\n<i>MEMORY DELETED</i>", ctx.Msg.From.FirstName), ParseMode: data.ParseHTML}}, nil)
+			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: fmt.Sprintf("I'll always remember you, %s!\n<i>MEMORY DELETED</i>", html.EscapeString(ctx.Msg.From.FirstName)), ParseMode: data.ParseHTML}}, nil)
 			if err := storage.DeleteUserSettings(storage.UpdaterSettings{}, ctx.Msg.From.Id); err != nil { ctx.Bot.ErrorLog.Println("Error deleting settings: ", err.Error()) }
 			if err := storage.DeleteUserCreds(storage.UpdaterSettings{}, ctx.Msg.From.Id); err != nil { ctx.Bot.ErrorLog.Println("Error deleting credentials: ", err.Error()) }
 			if err := storage.DeleteUserTagRules(storage.UpdaterSettings{}, ctx.Msg.From.Id); err != nil { ctx.Bot.ErrorLog.Println("Error deleting credentials: ", err.Error()) }
