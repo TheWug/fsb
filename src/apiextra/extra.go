@@ -136,3 +136,74 @@ func GetParentPostFromText(text string) int {
 
 	return NONEXISTENT_PARENT
 }
+
+type Ratings struct {
+	Safe, Questionable, Explicit bool
+}
+
+func (this Ratings) And(other Ratings) Ratings {
+	this.Safe = this.Safe && other.Safe
+	this.Questionable = this.Questionable && other.Questionable
+	this.Explicit = this.Explicit && other.Explicit
+	return this
+}
+
+func (this Ratings) RatingTag() string {
+	if this.Safe {
+		if this.Questionable {
+			if this.Explicit {
+				return ""		// SQE
+			} else {
+				return "-rating:e"	// SQ
+			}
+		} else {
+			if this.Explicit {
+				return "-rating:q"	// SE
+			} else {
+				return "rating:s"	// S
+			}
+		}
+	} else {
+		if this.Questionable {
+			if this.Explicit {
+				return "-rating:s"	// QE
+			} else {
+				return "rating:q"	// Q
+			}
+		} else {
+			if this.Explicit {
+				return "rating:e"	// E
+			} else {
+				return "id:<0"		// none
+			}
+		}
+	}
+}
+
+var ws *regexp.Regexp = regexp.MustCompile(`\s+`)
+
+func RatingsFromString(tags string) Ratings {
+	var r Ratings = Ratings{true, true, true}
+	for _, tag := range ws.Split(tags, -1) {
+		if strings.HasPrefix(tag, "rating:") {
+			switch {
+			case strings.HasPrefix(tag[7:], "s"):
+				r.Safe, r.Questionable, r.Explicit = true, false, false
+			case strings.HasPrefix(tag[7:], "q"):
+				r.Safe, r.Questionable, r.Explicit = false, true, false
+			case strings.HasPrefix(tag[7:], "e"):
+				r.Safe, r.Questionable, r.Explicit = false, false, true
+			}
+		} else if strings.HasPrefix(tag, "-rating:") {
+			switch {
+			case strings.HasPrefix(tag[8:], "s"):
+				r.Safe, r.Questionable, r.Explicit = false, true, true
+			case strings.HasPrefix(tag[8:], "q"):
+				r.Safe, r.Questionable, r.Explicit = true, false, true
+			case strings.HasPrefix(tag[8:], "e"):
+				r.Safe, r.Questionable, r.Explicit = true, true, false
+			}
+		}
+	}
+	return r
+}
