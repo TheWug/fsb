@@ -1,0 +1,3 @@
+[submodule "src/telegram"]
+	path = src/telegram
+	url = ssh://localhost:7564/bulk/git/golang/telegram
