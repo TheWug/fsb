@@ -6,6 +6,9 @@ import (
 	"github.com/thewug/fsb/pkg/storage"
 
 	"github.com/thewug/fsb/pkg/api"
+	"github.com/thewug/fsb/pkg/apiextra"
+	"github.com/thewug/fsb/pkg/fsb/proxify"
+	"github.com/thewug/fsb/pkg/fsb/proxify/webm"
 
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/data"
@@ -108,11 +111,24 @@ func (this *Settings) InitializeAll(bot *gogram.TelegramBot) (error) {
 	e := this.RedirectLogs(bot)
 	if e != nil { return e }
 
+	e = api.Init(this)
+	if e != nil { return e }
+
+	e = apiextra.Init(this)
+	if e != nil { return e }
+
+	e = proxify.Init(this)
+	if e != nil { return e }
+
 	e = storage.DBInit(this.DbUrl)
 	if e != nil { return e }
 
 	bot.Remote.SetAPIKey(this.ApiKey)
 	e = bot.Remote.Test()
+	if e != nil { return e }
+
+	webm.ConfigureWebmToTelegramMp4Converter(bot, this)
+
 	return e
 }
 

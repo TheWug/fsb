@@ -1,13 +1,9 @@
 package main
 
 import (
-	"github.com/thewug/fsb/pkg/api"
-	"github.com/thewug/fsb/pkg/apiextra"
 	"github.com/thewug/fsb/pkg/bot"
 	"github.com/thewug/fsb/pkg/botbehavior"
 	"github.com/thewug/fsb/pkg/botbehavior/settings"
-	"github.com/thewug/fsb/pkg/fsb/proxify/webm"
-	"github.com/thewug/fsb/pkg/fsb/proxify"
 	"github.com/thewug/fsb/pkg/storage"
 
 	"github.com/thewug/fsb/cmd"
@@ -46,24 +42,6 @@ func main() {
 	behavior.ForwardTo = machine
 
 	e := thebot.Init(settingsFile, &settings)
-	if e != nil {
-		fmt.Println(e.Error())
-		os.Exit(1)
-	}
-
-	api.Init(settings)
-	if e != nil {
-		fmt.Println(e.Error())
-		os.Exit(1)
-	}
-
-	apiextra.Init(settings)
-	if e != nil {
-		fmt.Println(e.Error())
-		os.Exit(1)
-	}
-
-	e = proxify.Init(settings)
 	if e != nil {
 		fmt.Println(e.Error())
 		os.Exit(1)
@@ -125,8 +103,6 @@ func main() {
 
 	err := p.LoadAllStates(machine)
 	if err != nil { thebot.ErrorLog.Println(err.Error()) }
-
-	webm.ConfigureWebmToTelegramMp4Converter(&thebot, &settings)
 
 	thebot.MainLoop()
 	os.Exit(0)
