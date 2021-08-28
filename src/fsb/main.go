@@ -7,6 +7,7 @@ import (
 	"bot"
 	"github.com/thewug/gogram"
 	"apiextra"
+	"fsb/proxify"
 )
 
 // This bot runs by polling telegram for updates, and then making synchronous calls to api. Because of the latency
@@ -54,6 +55,12 @@ func main() {
 	}
 
 	bot.Init(settings)
+	if e != nil {
+		fmt.Println(e.Error())
+		os.Exit(1)
+	}
+
+	e = proxify.Init(settings)
 	if e != nil {
 		fmt.Println(e.Error())
 		os.Exit(1)

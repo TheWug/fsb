@@ -37,6 +37,12 @@ func ShowHelp() {
 	fmt.Println("  home                - numeric telegram chat ID of bot's service chat.")
 	fmt.Println("  no_results_photo_id - base64 telegram photo ID of 'no results' placeholder photo.")
 	fmt.Println("  error_photo_id      - base64 telegram photo ID of 'error' placeholder photo.")
+	fmt.Println("  source_map   - a json array of match rules which control how to format sources.")
+	fmt.Println("                 rules have the following keys:")
+	fmt.Println("                   hostname, subdomain_of, path_prefix - strings, or arrays of strings")
+	fmt.Println("                   token_count - arrays of the form [\"token\", N], or arrays of those")
+	fmt.Println("                   stickers - true to use this as a sticker pack link, which is displayed specially")
+	fmt.Println("                   next - either a string (to use this label), or one or more match rules to be evaluated recursively")
 }
 
 type Behavior struct {

@@ -6,6 +6,8 @@ import (
 	"os"
 	"log"
 	"storage"
+
+	"encoding/json"
 )
 
 const MAX_RESULTS_PER_PAGE = 50
@@ -31,6 +33,12 @@ type Settings struct {
 
 	NoResultsPhotoID data.FileID `json:"no_results_photo_id"`
 	ErrorPhotoID     data.FileID `json:"error_photo_id"`
+
+	SourceMap        json.RawMessage `json:"source_map"`
+}
+
+func (s Settings) GetSourceMap() json.RawMessage {
+	return s.SourceMap
 }
 
 func (s Settings) GetApiName() string {

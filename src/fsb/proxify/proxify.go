@@ -62,6 +62,7 @@ func sourcesList(sources []string) []string {
 
 	telegram_sticker_source := false
 
+	SourceLoop:
 	for _, source := range(sources) {
 		u, err := url.Parse(source)
 		if err != nil {
@@ -69,12 +70,25 @@ func sourcesList(sources []string) []string {
 			continue
 		}
 
-		hostname := u.Hostname()
-		path := u.EscapedPath()
+		source_entry := ""
+		for _, d := range allDisplayDeciders {
+			if label, ok, stickers := d.Matches(u); ok {
+				if len(label) == 0 && !(!telegram_sticker_source && stickers) {
+					break
+				}
+				if !telegram_sticker_source && stickers {
+					all_sources = append(all_sources, sourceLine(source, "View Sticker Pack"))
+					telegram_sticker_source = true
+					continue SourceLoop
+				}
+				source_entry = sourceLine(source, label)
+				break
+			}
+		}
 
-		source_entry := sourceLine(source, "Source")
-
-		// figure out a way to pretty-print sources
+		if len(source_entry) == 0 {
+			source_entry = sourceLine(source, u.Hostname())
+		}
 
 		if len(source_entry) == 0 {
 			unknown++
