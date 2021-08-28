@@ -1,7 +1,7 @@
 package proxify
 
 import (
-	"github.com/thewug/fsb/pkg/botbehavior/settings"
+	stypes "github.com/thewug/fsb/pkg/botbehavior/settings/types"
 	"github.com/thewug/fsb/pkg/api"
 	"github.com/thewug/fsb/pkg/api/types"
 	"github.com/thewug/fsb/pkg/fsb/proxify/webm"
@@ -62,7 +62,7 @@ func sourceLine(url, display string) string {
 	return fmt.Sprintf(`<a href="%s">%s</a>`, url, display)
 }
 
-func sourcesList(sources []string, settings settings.CaptionSettings) []string {
+func sourcesList(sources []string, settings stypes.CaptionSettings) []string {
 	sort.Slice(sources, func(i, j int) bool {
 		return len(sources[i]) < len(sources[j])
 	})
@@ -112,7 +112,7 @@ func sourcesList(sources []string, settings settings.CaptionSettings) []string {
 	return append(all_sources, "Sources: " + strings.Join(output_source_list, ", "))
 }
 
-func GenerateCaption(result types.TPostInfo, force_safe bool, query string, settings settings.CaptionSettings, convert_notice bool) *string {
+func GenerateCaption(result types.TPostInfo, force_safe bool, query string, settings stypes.CaptionSettings, convert_notice bool) *string {
 	post_url := fmt.Sprintf("https://%s/posts/%d", domain(force_safe), result.Id)
 	image_url := MaybeSafeify(result.File_url, force_safe)
 
@@ -173,7 +173,7 @@ func GenerateCaption(result types.TPostInfo, force_safe bool, query string, sett
 
 // https://api/artists/show_or_new?name=dizzyvixen
 
-func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, query string, debugmode bool, settings settings.CaptionSettings) (interface{}) {
+func ConvertApiResultToTelegramInline(result types.TPostInfo, force_safe bool, query string, debugmode bool, settings stypes.CaptionSettings) (interface{}) {
 	s2p := func(s string) *string { return &s }
 	replymarkup := &data.TInlineKeyboard{
 		Buttons: [][]data.TInlineKeyboardButton{
@@ -329,7 +329,7 @@ func UpdateWebmPostWithConvertedFile(ctx *gogram.InlineResultCtx, post *types.TP
 		},
 		Media: data.TInputMediaAnimation{
 			ParseMode: data.ParseHTML,
-			Caption: *GenerateCaption(*post, false, ctx.Result.Query, settings.CaptionSettings{3,3,3}, false),
+			Caption: *GenerateCaption(*post, false, ctx.Result.Query, stypes.CaptionSettings{3,3,3}, false),
 			Media: file_id,
 		},
 		ReplyMarkup: &data.TInlineKeyboard{

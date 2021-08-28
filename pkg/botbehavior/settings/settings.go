@@ -1,6 +1,8 @@
 package settings
 
 import (
+	"github.com/thewug/fsb/pkg/botbehavior/settings/types"
+
 	"github.com/thewug/fsb/pkg/storage"
 
 	"github.com/thewug/fsb/pkg/api"
@@ -19,12 +21,6 @@ const MAX_RESULTS_PER_PAGE = 50
 const MAX_ARTISTS = 10
 const MAX_CHARS = 10
 const MAX_SOURCES = 10
-
-type CaptionSettings struct {
-	MaxArtists int `json:"max_artists"`
-	MaxChars   int `json:"max_chars"`
-	MaxSources int `json:"max_sources"`
-}
 
 type Settings struct {
 	gogram.InitSettings
@@ -55,7 +51,7 @@ type Settings struct {
 
 	SourceMap        json.RawMessage `json:"source_map"`
 
-	CaptionSettings
+	types.CaptionSettings
 }
 
 func (s Settings) GetSourceMap() json.RawMessage {
