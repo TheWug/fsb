@@ -20,7 +20,7 @@ const VERIFY = "verify"
 const VERIFYDONE = "doneverifying"
 const VERIFYFAIL = "failverifying"
 
-func ApiAccount(user string, bot_janitor bool) string {
+func Account(user string, bot_janitor bool) string {
 	if user == "" {
 		return "<i>Not connected</i>"
 	}
@@ -28,7 +28,7 @@ func ApiAccount(user string, bot_janitor bool) string {
 	return html.EscapeString(user) + map[bool]string{false: "", true: " \u2728"}[bot_janitor]
 }
 
-func SettingsMessage(subcommand string, settings *storage.UserSettings, api_user string, bot_janitor bool) data.SendData {
+func SettingsMessage(subcommand string, settings *storage.UserSettings, user string, bot_janitor bool) data.SendData {
 	var d data.SendData
 	var b bytes.Buffer
 
@@ -52,7 +52,7 @@ func SettingsMessage(subcommand string, settings *storage.UserSettings, api_user
 	b.WriteString("\n\n<b>Your Account</b>\n<code>Telegram ID:  </code>")
 	b.WriteString(strconv.Itoa(int(settings.TelegramId)))
 	b.WriteString("\n<code>" + api.ApiName + " Account: </code>")
-	b.WriteString(ApiAccount(api_user, bot_janitor))
+	b.WriteString(Account(user, bot_janitor))
 	b.WriteString("\n\n")
 	b.WriteString(prompt)
 
