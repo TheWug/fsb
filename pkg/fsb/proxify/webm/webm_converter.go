@@ -1,7 +1,6 @@
 package webm
 
 import (
-	"github.com/thewug/fsb/pkg/botbehavior/settings"
 	"github.com/thewug/fsb/pkg/api/types"
 	"github.com/thewug/fsb/pkg/storage"
 
@@ -21,15 +20,21 @@ import (
 type webmToTelegramMp4Converter struct {
 	convert_requests chan *webm2Mp4Req
 	bot *gogram.TelegramBot
-	settings *settings.Settings
+	s settings
 }
 
 var converter *webmToTelegramMp4Converter
 
-func ConfigureWebmToTelegramMp4Converter(bot *gogram.TelegramBot, settings *settings.Settings) {
+type settings interface {
+	GetMediaConvertDirectory() string
+	GetWebm2Mp4ConvertScript() string
+	GetMediaStoreChannel() data.ChatID
+}
+
+func ConfigureWebmToTelegramMp4Converter(bot *gogram.TelegramBot, s settings) {
 	converter = &webmToTelegramMp4Converter{
 		bot: bot,
-		settings: settings,
+		s: s,
 		convert_requests: make(chan *webm2Mp4Req),
 	}
 
@@ -110,8 +115,8 @@ func (this webmToTelegramMp4Converter) convertFile(url string, strip_audio bool)
 	defer resp.Body.Close()
 
 	base_name := path.Base(url) + map[bool]string{false: ".mp4", true: ".silent.mp4"}[strip_audio]
-	out_name := this.settings.MediaConvertDirectory + base_name
-	cmd := exec.Command(this.settings.Webm2Mp4ConvertScript, out_name,
+	out_name := this.s.GetMediaConvertDirectory() + base_name
+	cmd := exec.Command(this.s.GetWebm2Mp4ConvertScript(), out_name,
 	                    map[bool]string{false: "audio", true: "noaudio"}[strip_audio])
 	cmd.Stdin = resp.Body
 	err = cmd.Run()
@@ -141,7 +146,7 @@ func (this webmToTelegramMp4Converter) uploadConvertedFileToTelegram(file reqtif
 	message, err := this.bot.Remote.SendAnimation(data.OAnimation{
 		SendData: data.SendData{
 			TargetData: data.TargetData{
-				ChatId: this.settings.MediaStoreChannel,
+				ChatId: this.s.GetMediaStoreChannel(),
 			},
 			Text: file.Name,
 		},
