@@ -413,6 +413,7 @@ func (this *Behavior) ClearPromptPostsOlderThan(bot *gogram.TelegramBot, time_ag
 type QuerySettings struct {
 	debugmode      bool
 	resultsperpage int
+	settingsbutton string
 }
 
 // inline query, do tag search.
@@ -476,10 +477,12 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 	}
 
 	allowed_ratings := apiextra.Ratings{Safe: true, Questionable: true, Explicit: true}
+	q.settingsbutton = "Search Settings"
 	if settings.RatingMode == bottypes.FILTER_EXPLICIT {
 		allowed_ratings = apiextra.Ratings{Safe: true, Questionable: true, Explicit: false}
 	} else if settings.RatingMode == bottypes.FILTER_QUESTIONABLE {
 		allowed_ratings = apiextra.Ratings{Safe: true, Questionable: false, Explicit: false}
+		q.settingsbutton += " [SFW mode]"
 	}
 
 	force_rating := apiextra.RatingsFromString(ctx.Query.Query).And(allowed_ratings).RatingTag()
@@ -500,7 +503,7 @@ func (this *Behavior) ProcessInlineQuery(ctx *gogram.InlineCtx) {
 }
 
 func (this *Behavior) ApiResultsToInlineResponse(query, blacklist string, search_results apitypes.TPostInfoArray, current_offset int, err error, q QuerySettings) data.OInlineQueryAnswer {
-	iqa := data.OInlineQueryAnswer{CacheTime: 30, IsPersonal: true}
+	iqa := data.OInlineQueryAnswer{CacheTime: 30, IsPersonal: true, SwitchPMText: q.settingsbutton, SwitchPMParam: "settings"}
 	if err != nil {
 		if placeholder := this.GetErrorPlaceholder(); placeholder != nil {
 			iqa.Results = append(iqa.Results, placeholder)
