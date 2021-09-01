@@ -4,8 +4,8 @@ github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 h1:Z9n2FFNU
 github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51/go.mod h1:CzGEWj7cYgsdH8dAjBGEr58BoE7ScuLd+fwFZ44+/x8=
 github.com/lib/pq v1.10.2 h1:AqzbZs4ZoCBp+GtejcpCpcxM3zlSMx29dXbUSeVtJb8=
 github.com/lib/pq v1.10.2/go.mod h1:AlVN5x4E4T544tWzH6hKfbfQvm3HdbOxrmggDNAPY9o=
-github.com/thewug/dml v0.0.0-20210725230048-b9a5991ea54a h1:2kc2tikrnKzlXWDU9Ggi+N3BJawl0CNCC/wL3/dPerU=
-github.com/thewug/dml v0.0.0-20210725230048-b9a5991ea54a/go.mod h1:ds4Nlz0Voknf0Ew/JEX0ROvUbQ+xb7clt4e9148A8CM=
+github.com/thewug/dml v0.0.0-20210729230338-639f3c6dc045 h1:MkNG78ji66OykfdDWMvO5t2bblwUmMHUFo9kG1tG7FI=
+github.com/thewug/dml v0.0.0-20210729230338-639f3c6dc045/go.mod h1:ds4Nlz0Voknf0Ew/JEX0ROvUbQ+xb7clt4e9148A8CM=
 github.com/thewug/gogram v1.1.0 h1:lw3wlmZRyos5dCgtyTTL8H4ujNZIFJDhwOTn8PbgUqg=
 github.com/thewug/gogram v1.1.0/go.mod h1:X+/3NHcy5cGtzJvUAtImdCEf/+gK10O8wzvKSp1rJ94=
 github.com/thewug/reqtify v0.0.0-20210727140724-8ce9e4058694 h1:YF31eeB0c9XL2x5m+liT/jxOk3B1/Xa4URvLvJc8bAY=
