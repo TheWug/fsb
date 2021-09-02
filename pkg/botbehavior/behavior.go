@@ -50,6 +50,7 @@ func ShowHelp() {
 	fmt.Println("  webm2mp4_convert_script   - script to convert webms into mp4s.")
 	fmt.Println("  media_store_channel       - numeric telegram chat ID of channel to use for converted media storage.")
 	fmt.Println("  maintenance_sync_interval - number of seconds between automatic api post syncs.")
+	fmt.Println("  debug_media_received      - helper flag, show media ids of incoming photos (useful for setting *_photo_id settings).")
 	fmt.Println("  source_map   - a json array of match rules which control how to format sources.")
 	fmt.Println("                 rules have the following keys:")
 	fmt.Println("                   hostname, subdomain_of, path_prefix - strings, or arrays of strings")
@@ -419,6 +420,16 @@ type QuerySettings struct {
 	debugmode      bool
 	resultsperpage int
 	settingsbutton string
+}
+
+func (this *Behavior) ProcessMessage(ctx *gogram.MessageCtx) {
+	if this.MySettings.DebugMediaReceived {
+		if ctx.Msg.Photo != nil {
+			ctx.Bot.Log.Printf("Photo: %+v\n", ctx.Msg.Photo)
+		}
+	}
+
+	this.ForwardTo.ProcessMessage(ctx)
 }
 
 // inline query, do tag search.

@@ -18,5 +18,6 @@
 	"webm2mp4_convert_script": "",
 	"media_store_channel": -1,
 	"maintenance_sync_interval": 60,
+	"debug_media_received": false,
 	"source_map": []
 }

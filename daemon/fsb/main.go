@@ -102,7 +102,7 @@ func main() {
 	machine.AddCommand("/operator", &operator)
 	machine.AddCommand("/manage", &manage)
 
-	thebot.SetMessageCallback(machine)
+	thebot.SetMessageCallback(&behavior)
 	thebot.SetStateMachine(machine)
 	thebot.SetCallbackCallback(machine)
 	thebot.SetInlineCallback(&behavior)

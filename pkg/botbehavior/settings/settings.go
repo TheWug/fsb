@@ -55,6 +55,7 @@ type Settings struct {
 	Webm2Mp4ConvertScript string      `json:"webm2mp4_convert_script"`
 	MediaStoreChannel     data.ChatID `json:"media_store_channel"`
 	MaintenanceSyncInterval int       `json:"maintenance_sync_interval"`
+	DebugMediaReceived      bool      `json:"debug_media_received"`
 
 	SourceMap        json.RawMessage `json:"source_map"`
 
