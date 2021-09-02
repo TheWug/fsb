@@ -102,6 +102,10 @@ func (this webmToTelegramMp4Converter) convertRoutine() {
 }
 
 func (this webmToTelegramMp4Converter) convertFile(url string, strip_audio bool) (reqtify.FormFile, error) {
+	if _, err := os.Stat(this.s.GetWebm2Mp4ConvertScript()); os.IsNotExist(err) {
+		return reqtify.FormFile{}, err
+	}
+
 	var file reqtify.FormFile
 	resp, err := http.Get(url)
 	if err != nil {
