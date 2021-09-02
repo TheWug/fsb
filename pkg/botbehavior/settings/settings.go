@@ -24,6 +24,7 @@ const MAX_RESULTS_PER_PAGE = 50
 const MAX_ARTISTS = 10
 const MAX_CHARS = 10
 const MAX_SOURCES = 10
+const MAINTENANCE_SYNC_DEFAULT = 60
 
 type Settings struct {
 	gogram.InitSettings
@@ -53,6 +54,7 @@ type Settings struct {
 	MediaConvertDirectory string      `json:"media_convert_directory"`
 	Webm2Mp4ConvertScript string      `json:"webm2mp4_convert_script"`
 	MediaStoreChannel     data.ChatID `json:"media_store_channel"`
+	MaintenanceSyncInterval int       `json:"maintenance_sync_interval"`
 
 	SourceMap        json.RawMessage `json:"source_map"`
 
@@ -109,6 +111,7 @@ func (this *Settings) InitializeAll(bot *gogram.TelegramBot) (error) {
 	if this.MaxArtists < 1 || this.MaxArtists > MAX_ARTISTS { this.MaxArtists = MAX_ARTISTS }
 	if this.MaxChars < 1 || this.MaxChars > MAX_CHARS { this.MaxChars = MAX_CHARS }
 	if this.MaxSources < 1 || this.MaxSources > MAX_SOURCES { this.MaxSources = MAX_SOURCES }
+	if this.MaintenanceSyncInterval <= 60 { this.MaintenanceSyncInterval = MAINTENANCE_SYNC_DEFAULT }
 
 	e := this.RedirectLogs(bot)
 	if e != nil { return e }

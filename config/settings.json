@@ -17,5 +17,6 @@
 	"media_convert_directory": "",
 	"webm2mp4_convert_script": "",
 	"media_store_channel": -1,
+	"maintenance_sync_interval": 60,
 	"source_map": []
 }

@@ -46,9 +46,10 @@ func ShowHelp() {
 	fmt.Println("  no_results_photo_id  - base64 telegram photo ID of 'no results' placeholder photo.")
 	fmt.Println("  blacklisted_photo_id - base64 telegram photo ID of 'all results blacklisted' placeholder photo.")
 	fmt.Println("  error_photo_id       - base64 telegram photo ID of 'error' placeholder photo.")
-	fmt.Println("  media_convert_directory - conversion directory for webm -> mp4 conversions.")
-	fmt.Println("  webm2mp4_convert_script - script to convert webms into mp4s.")
-	fmt.Println("  media_store_channel     - numeric telegram chat ID of channel to use for converted media storage.")
+	fmt.Println("  media_convert_directory   - conversion directory for webm -> mp4 conversions.")
+	fmt.Println("  webm2mp4_convert_script   - script to convert webms into mp4s.")
+	fmt.Println("  media_store_channel       - numeric telegram chat ID of channel to use for converted media storage.")
+	fmt.Println("  maintenance_sync_interval - number of seconds between automatic api post syncs.")
 	fmt.Println("  source_map   - a json array of match rules which control how to format sources.")
 	fmt.Println("                 rules have the following keys:")
 	fmt.Println("                   hostname, subdomain_of, path_prefix - strings, or arrays of strings")
@@ -65,7 +66,7 @@ type Behavior struct {
 }
 
 func (this *Behavior) GetInterval() int64 {
-	return 60
+	return int64(this.MySettings.MaintenanceSyncInterval)
 }
 
 func (this *Behavior) DoMaintenance(bot *gogram.TelegramBot) {
