@@ -198,14 +198,9 @@ func ImportPostTagsFromNameToID(tx DBLike, sfx chan string) (error) {
 		// downside:	this insertion method will fail if any non-unique entries are present, including conflicts with
 		//		existing data in the table, where a smarter but slower approach could work around them.
 
-		// bump maintenance memory threshhold, the default value is low. this field's value is per transaction.
-		query := "SET maintenance_work_mem TO '4 GB'"
-		_, err = tx.Exec(query)
-		if err != nil { return err }
-
 		// delete existing tag records before removing indices because it will be a lot slower without them
 		status(" (1/4 tag clear overrides)")
-		query = "DELETE FROM post_tags WHERE post_id IN (SELECT DISTINCT post_id FROM post_tags_by_name)"
+		query := "DELETE FROM post_tags WHERE post_id IN (SELECT DISTINCT post_id FROM post_tags_by_name)"
 		_, err = tx.Exec(query)
 		if err != nil { return err }
 
