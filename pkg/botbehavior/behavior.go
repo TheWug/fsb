@@ -203,6 +203,7 @@ func (this *Behavior) maintenanceInternal(tx storage.DBLike, bot *gogram.Telegra
 		if err != nil { return err }
 		post := updated_posts[id]
 		post_info = this.PromptPost(bot, post_info, id, &post, edit)
+		time.Sleep(4 * time.Second) // avoid rate limiting in telegram message sending
 		err = storage.SavePromptPost(tx, id, post_info)
 		if err != nil { return err }
 	}
