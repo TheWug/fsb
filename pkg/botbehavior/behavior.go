@@ -122,49 +122,48 @@ func (this *Behavior) maintenanceInternal(tx storage.DBLike, bot *gogram.Telegra
 	err = tagindex.SyncPostsInternal(tx, this.MySettings.SearchUser, this.MySettings.SearchAPIKey, extra_expensive, extra_expensive, nil, update_chan)
 	if err != nil { return err }
 
-	replace_id := int64(-1)
-	replacements, err := storage.GetReplacements(tx, replace_id)
-	if err != nil { return err }
-	actual_posts, err := storage.PostsById(tx, updated_post_ids)
-	if err != nil { return err }
-
-	type shim struct {
-		post *apitypes.TPostInfo
-		metadata tags.TagSet
-	}
-
-	posts_and_stuff := make(map[int]shim)
-
-	for i, _ := range actual_posts {
-		posts_and_stuff[actual_posts[i].Id] = shim{post: &actual_posts[i], metadata: actual_posts[i].ExtendedTagSet()}
-	}
-
-	replacement_history, err := storage.GetReplacementHistorySince(tx, updated_post_ids, time.Now().Add(-1 * 7 * 24 * time.Hour))
-	if err != nil {	return err }
-
 	edits := make(map[int]*storage.PostSuggestedEdit)
-	for len(replacements) != 0 {
-		for _, r := range replacements {
-			m := r.Matcher()
-			for id, sh := range posts_and_stuff {
-				if _, ok := replacement_history[storage.ReplacementHistoryKey{ReplacerId: r.Id, PostId: id}]; ok { continue }
-				if m.Matches(sh.metadata) {
-					if edits[id] == nil {
-						edits[id] = &storage.PostSuggestedEdit{}
-					}
 
-					edits[id].Represents = append(edits[id].Represents, r.Id)
-					to := &edits[id].Prompt
-					if r.Autofix {
-						to = &edits[id].AutoFix
+	page_channel := storage.PaginatedPostsById(tx, updated_post_ids, 10000)
+	for page := range page_channel {
+		if page.Err != nil { return page.Err }
+		type shim struct {
+			post *apitypes.TPostInfo
+			metadata tags.TagSet
+		}
+
+		posts_and_stuff := make(map[int]shim)
+
+		for i, _ := range page.Posts {
+			posts_and_stuff[page.Posts[i].Id] = shim{post: &page.Posts[i], metadata: page.Posts[i].ExtendedTagSet()}
+		}
+
+		log.Println("Fetching replacement history...")
+		replacement_history, err := storage.GetReplacementHistorySince(tx, page.Page, time.Now().Add(-1 * 7 * 24 * time.Hour))
+		if err != nil {	return err }
+
+		replacement_chan := storage.PaginatedGetAllReplacements(tx, 1000)
+		for replacements := range replacement_chan {
+			if replacements.Err != nil { return replacements.Err }
+			for _, r := range replacements.Replacers {
+				m := r.Matcher()
+				for id, sh := range posts_and_stuff {
+					if _, ok := replacement_history[storage.ReplacementHistoryKey{ReplacerId: r.Id, PostId: id}]; ok { continue }
+					if m.Matches(sh.metadata) {
+						if edits[id] == nil {
+							edits[id] = &storage.PostSuggestedEdit{}
+						}
+
+						edits[id].Represents = append(edits[id].Represents, r.Id)
+						to := &edits[id].Prompt
+						if r.Autofix {
+							to = &edits[id].AutoFix
+						}
+						*to = append(*to, m.ReplaceSpec)
 					}
-					*to = append(*to, m.ReplaceSpec)
 				}
 			}
 		}
-		replace_id = replacements[len(replacements) - 1].Id
-		replacements, err = storage.GetReplacements(tx, replace_id)
-		if err != nil {	return err }
 	}
 
 	default_creds := this.MySettings.DefaultSearchCredentials()
