@@ -114,6 +114,37 @@ func PostsById(tx DBLike, ids []int) ([]apitypes.TPostInfo, error) {
 	return out, err
 }
 
+type PostsPage struct {
+	Page  []int
+	Posts []apitypes.TPostInfo
+	Err     error
+}
+
+func PaginatedPostsById(tx DBLike, ids []int, pageSize int) chan PostsPage {
+	out := make(chan PostsPage)
+	go func() {
+		for {
+			page := ids
+			if len(page) > pageSize { page = page[0:pageSize] }
+			ids = ids[len(page):]
+
+			if len(page) == 0 { break }
+
+			posts, err := PostsById(tx, page)
+
+			if len(posts) != 0 { out <- PostsPage{Page: page, Posts: posts} }
+			if err != nil {
+				out <- PostsPage{Page: page, Err: err}
+				break
+			}
+		}
+
+		close(out)
+	}()
+
+	return out
+}
+
 func PostByMD5(tx DBLike, md5 string) (*apitypes.TPostInfo, error) {
 	var item apitypes.TPostInfo
 	var sources string
