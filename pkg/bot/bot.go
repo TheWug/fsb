@@ -1067,7 +1067,7 @@ func (this *PostState) Post(ctx *gogram.MessageCtx) {
 			return nil
 		}
 
-		tagrules, err := storage.GetUserTagRules(tx, ctx.Msg.From.Id, "main")
+		tagrules, err := storage.GetUserTagRules(tx, ctx.Msg.From.Id, "upload")
 		if err != nil {
 			ctx.ReplyAsync(data.OMessage{SendData: data.SendData{Text: "Couldn't load your tag rules for some reason."}}, nil)
 			return fmt.Errorf("GetUserTagRules: %w", err)
