@@ -43,6 +43,10 @@ func ListTags(user, apitoken string, options types.ListTagsOptions) (types.TTagI
 		return nil, e
 	}
 
+	if r.StatusCode != 200 {
+		return nil, errors.New(r.Status)
+	}
+
 	return results.Tags, nil
 }
 
@@ -67,6 +71,10 @@ func ListTagAliases(user, apitoken string, options types.ListTagAliasOptions) (t
 		return nil, e
 	}
 
+	if r.StatusCode != 200 {
+		return nil, errors.New(r.Status)
+	}
+
 	return results.Aliases, nil
 }
 
@@ -87,6 +95,10 @@ func ListPosts(user, apitoken string, options types.ListPostOptions) (types.TPos
 
 	if e != nil {
 		return nil, e
+	}
+
+	if r.StatusCode != 200 {
+		return nil, errors.New(r.Status)
 	}
 
 	return results.Posts, nil
@@ -111,6 +123,10 @@ func FetchOnePost(user, apitoken string, id int) (*types.TPostInfo, error) {
 		return nil, e
 	}
 
+	if r.StatusCode != 200 {
+		return nil, errors.New(r.Status)
+	}
+
 	if post.Post.Id != 0 { return &post.Post, nil }
 	return nil, nil
 }
@@ -129,6 +145,10 @@ func GetTagData(user, apitoken string, id int) (*types.TTagData, error) {
 
 	if e != nil {
 		return nil, e
+	}
+
+	if r.StatusCode != 200 {
+		return nil, errors.New(r.Status)
 	}
 
 	return &tag, nil
@@ -155,6 +175,8 @@ func FetchUser(username, api_key string) (*types.TUserInfo, error) {
 
 	if e != nil {
 		return nil, e
+	} else if r.StatusCode != 200 {
+		return nil, errors.New(r.Status)
 	} else if !status.Success {
 		return nil, nil
 	} else if len(user) == 0 {
