@@ -13,6 +13,8 @@ import (
 func PostUpdater(tx DBLike, input chan apitypes.TPostInfo) (error) {
 	defer func(){ for _ = range input {} }()
 
+	i := 0
+
 	for post := range input {
 		_, err := tx.Exec("DELETE FROM post_tags_by_name WHERE post_id = $1", post.Id)
 		if err != nil { return err }
@@ -25,6 +27,13 @@ func PostUpdater(tx DBLike, input chan apitypes.TPostInfo) (error) {
 		_, err = tx.Exec("INSERT INTO post_index (post_id, post_change_seq, post_rating, post_description, post_sources, post_hash, post_deleted) VALUES ($1, $2, $3, $4, $5, $6, $7)",
 				 post.Id, post.Change, post.Rating, post.Description, strings.Join(post.Sources, "\n"), strings.ToLower(post.Md5), post.Deleted)
 		if err != nil { return err }
+
+		i++
+		if i == 100000 {
+			_, err = tx.Exec("ANALYZE post_tags_by_name; ANALYZE post_index;")
+			if err != nil { return err }
+			i = 0
+		}
 	}
 
 	return nil
