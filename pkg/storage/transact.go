@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"database/sql"
+	"sync"
 )
 
 // TODO split this into a new package and use this as its documentation
@@ -169,10 +170,9 @@ type Queryable interface {
 
 // DBLike is a generic interface that encapsulates a database, and optionally also a transaction.
 type DBLike interface {
-	Queryable
-
 	InTransaction() bool
 	EnsureTransaction(*error) func()
+	Enter(func(Queryable) error) error
 }
 
 // queryableError implements Queryable and always returns its error from Queryable interface functions
@@ -188,10 +188,24 @@ func (q queryableError) QueryRowContext(context.Context, string, ...interface{})
 
 // dbWrapper is the basic DBLike implementation.
 type dbWrapper struct {
-	Queryable
+	q Queryable
 
 	database *sql.DB
 	tx       *sql.Tx
+	locker    sync.Mutex
+}
+
+// lock() is an internal function which locks the dbWrapper from being queried concurrently.
+// it's not enough because it doesn't protect result sets, so that's being reworked.
+func (w *dbWrapper) lock() func() {
+	w.locker.Lock()
+	return w.locker.Unlock
+}
+
+// Enter enters a serialized region, yielding the internal queryable for use.
+func (w *dbWrapper) Enter(f func(Queryable) error) error {
+	defer w.lock()()
+	return f(w.q)
 }
 
 // EnsureTransaction starts a transaction if one is not already started (if one is, it is a no-op).
@@ -215,7 +229,7 @@ func (d *dbWrapper) EnsureTransaction(parent_return *error) func() {
 
 // InTransaction returns true if this dbWrapper contains an ongoing, uncommitted, unrollbacked transaction.
 func (d *dbWrapper) InTransaction() bool {
-	return d.Queryable == d.tx
+	return d.q == d.tx
 }
 
 // begin begins a transaction. calling begin with a transaction already open will make a mess, so don't.
@@ -223,16 +237,16 @@ func (d *dbWrapper) begin() error {
 	var err error
 	d.tx, err = d.database.Begin()
 	if err != nil {
-		d.Queryable = queryableError{error: err}
+		d.q = queryableError{error: err}
 	} else {
-		d.Queryable = d.tx
+		d.q = d.tx
 	}
 	return err
 }
 
 // rollback rolls back a transaction. calling rollback without a transaction open will make a mess, so don't.
 func (d *dbWrapper) rollback() error {
-	d.Queryable = d.database
+	d.q = d.database
 	err := d.tx.Rollback()
 	d.tx = nil
 	return err
@@ -242,7 +256,7 @@ func (d *dbWrapper) rollback() error {
 func (d *dbWrapper) commit() error {
 	if !d.InTransaction() { return errors.New("not in transaction") }
 
-	d.Queryable = d.database
+	d.q = d.database
 	err := d.tx.Commit()
 	d.tx = nil
 	return err
