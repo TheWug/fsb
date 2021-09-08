@@ -157,21 +157,6 @@ func NewTxRequired(message string) error {
 	return txRequiredError{error: errors.New(message)}
 }
 
-// Transact wraps the provided callback in a transaction.
-// See the package documentation for usage examples.
-func Transact(db_connection *sql.DB, callback func(DBLike) error) (err error) {
-	wrapper := NoTx(db_connection)
-	defer wrapper.EnsureTransaction(&err)()
-	if err != nil { return err }
-
-	return callback(wrapper)
-}
-
-// A convenience specialization of Transact which automatically uses Db_pool.
-func DefaultTransact(callback func(DBLike) error) error {
-	return Transact(Db_pool, callback)
-}
-
 // Queryable is compatible with query/exec methods of both *sql.DB and *sql.Tx.
 type Queryable interface {
 	Exec(string, ...interface{}) (sql.Result, error)
@@ -207,19 +192,6 @@ type dbWrapper struct {
 
 	database *sql.DB
 	tx       *sql.Tx
-}
-
-// NoTx produces a DBLike around a database, without opening a transaction, allowing for untransacted queries.
-func NoTx(database *sql.DB) DBLike {
-	return &dbWrapper{
-		Queryable: database,
-		database: database,
-	}
-}
-
-// DefaultNoTx, like DefaultTransact, is a convenience wrapper for NoTx using the default database Db_pool.
-func DefaultNoTx() DBLike {
-	return NoTx(Db_pool)
 }
 
 // EnsureTransaction starts a transaction if one is not already started (if one is, it is a no-op).
@@ -294,6 +266,34 @@ func (d *dbWrapper) onParentReturn(parent_return *error) {
 			if innerErr != nil { *parent_return = innerErr }
 		}
 	}
+}
+
+// NoTx produces a DBLike around a database, without opening a transaction, allowing for untransacted queries.
+func NoTx(database *sql.DB) DBLike {
+	return &dbWrapper{
+		q: database,
+		database: database,
+	}
+}
+
+// DefaultNoTx, like DefaultTransact, is a convenience wrapper for NoTx using the default database Db_pool.
+func DefaultNoTx() DBLike {
+	return NoTx(Db_pool)
+}
+
+// Transact wraps the provided callback in a transaction.
+// See the package documentation for usage examples.
+func Transact(db_connection *sql.DB, callback func(DBLike) error) (err error) {
+	wrapper := NoTx(db_connection)
+	defer wrapper.EnsureTransaction(&err)()
+	if err != nil { return err }
+
+	return callback(wrapper)
+}
+
+// A convenience specialization of Transact which automatically uses Db_pool.
+func DefaultTransact(callback func(DBLike) error) error {
+	return Transact(Db_pool, callback)
 }
 
 // noop is a dummy function which does nothing.
