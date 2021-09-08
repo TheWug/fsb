@@ -138,7 +138,6 @@ func (this *Behavior) maintenanceInternal(tx storage.DBLike, bot *gogram.Telegra
 			posts_and_stuff[page.Posts[i].Id] = shim{post: &page.Posts[i], metadata: page.Posts[i].ExtendedTagSet()}
 		}
 
-		log.Println("Fetching replacement history...")
 		replacement_history, err := storage.GetReplacementHistorySince(tx, page.Page, time.Now().Add(-1 * 7 * 24 * time.Hour))
 		if err != nil {	return err }
 

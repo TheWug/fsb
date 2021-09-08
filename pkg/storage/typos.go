@@ -16,14 +16,17 @@ type TypoData struct {
 	ReplaceId *int64              `dml:"replace_id"`
 }
 
-func DelTagTypoByTag(tx DBLike, typo TypoData) error {
-        _, err := tx.Exec(`DELETE FROM replacements WHERE replace_id = (SELECT replace_id FROM typos_registered WHERE tag_typo_id = $1)`, typo.Tag.Id)
-	if err != nil { return err }
-        _, err = tx.Exec(`DELETE FROM typos_registered WHERE tag_typo_id = $1`, typo.Tag.Id)
-	return err
+func DelTagTypoByTag(d DBLike, typo TypoData) error {
+	query1 := `DELETE FROM replacements WHERE replace_id = (SELECT replace_id FROM typos_registered WHERE tag_typo_id = $1)`
+	query2 := `DELETE FROM typos_registered WHERE tag_typo_id = $1`
+
+	return d.Enter(func(tx Queryable) error {
+		if err := WrapExec(tx.Exec(query1, typo.Tag.Id)); err != nil { return err }
+		return WrapExec(tx.Exec(query2, typo.Tag.Id))
+	})
 }
 
-func SetTagTypoByTag(tx DBLike, typo TypoData, marked, autofix bool) error {
+func SetTagTypoByTag(d DBLike, typo TypoData, marked, autofix bool) error {
 	if !marked {
 		typo.Fix = nil
 	}
@@ -39,34 +42,35 @@ DO UPDATE SET
     tag_fix_id = EXCLUDED.tag_fix_id
 RETURNING typo_id, replace_id`
 
-	var err error
-	if typo.Fix == nil {
-		err = tx.QueryRow(query, typo.Marked, typo.Tag.Id, nil).Scan(&typo.Id, &typo.ReplaceId)
-	} else {
-		err = tx.QueryRow(query, typo.Marked, typo.Tag.Id, typo.Fix.Id).Scan(&typo.Id, &typo.ReplaceId)
-	}
-	if err != nil { return err } // you should get a row back, if that fails something is wrong
+	err := d.Enter(func(tx Queryable) error {
+		if typo.Fix == nil {
+			return tx.QueryRow(query, typo.Marked, typo.Tag.Id, nil).Scan(&typo.Id, &typo.ReplaceId)
+		} else {
+			return tx.QueryRow(query, typo.Marked, typo.Tag.Id, typo.Fix.Id).Scan(&typo.Id, &typo.ReplaceId)
+		}
+	})
+	if err != nil { return err } 
 
 	if typo.Marked {
 		if typo.ReplaceId == nil {
 			var replacement *Replacer
-			replacement, err := AddReplacement(tx, Replacer{MatchSpec: typo.Tag.Name, ReplaceSpec: fmt.Sprintf("-%s %s", typo.Tag.Name, typo.Fix.Name), Autofix: autofix})
+			replacement, err := AddReplacement(d, Replacer{MatchSpec: typo.Tag.Name, ReplaceSpec: fmt.Sprintf("-%s %s", typo.Tag.Name, typo.Fix.Name), Autofix: autofix})
 			if err != nil { return err }
 
 			query := `UPDATE typos_registered SET replace_id = $2 WHERE typo_id = $1`
-			_, err = tx.Exec(query, typo.Id, replacement.Id)
+			err = d.Enter(func(tx Queryable) error { return WrapExec(tx.Exec(query, typo.Id, replacement.Id)) })
 
 		} else {
-			err = UpdateReplacement(tx, Replacer{Id: *typo.ReplaceId, MatchSpec: typo.Tag.Name, ReplaceSpec: fmt.Sprintf("-%s %s", typo.Tag.Name, typo.Fix.Name), Autofix: autofix})
+			err = UpdateReplacement(d, Replacer{Id: *typo.ReplaceId, MatchSpec: typo.Tag.Name, ReplaceSpec: fmt.Sprintf("-%s %s", typo.Tag.Name, typo.Fix.Name), Autofix: autofix})
 
 		}
 	} else if typo.ReplaceId != nil {
-		err = DeleteReplacement(tx, *typo.ReplaceId)
+		err = DeleteReplacement(d, *typo.ReplaceId)
 	}
 	return err
 }
 
-func GetTagTypos(tx DBLike, tag string) (map[string]TypoData, error) {
+func GetTagTypos(d DBLike, tag string) (map[string]TypoData, error) {
 	query := `
 		SELECT	typo_id, marked, replace_id,
 			a.tag_id, a.tag_name, a.tag_count, a.tag_count_full, a.tag_type, a.tag_type_locked,
@@ -76,22 +80,30 @@ func GetTagTypos(tx DBLike, tag string) (map[string]TypoData, error) {
 			LEFT JOIN tag_index as b ON b.tag_id = tag_fix_id
 		WHERE	a.tag_name = $1 OR b.tag_name = $1
 		`
-	rows, err := dml.X(tx.Query(query, tag))
-	if err != nil { return nil, err }
-
-	defer rows.Close()
-
 	results := make(map[string]TypoData)
-	for rows.Next() {
-		var data TypoData
-		var fix_tag apitypes.TTagData
-		err = dml.Scan(rows, &data, &data.Tag, &fix_tag)
-		if fix_tag.Id != 0 {
-			data.Fix = &fix_tag
-		}
-		if err != nil { return nil, err }
-		results[data.Tag.Name] = data
-	}
 
+	err := d.Enter(func(tx Queryable) error {
+		rows, err := dml.X(tx.Query(query, tag))
+		if err != nil { return err }
+		defer rows.Close()
+
+		// XXX needs more dml
+		for rows.Next() {
+			var data TypoData
+			var fix_tag apitypes.TTagData
+			err = dml.Scan(rows, &data, &data.Tag, &fix_tag)
+			if fix_tag.Id != 0 {
+				data.Fix = &fix_tag
+			}
+			if err != nil { return err }
+			results[data.Tag.Name] = data
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		results = nil
+	}
 	return results, nil
 }

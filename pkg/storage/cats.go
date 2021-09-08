@@ -23,8 +23,10 @@ func (c CatData) String() string {
 	}
 }
 
-func GetCats(tx DBLike, yes, no bool) ([]CatData, []CatData, error) {
-	query :=
+func GetCats(d DBLike, yes, no bool) ([]CatData, []CatData, error) {
+	var out_yes, out_no []CatData
+	err := d.Enter(func(tx Queryable) error {
+		query :=
 `SELECT cat_id, marked,
     a.tag_id, a.tag_name, a.tag_type, a.tag_count,
     b.tag_id, b.tag_name, b.tag_type, b.tag_count,
@@ -36,48 +38,55 @@ FROM cats_registered
 WHERE ($1 AND marked)
    OR ($2 AND NOT marked)`
 
-	rows, err := tx.Query(query, yes, no)
-	if err != nil { return nil, nil, err }
+		rows, err := tx.Query(query, yes, no)
+		if err != nil { return err }
 
-	var out_yes, out_no []CatData
-	for rows.Next() {
-		var cat CatData
-		var id_1, id_2, id_merged *int
-		var name_1, name_2, name_merged *string
-		var type_1, type_2, type_merged *apitypes.TagCategory
-		var count_1, count_2, count_merged *int
+		for rows.Next() {
+			var cat CatData
+			var id_1, id_2, id_merged *int
+			var name_1, name_2, name_merged *string
+			var type_1, type_2, type_merged *apitypes.TagCategory
+			var count_1, count_2, count_merged *int
 
-		err = rows.Scan(&cat.Id, &cat.Marked,
-		                &id_merged, &name_merged, &type_merged, &count_merged,
-		                &id_1, &name_1, &type_1, &count_1,
-		                &id_2, &name_2, &type_2, &count_2)
+			err = rows.Scan(&cat.Id, &cat.Marked,
+				        &id_merged, &name_merged, &type_merged, &count_merged,
+				        &id_1, &name_1, &type_1, &count_1,
+				        &id_2, &name_2, &type_2, &count_2)
 
-		if err != nil { return nil, nil, err }
-		cat.Merged = apitypes.TTagData{Id: *id_merged, Name: *name_merged, Type: *type_merged, Count: *count_merged}
-		if id_1 != nil &&id_2 != nil {
-			cat.First  = &apitypes.TTagData{Id: *id_1, Name: *name_1, Type: *type_1, Count: *count_1}
-			cat.Second = &apitypes.TTagData{Id: *id_2, Name: *name_2, Type: *type_2, Count: *count_2}
+			if err != nil { return err }
+			cat.Merged = apitypes.TTagData{Id: *id_merged, Name: *name_merged, Type: *type_merged, Count: *count_merged}
+			if id_1 != nil &&id_2 != nil {
+				cat.First  = &apitypes.TTagData{Id: *id_1, Name: *name_1, Type: *type_1, Count: *count_1}
+				cat.Second = &apitypes.TTagData{Id: *id_2, Name: *name_2, Type: *type_2, Count: *count_2}
+			}
+
+			if cat.Marked {
+				out_yes = append(out_yes, cat)
+			} else {
+				out_no  = append(out_no,  cat)
+			}
 		}
 
-		if cat.Marked {
-			out_yes = append(out_yes, cat)
-		} else {
-			out_no  = append(out_no,  cat)
-		}
+		return nil
+	})
+
+	if err != nil {
+		out_yes, out_no = nil, nil
 	}
 
 	return out_yes, out_no, err
 }
 
-func SetCatByTagNames(tx DBLike, cat CatData, marked, autofix bool) error {
-	merged, err := GetTagByName(tx, cat.Merged.Name, true)
+func SetCatByTagNames(d DBLike, cat CatData, marked, autofix bool) error {
+	merged, err := GetTagByName(d, cat.Merged.Name, true)
 	if err != nil { return err }
 	cat.Merged = *merged
 
+	// XXX squash these calls into a single database call, they don't need to be 3+ calls
 	if marked {
-		cat.First, err = GetTagByName(tx, cat.First.Name, true)
+		cat.First, err = GetTagByName(d, cat.First.Name, true)
 		if err != nil { return err }
-		cat.Second, err = GetTagByName(tx, cat.Second.Name, true)
+		cat.Second, err = GetTagByName(d, cat.Second.Name, true)
 		if err != nil { return err }
 	} else {
 		cat.First = nil
@@ -97,42 +106,46 @@ DO UPDATE SET
 RETURNING cat_id, replace_id`
 
 	var row *sql.Row
-	if cat.First == nil || cat.Second == nil{
-		row = tx.QueryRow(query, cat.Marked, cat.Merged.Id, nil, nil)
-	} else {
-		row = tx.QueryRow(query, cat.Marked, cat.Merged.Id, cat.First.Id, cat.Second.Id)
-	}
-	err = row.Scan(&cat.Id, &cat.ReplaceId)
+	err = d.Enter(func(tx Queryable) error {
+		if cat.First == nil || cat.Second == nil{
+			row = tx.QueryRow(query, cat.Marked, cat.Merged.Id, nil, nil)
+		} else {
+			row = tx.QueryRow(query, cat.Marked, cat.Merged.Id, cat.First.Id, cat.Second.Id)
+		}
+		return row.Scan(&cat.Id, &cat.ReplaceId)
+	})
 	if err != nil { return err } // you should get a row back, if that fails something is wrong
 
 	if cat.Marked {
 		if cat.ReplaceId == nil {
 			replacement := &Replacer{MatchSpec: cat.Merged.Name, ReplaceSpec: fmt.Sprintf("-%s %s %s", cat.Merged.Name, cat.First.Name, cat.Second.Name), Autofix: autofix}
-			replacement, err = AddReplacement(tx, *replacement)
+			replacement, err = AddReplacement(d, *replacement)
 			if err != nil { return err }
 
-			query := `UPDATE cats_registered SET replace_id = $2 WHERE cat_id = $1`
-			_, err = tx.Exec(query, cat.Id, replacement.Id)
-
+			err = d.Enter(func(tx Queryable) error {
+				query := `UPDATE cats_registered SET replace_id = $2 WHERE cat_id = $1`
+				_, err := tx.Exec(query, cat.Id, replacement.Id)
+				return err
+			})
 		} else {
-			err = UpdateReplacement(tx, Replacer{Id: *cat.ReplaceId, MatchSpec: cat.Merged.Name, ReplaceSpec: fmt.Sprintf("-%s %s %s", cat.Merged.Name, cat.First.Name, cat.Second.Name), Autofix: autofix})
-
+			err = UpdateReplacement(d, Replacer{Id: *cat.ReplaceId, MatchSpec: cat.Merged.Name, ReplaceSpec: fmt.Sprintf("-%s %s %s", cat.Merged.Name, cat.First.Name, cat.Second.Name), Autofix: autofix})
 		}
 	} else if cat.ReplaceId != nil {
-		err = DeleteReplacement(tx, *cat.ReplaceId)
+		err = DeleteReplacement(d, *cat.ReplaceId)
 	}
 	return err
 }
 
-func DeleteCatByTagNames(tx DBLike, cat CatData) error {
-	merged, err := GetTagByName(tx, cat.Merged.Name, false)
+func DeleteCatByTagNames(d DBLike, cat CatData) error {
+	merged, err := GetTagByName(d, cat.Merged.Name, false)
 	if err != nil { return err }
 	if merged == nil { return nil }
 	cat.Merged = *merged
 
-        _, err = tx.Exec(`DELETE FROM replacements WHERE replace_id = (SELECT replace_id FROM cats_registered WHERE tag_id_merged = $1)`, cat.Merged.Id)
-	if err != nil { return err }
-        _, err = tx.Exec(`DELETE FROM cats_registered WHERE tag_id_merged = $1`, cat.Merged.Id)
-
-	return err
+	return d.Enter(func(tx Queryable) error {
+		_, err = tx.Exec(`DELETE FROM replacements WHERE replace_id = (SELECT replace_id FROM cats_registered WHERE tag_id_merged = $1)`, cat.Merged.Id)
+		if err != nil { return err }
+		_, err = tx.Exec(`DELETE FROM cats_registered WHERE tag_id_merged = $1`, cat.Merged.Id)
+		return err
+	})
 }

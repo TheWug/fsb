@@ -51,35 +51,38 @@ type ReplacementHistoryKey struct {
 	PostId     int   `dml:"post_id"`
 }
 
-func AddReplacement(tx DBLike, repl Replacer) (*Replacer, error) {
+func AddReplacement(d DBLike, repl Replacer) (*Replacer, error) {
 	query := "INSERT INTO replacements (match_spec, replace_spec, autofix) VALUES ($1, $2, $3) RETURNING replace_id"
 
-	row := tx.QueryRow(query, repl.MatchSpec, repl.ReplaceSpec, repl.Autofix)
-	err := row.Scan(&repl.Id)
+	err := d.Enter(func(tx Queryable) error { return tx.QueryRow(query, repl.MatchSpec, repl.ReplaceSpec, repl.Autofix).Scan(&repl.Id) })
 	return &repl, err
 }
 
-func UpdateReplacement(tx DBLike, repl Replacer) error {
+func UpdateReplacement(d DBLike, repl Replacer) error {
 	query := "UPDATE replacements SET match_spec = $2, replace_spec = $3, autofix = $4 WHERE replace_id = $1"
-	_, err := tx.Exec(query, repl.Id, repl.MatchSpec, repl.ReplaceSpec, repl.Autofix)
-	return err
+	return d.Enter(func(tx Queryable) error { return WrapExec(tx.Exec(query, repl.Id, repl.MatchSpec, repl.ReplaceSpec, repl.Autofix)) })
 }
 
-func DeleteReplacement(tx DBLike, id int64) (error) {
+func DeleteReplacement(d DBLike, id int64) (error) {
 	query := "DELETE FROM replacements WHERE replace_id = $1"
-	_, err := tx.Exec(query, id)
-	return err
+	return d.Enter(func(tx Queryable) error { return WrapExec(tx.Exec(query, id)) })
 }
 
-func GetReplacements(tx DBLike, after_id int64, page_size int) ([]Replacer, error) {
+func GetReplacements(d DBLike, after_id int64, page_size int) ([]Replacer, error) {
 	query := "SELECT replace_id, match_spec, replace_spec, autofix FROM replacements WHERE replace_id > $1 ORDER BY replace_id LIMIT $2"
-	rows, err := dml.X(tx.Query(query, after_id, page_size))
-	defer rows.Close()
-	if err != nil { return nil, err }
-
 	var out []Replacer
-	err = dml.ScanArray(rows, &out)
 
+	err := d.Enter(func(tx Queryable) error {
+		rows, err := dml.X(tx.Query(query, after_id, page_size))
+		if err != nil { return err }
+		defer rows.Close()
+
+		return dml.ScanArray(rows, &out)
+	})
+
+	if err != nil {
+		out = nil
+	}
 	return out, err
 }
 
@@ -88,13 +91,13 @@ type ReplacersPage struct {
 	Err         error
 }
 
-func PaginatedGetAllReplacements(tx DBLike, page_size int) chan ReplacersPage {
+func PaginatedGetAllReplacements(d DBLike, page_size int) chan ReplacersPage {
 	out := make(chan ReplacersPage)
 
 	go func() {
 		current_id := int64(-1)
 		for {
-			replacers, err := GetReplacements(tx, current_id, page_size)
+			replacers, err := GetReplacements(d, current_id, page_size)
 
 			if len(replacers) != 0 {
 				current_id = replacers[len(replacers) - 1].Id
@@ -113,28 +116,33 @@ func PaginatedGetAllReplacements(tx DBLike, page_size int) chan ReplacersPage {
 	return out
 }
 
-func GetReplacementHistorySince(tx DBLike, post_ids []int, since time.Time) (map[ReplacementHistoryKey]ReplacementHistory, error) {
+func GetReplacementHistorySince(d DBLike, post_ids []int, since time.Time) (map[ReplacementHistoryKey]ReplacementHistory, error) {
 	query := "SELECT action_id, telegram_user_id, replace_id, post_id, action_ts FROM replacement_actions WHERE post_id = ANY($1::int[]) AND action_ts > $2"
-	rows, err := dml.X(tx.Query(query, pq.Array(post_ids), since))
-	if err != nil { return nil, err }
-	defer rows.Close()
-
 	out := make(map[ReplacementHistoryKey]ReplacementHistory)
 
-	for rows.Next() {
-		var r ReplacementHistory
-		err = dml.Scan(rows, &r)
-		if err != nil { return nil, err }
+	d.Enter(func(tx Queryable) error {
+		rows, err := dml.X(tx.Query(query, pq.Array(post_ids), since))
+		if err != nil { return err }
+		defer rows.Close()
 
-		out[r.ReplacementHistoryKey] = r
-	}
+		for rows.Next() {
+			var r ReplacementHistory
+			err = dml.Scan(rows, &r)
+			if err != nil { return err }
+
+			out[r.ReplacementHistoryKey] = r
+		}
+
+		return nil
+	})
 
 	return out, nil
 }
 
-func AddReplacementHistory(tx DBLike, event *ReplacementHistory) error {
+func AddReplacementHistory(d DBLike, event *ReplacementHistory) error {
 	query := "INSERT INTO replacement_actions (action_id, telegram_user_id, replace_id, post_id, action_ts) VALUES (default, $1, $2, $3, $4) RETURNING action_id"
-	row := tx.QueryRow(query, event.TelegramUserId, event.ReplacerId, event.PostId, event.Timestamp)
-	err := row.Scan(event.Id)
-	return err // ErrNoRows will be passed through here, and we do want to propagate that because it should never happen
+
+	return d.Enter(func(tx Queryable) error {
+		return tx.QueryRow(query, event.TelegramUserId, event.ReplacerId, event.PostId, event.Timestamp).Scan(event.Id)
+	}) // ErrNoRows will be passed through here, and we do want to propagate that because it should never happen
 }

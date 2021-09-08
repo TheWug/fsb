@@ -15,30 +15,29 @@ type UserSettings struct {
 	BlacklistMode types.BlacklistMode
 }
 
-func GetUserSettings(tx DBLike, telegram_id tgtypes.UserID) (*UserSettings, error) {
+func GetUserSettings(d DBLike, telegram_id tgtypes.UserID) (*UserSettings, error) {
 	query := "SELECT telegram_id, age_status, rating_mode, blacklist_mode FROM user_settings WHERE telegram_id = $1"
-	row := tx.QueryRow(query, telegram_id)
+	u := &UserSettings{}
 
-	var u UserSettings
-	err := row.Scan(&u.TelegramId, &u.AgeStatus, &u.RatingMode, &u.BlacklistMode)
+	err := d.Enter(func(tx Queryable) error { return tx.QueryRow(query, telegram_id).Scan(&u.TelegramId, &u.AgeStatus, &u.RatingMode, &u.BlacklistMode) })
 
 	if err == sql.ErrNoRows {
 		u.TelegramId = telegram_id
-	} else if err != nil {
-		return nil, err
+		err = nil
 	}
 
-	return &u, nil
+	if err != nil {
+		u = nil
+	}
+	return u, err
 }
 
-func WriteUserSettings(tx DBLike, s *UserSettings) (error) {
+func WriteUserSettings(d DBLike, s *UserSettings) (error) {
 	query := "INSERT INTO user_settings (telegram_id, age_status, rating_mode, blacklist_mode) VALUES ($1, $2, $3, $4) ON CONFLICT (telegram_id) DO UPDATE SET age_status = EXCLUDED.age_status, rating_mode = EXCLUDED.rating_mode, blacklist_mode = EXCLUDED.blacklist_mode"
-	_, err := tx.Exec(query, s.TelegramId, s.AgeStatus, s.RatingMode, s.BlacklistMode)
-	return err
+	return d.Enter(func(tx Queryable) error { return WrapExec(tx.Exec(query, s.TelegramId, s.AgeStatus, s.RatingMode, s.BlacklistMode)) })
 }
 
-func DeleteUserSettings(tx DBLike, id tgtypes.UserID) (error) {
+func DeleteUserSettings(d DBLike, id tgtypes.UserID) (error) {
 	query := "UPDATE user_settings SET age_status = LEAST(age_status, 0), rating_mode = 0, blacklist_mode = 0 WHERE telegram_id = $1"
-	_, err := tx.Exec(query, id)
-	return err
+	return d.Enter(func(tx Queryable) error { return WrapExec(tx.Exec(query, id)) })
 }
