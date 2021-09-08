@@ -71,9 +71,9 @@ func DeleteReplacement(tx DBLike, id int64) (error) {
 	return err
 }
 
-func GetReplacements(tx DBLike, after_id int64) ([]Replacer, error) {
-	query := "SELECT replace_id, match_spec, replace_spec, autofix FROM replacements WHERE replace_id > $1 ORDER BY replace_id LIMIT 500"
-	rows, err := dml.X(tx.Query(query, after_id))
+func GetReplacements(tx DBLike, after_id int64, page_size int) ([]Replacer, error) {
+	query := "SELECT replace_id, match_spec, replace_spec, autofix FROM replacements WHERE replace_id > $1 ORDER BY replace_id LIMIT $2"
+	rows, err := dml.X(tx.Query(query, after_id, page_size))
 	defer rows.Close()
 	if err != nil { return nil, err }
 
@@ -81,6 +81,36 @@ func GetReplacements(tx DBLike, after_id int64) ([]Replacer, error) {
 	err = dml.ScanArray(rows, &out)
 
 	return out, err
+}
+
+type ReplacersPage struct {
+	Replacers []Replacer
+	Err         error
+}
+
+func PaginatedGetAllReplacements(tx DBLike, page_size int) chan ReplacersPage {
+	out := make(chan ReplacersPage)
+
+	go func() {
+		current_id := int64(-1)
+		for {
+			replacers, err := GetReplacements(tx, current_id, page_size)
+
+			if len(replacers) != 0 {
+				current_id = replacers[len(replacers) - 1].Id
+				out <- ReplacersPage{Replacers: replacers}
+			} else if err != nil {
+				out <- ReplacersPage{Err: err}
+				break
+			} else {
+				break
+			}
+		}
+
+		close(out)
+	}()
+
+	return out
 }
 
 func GetReplacementHistorySince(tx DBLike, post_ids []int, since time.Time) (map[ReplacementHistoryKey]ReplacementHistory, error) {
