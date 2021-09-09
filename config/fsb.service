@@ -4,6 +4,7 @@ Wants=network-online.target postgresql.service
 After=network-online.target postgresql.service
 
 [Service]
+RuntimeDirectory=fsb
 Type=exec
 User=fsb
 Group=fsb
