@@ -20,7 +20,8 @@ installexec: fsb
 	install -D single.sh $(DESTDIR)$(prefix)/bin/fsb-util/convert-script.sh
 
 installconf:
-	install -m 644 config/settings.json $(DESTDIR)/etc/fsb
+	mkdir -p $(DESTDIR)/etc/fsb
+	install -D -o nobody -g nogroup -m 600 config/settings.json $(DESTDIR)/etc/fsb/settings.json
 	install config/fsb.service $(DESTDIR)/etc/systemd/system/fsb.service
 
 var:
