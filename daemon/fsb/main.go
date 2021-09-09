@@ -25,7 +25,7 @@ import (
 
 func main() {
 	// handle command line arguments
-	settingsFile := "~/.fsb.json"
+	settingsFile := "/etc/fsb/settings.json"
 	if len(os.Args) > 1 && os.Args[1] != "" {
 		if os.Args[1] == "--help" || os.Args[1] == "-h" {
 			fmt.Printf("Usage: %s [CONFIGFILE]\n", os.Args[0])
