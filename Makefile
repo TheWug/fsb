@@ -3,9 +3,9 @@ user = fsb
 
 all: fsb
 
-.PHONY: fsb test
+.PHONY: build test
 
-fsb: var
+build: var
 	go build ./daemon/fsb
 
 test: var
