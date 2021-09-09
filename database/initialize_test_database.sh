@@ -27,4 +27,11 @@ sudo -u postgres psql -p "$port" <<< "
 	ALTER ROLE $user SET search_path TO fsb_test;
 	CREATE DATABASE $dbname WITH OWNER $user TEMPLATE template0 ENCODING utf8;"
 
+cat > ./test_db.json <<< "{
+	\"user\":   \"$user\",
+	\"dbname\": \"$dbname\",
+	\"host\":   \"$host\",
+	\"port\":   \"$port\"
+}"
+
 ./reset_test_database.sh "$user" "$2" "$host" "$port"
