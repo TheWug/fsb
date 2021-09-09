@@ -1,0 +1,20 @@
+{
+	"owner": -1,
+	"home": -1,
+	"logfile": "/var/fsb/fsb.log",
+	"apikey":  "",
+	"dburl":   "",
+	"search_user": "",
+	"search_apikey": "",
+	"no_results_photo_id": "",
+	"blacklisted_photo_id": "",
+	"error_photo_id": "",
+	"results_per_page": 40,
+	"max_artists": 3,
+	"max_chars": 4,
+	"max_sources": 2,
+	"media_convert_directory": "",
+	"webm2mp4_convert_script": "",
+	"media_store_channel": -1,
+	"source_map": []
+}
