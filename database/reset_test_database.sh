@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd "$(git rev-parse --show-root)/database"
+
 user="${1:-fsb_test}"
 dbname="${2:-furrysmutbot_test}_readonly"
 host="${3:-127.0.0.1}"
