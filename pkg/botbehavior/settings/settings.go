@@ -29,6 +29,8 @@ type Settings struct {
 	gogram.InitSettings
 
 	Logfile string      `json:"logfile"`
+	Pidfile string      `json:"pidfile"`
+
 	ApiKey  string      `json:"apikey"`
 	DbUrl   string      `json:"dburl"`
 	ApiName             string `json:"api_name"`

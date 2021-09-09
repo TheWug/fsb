@@ -2,6 +2,7 @@
 	"owner": -1,
 	"home": -1,
 	"logfile": "/var/fsb/fsb.log",
+	"pidfile": "/var/run/fsb.pid",
 	"apikey":  "",
 	"dburl":   "",
 	"search_user": "",

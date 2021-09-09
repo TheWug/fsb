@@ -11,6 +11,8 @@ import (
 	"github.com/thewug/gogram"
 	"github.com/thewug/gogram/persist"
 
+	"github.com/thewug/pidfile"
+
 	"fmt"
 	"os"
 )
@@ -46,6 +48,13 @@ func main() {
 		fmt.Println(e.Error())
 		os.Exit(1)
 	}
+
+	pf, e := pidfile.Open(settings.Pidfile)
+	if e != nil {
+		fmt.Println("Error opening pidfile:", e.Error(), settings.Pidfile)
+		os.Exit(1)
+	}
+	pf.Write()
 
 	behavior.MySettings = settings
 
@@ -105,5 +114,7 @@ func main() {
 	if err != nil { thebot.ErrorLog.Println(err.Error()) }
 
 	thebot.MainLoop()
+
+	pf.Remove()
 	os.Exit(0)
 }

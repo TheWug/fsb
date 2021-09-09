@@ -8,5 +8,7 @@ github.com/thewug/dml v0.0.0-20210729230338-639f3c6dc045 h1:MkNG78ji66OykfdDWMvO
 github.com/thewug/dml v0.0.0-20210729230338-639f3c6dc045/go.mod h1:ds4Nlz0Voknf0Ew/JEX0ROvUbQ+xb7clt4e9148A8CM=
 github.com/thewug/gogram v1.1.0 h1:lw3wlmZRyos5dCgtyTTL8H4ujNZIFJDhwOTn8PbgUqg=
 github.com/thewug/gogram v1.1.0/go.mod h1:X+/3NHcy5cGtzJvUAtImdCEf/+gK10O8wzvKSp1rJ94=
+github.com/thewug/pidfile v0.0.0-20210902035601-3304e2340869 h1:oqlERxN1r7cBY8eljVVMwf+WitraIPm/I2uT6vhRaD0=
+github.com/thewug/pidfile v0.0.0-20210902035601-3304e2340869/go.mod h1:RbAiqy+x36CUlc2RgZqa4oMl7gGj7WTa26soMDRhLsQ=
 github.com/thewug/reqtify v0.0.0-20210727140724-8ce9e4058694 h1:YF31eeB0c9XL2x5m+liT/jxOk3B1/Xa4URvLvJc8bAY=
 github.com/thewug/reqtify v0.0.0-20210727140724-8ce9e4058694/go.mod h1:CVh+t6QoXpaMo0HqKDFzEiT5QCkg2k0hczFtJ/FIh7E=

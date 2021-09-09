@@ -27,6 +27,7 @@ import (
 func ShowHelp() {
 	fmt.Println("CONFIGFILE options available:.")
 	fmt.Println("  logfile     - controls the file to log to.")
+	fmt.Println("  pidfile     - controls the daemon pid file name.")
 	fmt.Println("  apikey      - sets the bot's telegram api token.")
 	fmt.Println("  dburl       - sets the bot's telegram api token.")
 	fmt.Println("  ownerid     - sets the bot's owner's account ID.")
