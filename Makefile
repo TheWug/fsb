@@ -14,7 +14,7 @@ test: var
 clean:
 	git clean -fd
 
-installall: installsetup installexec installconf
+installall: installsetup installexec installconf installservice
 
 installexec: fsb
 	install fsb $(DESTDIR)$(prefix)/bin/fsb
@@ -23,6 +23,8 @@ installexec: fsb
 installconf:
 	mkdir -p $(DESTDIR)/etc/fsb
 	install -D -o fsb -g fsb -m 600 config/settings.json $(DESTDIR)/etc/fsb/settings.json
+
+installservice:
 	install config/fsb.service $(DESTDIR)/etc/systemd/system/fsb.service
 
 installsetup:
