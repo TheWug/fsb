@@ -29,7 +29,7 @@ func ensureSettings() error {
 	if settings.User != "" { return nil }
 	
 	file, err := os.Open("../../database/test_db.json")
-	if err != nil { return err }
+	if err != nil { return fmt.Errorf("Couldn't open database test settings! Did you forget to run initialize_test_database.sh? (%w)", err) }
 	
 	data, err := ioutil.ReadAll(file)
 	if err != nil { return err }
