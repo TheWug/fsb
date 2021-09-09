@@ -1,4 +1,5 @@
 prefix = /usr/local
+user = fsb
 
 all: fsb
 
@@ -13,7 +14,7 @@ test: var
 clean:
 	git clean -fd
 
-installall: installexec installconf
+installall: installsetup installexec installconf
 
 installexec: fsb
 	install fsb $(DESTDIR)$(prefix)/bin/fsb
@@ -21,8 +22,11 @@ installexec: fsb
 
 installconf:
 	mkdir -p $(DESTDIR)/etc/fsb
-	install -D -o nobody -g nogroup -m 600 config/settings.json $(DESTDIR)/etc/fsb/settings.json
+	install -D -o fsb -g fsb -m 600 config/settings.json $(DESTDIR)/etc/fsb/settings.json
 	install config/fsb.service $(DESTDIR)/etc/systemd/system/fsb.service
+
+installsetup:
+	if id -u fsb; then :; else adduser --system --no-create-home --home /var/fsb --group --disabled-login $(user); fi;
 
 var:
 	mkdir var
