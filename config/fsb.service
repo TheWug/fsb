@@ -1,0 +1,14 @@
+[Unit]
+Description=Telegram bot (API Bridge)
+Wants=network-online.target postgresql.service
+After=network-online.target postgresql.service
+
+[Service]
+Type=exec
+User=fsb
+Group=fsb
+ExecStart=/usr/local/bin/fsb
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

@@ -21,6 +21,7 @@ installexec: fsb
 
 installconf:
 	install -m 644 config/settings.json $(DESTDIR)/etc/fsb
+	install config/fsb.service $(DESTDIR)/etc/systemd/system/fsb.service
 
 var:
 	mkdir var
