@@ -123,7 +123,7 @@ func FetchOnePost(user, apitoken string, id int) (*types.TPostInfo, error) {
 		return nil, e
 	}
 
-	if r.StatusCode != 200 {
+	if !((r.StatusCode >= 200 && r.StatusCode < 300) || r.StatusCode == 404) {
 		return nil, errors.New(r.Status)
 	}
 
@@ -175,8 +175,6 @@ func FetchUser(username, api_key string) (*types.TUserInfo, error) {
 
 	if e != nil {
 		return nil, e
-	} else if r.StatusCode != 200 {
-		return nil, errors.New(r.Status)
 	} else if !status.Success {
 		return nil, nil
 	} else if len(user) == 0 {
@@ -185,6 +183,8 @@ func FetchUser(username, api_key string) (*types.TUserInfo, error) {
 		return nil, errors.New("Got wrong number of users?")
 	} else if strings.ToLower(user[0].Name) != strings.ToLower(username) {
 		return nil, errors.New("Got non-matching user?")
+	} else if r.StatusCode != 200 {
+		return nil, errors.New(r.Status)
 	}
 
 	return &user[0], e

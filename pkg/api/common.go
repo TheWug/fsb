@@ -91,9 +91,9 @@ func APILog(url, user string, length int, response *http.Response, err error) {
 
 func LocationToURLWithRating(location string, rating types.PostRating) string {
 	if rating == types.Safe {
-		return FilteredEndpoint + location
+		return fmt.Sprintf("https://%s%s", FilteredEndpoint, location)
 	} else {
-		return Endpoint + location
+		return fmt.Sprintf("https://%s%s", Endpoint, location)
 	}
 }
 

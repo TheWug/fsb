@@ -64,19 +64,19 @@ func Test_SanitizeRatingForEdit(t *testing.T) {
 	}
 }
 
-func Test_LocationToURLWithRating(t *testing.T) {
+func Test_LocationToURL(t *testing.T) {
 	testcases := map[string]struct{
 		inputLocation string
 		inputRating types.PostRating
-		outputLinkWithRating string
 		outputLinkWithoutRating string
+		outputLinkWithRating string
 	}{
 		"safe": {"/posts/123456", types.Safe, "https://" + Endpoint + "/posts/123456", "https://" + FilteredEndpoint + "/posts/123456"},
-		"questionable": {"/posts/123456", types.Questionable, "https://" + Endpoint + "/posts/123456", "https://" + FilteredEndpoint + "/posts/123456"},
-		"explicit": {"/posts/123456", types.Explicit, "https://" + Endpoint + "/posts/123456", "https://" + FilteredEndpoint + "/posts/123456"},
+		"questionable": {"/posts/123456", types.Questionable, "https://" + Endpoint + "/posts/123456", "https://" + Endpoint + "/posts/123456"},
+		"explicit": {"/posts/123456", types.Explicit, "https://" + Endpoint + "/posts/123456", "https://" + Endpoint + "/posts/123456"},
 	}
 
-	t.Run("LocationToURL", func(t *testing.T) {
+	t.Run("normal", func(t *testing.T) {
 		for k, v := range testcases {
 			t.Run(k, func(t *testing.T) {
 				out := LocationToURL(v.inputLocation)
@@ -85,7 +85,7 @@ func Test_LocationToURLWithRating(t *testing.T) {
 		}
 	})
 
-	t.Run("LocationToURLWithRating", func(t *testing.T) {
+	t.Run("with-rating", func(t *testing.T) {
 		for k, v := range testcases {
 			t.Run(k, func(t *testing.T) {
 				out := LocationToURLWithRating(v.inputLocation, v.inputRating)
