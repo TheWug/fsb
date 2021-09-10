@@ -248,12 +248,12 @@ func ImportPostTagsFromNameToID(d DBLike, sfx chan string) (error) {
 			//		also, this LOCKS the ENTIRE post_tags table until the transaction completes! (constraint changes)
 
 			// delete existing tag records before removing indices because it will be a lot slower without them
-			status(" (1/4 tag clear overrides)")
+			status(" (1/5 tag clear overrides)")
 			query := "DELETE FROM post_tags WHERE post_id IN (SELECT DISTINCT post_id FROM post_tags_by_name)"
 			if err := WrapExec(tx.Exec(query)); err != nil { return err }
 
 			// drop the index and the primary key constraint
-			status(" (2/4 drop indices)")
+			status(" (2/5 drop indices)")
 			query = "DROP INDEX post_tags_tag_id_idx"
 			if err := WrapExec(tx.Exec(query)); err != nil { return err }
 
@@ -261,16 +261,21 @@ func ImportPostTagsFromNameToID(d DBLike, sfx chan string) (error) {
 			if err := WrapExec(tx.Exec(query)); err != nil { return err }
 
 			// slurp all of the data into the table (very slow if indexes are present, which is why we killed them)
-			status(" (3/4 import data)")
+			status(" (3/5 import data)")
 			query = "INSERT INTO post_tags SELECT post_id, tag_id FROM post_tags_by_name INNER JOIN tag_index USING (tag_name)"
 			if err := WrapExec(tx.Exec(query)); err != nil { return err }
 
 			// add the index and primary key constraint back to the table
-			status(" (4/4 re-index)")
+			status(" (4/5 re-index)")
 			query = "ALTER TABLE post_tags ADD CONSTRAINT post_tags_pkey PRIMARY KEY (post_id, tag_id)"
 			if err := WrapExec(tx.Exec(query)); err != nil { return err }
 
 			query = "CREATE INDEX post_tags_tag_id_idx ON post_tags (tag_id)"
+			if err := WrapExec(tx.Exec(query)); err != nil { return err }
+
+			// re-analyze relevant tables, to improve planner performance
+			status(" (5/5 analyze)")
+			query = "ANALYZE post_tags; ANALYZE post_index;"
 			if err := WrapExec(tx.Exec(query)); err != nil { return err }
 		} else {
 			// if the amount of new data is not large compared to the amount of existing data, just one-by-one plunk them into the table.
