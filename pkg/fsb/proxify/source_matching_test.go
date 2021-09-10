@@ -89,7 +89,7 @@ func Test_simplematchers(t *testing.T) {
 		url string
 		expected bool
 	}{
-		"normal": {"example.com", "https://example.com/foobar?123", false},
+		"normal": {"example.com", "https://example.com/foobar?123", true},
 		"subdomain": {"example.com", "https://example.example.com/foobar?123", true},
 		"middle": {"example.com", "https://foo.example.com.com/foobar?123", false},
 	}

@@ -47,7 +47,7 @@ type hostnameEqualityMatcher string
 func (h hostnameEqualityMatcher) Matches(u *url.URL) bool { return string(h) == u.Hostname() }
 
 type subdomainMatcher string
-func (s subdomainMatcher) Matches(u *url.URL) bool { return strings.HasSuffix(u.Hostname(), "." + string(s)) }
+func (s subdomainMatcher) Matches(u *url.URL) bool { return u.Hostname() == string(s) || strings.HasSuffix(u.Hostname(), "." + string(s)) }
 
 type pathPrefixMatcher string
 func (p pathPrefixMatcher) Matches(u *url.URL) bool { return strings.HasPrefix(u.EscapedPath(), string(p)) }
