@@ -245,6 +245,7 @@ func ImportPostTagsFromNameToID(d DBLike, sfx chan string) (error) {
 			// performing an enormous number of index insertions is much more expensive than building the index from scratch.
 			// downside:	this insertion method will fail if any non-unique entries are present, including conflicts with
 			//		existing data in the table, where a smarter but slower approach could work around them.
+			//		also, this LOCKS the ENTIRE post_tags table until the transaction completes! (constraint changes)
 
 			// delete existing tag records before removing indices because it will be a lot slower without them
 			status(" (1/4 tag clear overrides)")
